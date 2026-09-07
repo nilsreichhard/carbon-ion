@@ -35,10 +35,16 @@ var {
 	REQ_DEDUPE_WINDOW_MS,
 } = require('./constants');
 
-var buildInfo = require('../../.buildinfo.json');
+var buildInfo = {
+	version: '1.5.0',
+	hash: 'custom',
+	branch: 'master',
+	dirty: false,
+	buildDate: '2026-09-07'
+};
 var eventLog = require('./eventlog');
 
-var Clay = require('@rebble/clay');
+var Clay = require('./clay');
 var clayConfig = require('./config');
 var clay = new Clay(clayConfig, require('./config/custom'), { autoHandleEvents: false });
 clay.registerComponent(require('./config/debug'));

@@ -7,7 +7,9 @@
  * @link      https://cr0ybot.com/project/pebble-watchface-carbon
  */
 
-const { version, hash } = require('../../.buildinfo.json');
+// Build metadata inlined for robust offline/CloudPebble builds
+var version = '1.5.0';
+var hash = 'custom';
 
 module.exports = [
 	{
