@@ -17,12 +17,16 @@ static Settings s_settings;
 // struct to maintain compatibility with old persisted data.
 static const Settings s_defaults = {
     .temp_unit_celsius = true,
+    .light_theme = false,
     .date_format = "%A, %m/%d",
     .accent_color = {.argb = 0b11111111}, // GColorWhite
     .battery_display = BATTERY_DISPLAY_ICON,
-    .show_timezone = true,
+    .show_timezone = false,
     .show_ampm = true,
     .fetch_interval_min = 30,
+    .infill_mode = INFILL_FUTURE,
+    .needle_mode = NEEDLE_BOTH,
+    .forecast_hours = DEFAULT_FORECAST_HOURS,
 };
 
 void settings_init(void) {

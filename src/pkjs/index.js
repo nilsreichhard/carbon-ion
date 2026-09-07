@@ -680,16 +680,15 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 		sendToWatch(payload);
 	}
 
-	// Open-Meteo weather — forecast_hours=FORECAST_HOURS returns hourly entries
-	// starting from the current hour; timeformat=unixtime for sunrise/sunset
+	// Open-Meteo weather — 8 past hours and 28 forecast hours for a rolling continuous window
 	var weatherUrl = WEATHER_BASE_URL +
 		'?latitude=' + lat +
 		'&longitude=' + lon +
 		'&current=temperature_2m,weather_code' +
 		'&hourly=precipitation_probability,temperature_2m,apparent_temperature,cloud_cover,weather_code' +
-		'&forecast_hours=' + FORECAST_HOURS +
+		'&past_hours=8' +
+		'&forecast_hours=28' +
 		'&daily=sunrise,sunset,temperature_2m_min,temperature_2m_max' +
-		'&forecast_days=1' +
 		'&temperature_unit=' + tempUnit +
 		'&timeformat=unixtime' +
 		'&timezone=auto';

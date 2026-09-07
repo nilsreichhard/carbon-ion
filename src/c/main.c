@@ -83,6 +83,7 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 	(void)units_changed;
 #else
 	time_layer_update(s_time_layer, tick_time, settings_get());
+	daylight_layer_set_current_time(s_daylight_layer, tick_time->tm_hour, tick_time->tm_min);
 
 	// Re-push graph layers each hour for display rollover, and request weather
 	// at the configured minute cadence.
@@ -383,6 +384,8 @@ static void prv_request_weather(void) {
 
 static void prv_battery_handler(BatteryChargeState state) {
 	icon_bar_layer_notify_battery(s_icon_bar_layer, state);
+	daylight_layer_set_battery(s_daylight_layer, state.charge_percent,
+	                           state.is_charging);
 }
 
 static void prv_update_pending_state(void) {
@@ -408,6 +411,10 @@ static void prv_window_load(Window *window) {
 	s_daylight_layer = daylight_layer_create(GRect(0, y, w, DAYLIGHT_H));
 	layer_add_child(root, daylight_layer_get_layer(s_daylight_layer));
 	y += DAYLIGHT_H;
+
+	BatteryChargeState init_batt = battery_state_service_peek();
+	daylight_layer_set_battery(s_daylight_layer, init_batt.charge_percent,
+	                           init_batt.is_charging);
 
 	// Cloud cover layer
 	s_cloud_layer = cloud_layer_create(GRect(0, y, w, CLOUD_H));
@@ -450,8 +457,10 @@ static void prv_window_load(Window *window) {
 	time_t now_t = time(NULL);
 	struct tm *now = localtime(&now_t);
 #endif
-	if (now)
+	if (now) {
 		time_layer_update(s_time_layer, now, settings_get());
+		daylight_layer_set_current_time(s_daylight_layer, now->tm_hour, now->tm_min);
+	}
 
 	// Restore cached weather if available
 	prv_push_weather_to_layers(now);
@@ -495,7 +504,9 @@ static void init(void) {
 #endif
 
 	s_main_window = window_create();
-	window_set_background_color(s_main_window, GColorBlack);
+	window_set_background_color(s_main_window,
+	                            settings_get()->light_theme ? GColorWhite
+	                                                        : GColorBlack);
 	window_set_window_handlers(s_main_window, (WindowHandlers){
 	                                              .load = prv_window_load,
 	                                              .unload = prv_window_unload,

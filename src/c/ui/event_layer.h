@@ -20,5 +20,5 @@ Layer *event_layer_get_layer(EventLayer *layer);
 // hours_remaining: how many of those 24 entries contain valid data.
 //   Entries at index >= hours_remaining are drawn as a missing-data span
 //   marked with ICON_CONNECTION_SIGNAL__OFF.
-void event_layer_set_data(EventLayer *layer, const uint8_t hourly_code[24],
+void event_layer_set_data(EventLayer *layer, const uint8_t *hourly_code,
                           uint8_t hours_remaining);

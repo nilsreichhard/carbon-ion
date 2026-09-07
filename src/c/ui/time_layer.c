@@ -158,6 +158,14 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	if (!layer || !tick_time || !settings)
 		return;
 
+	GColor text_color = settings->light_theme ? GColorBlack : GColorWhite;
+	GColor sub_color = settings->light_theme ? GColorDarkGray : GColorLightGray;
+	text_layer_set_text_color(layer->city_label, text_color);
+	text_layer_set_text_color(layer->time_label, text_color);
+	text_layer_set_text_color(layer->date_label, text_color);
+	text_layer_set_text_color(layer->tz_label, sub_color);
+	text_layer_set_text_color(layer->ampm_label, sub_color);
+
 	bool is_24h = clock_is_24h_style();
 
 	// Time string
@@ -190,8 +198,7 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 		                (layer->tz_buf[1] >= 'A' && layer->tz_buf[1] <= 'Z');
 		text_layer_set_text(layer->tz_label, tz_valid ? layer->tz_buf : "");
 	}
-	layer_set_hidden(text_layer_get_layer(layer->tz_label),
-	                 !settings->show_timezone);
+	layer_set_hidden(text_layer_get_layer(layer->tz_label), true);
 
 	// Date — format string stored in settings; leading zeros stripped
 	// automatically.

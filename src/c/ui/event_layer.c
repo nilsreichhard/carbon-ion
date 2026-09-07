@@ -15,7 +15,7 @@
 struct EventLayer {
 	Layer *layer;
 	GFont icon_font;
-	uint8_t hourly_code[GRAPH_HOURS];
+	uint8_t hourly_code[MAX_GRAPH_HOURS];
 	uint8_t hours_remaining;
 };
 
@@ -62,11 +62,14 @@ static const char *prv_event_icon(uint8_t code, GColor *out_color,
 // Scan hourly_code to identify consecutive runs of the same event type.
 // Also appends a single MISSING span for hours >= hours_remaining.
 // Returns the number of spans found and populates the spans array.
-static int prv_find_spans(const uint8_t hourly_code[24],
-                          uint8_t hours_remaining, EventSpan spans[24]) {
+static int prv_find_spans(const uint8_t hourly_code[MAX_GRAPH_HOURS],
+                          uint8_t hours_remaining, EventSpan spans[MAX_GRAPH_HOURS]) {
 	int span_count = 0;
 	int i = 0;
-	while (i < (int)hours_remaining && i < GRAPH_HOURS) {
+	int total_hours = GRAPH_HOURS;
+	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
+
+	while (i < (int)hours_remaining && i < total_hours) {
 		GColor color;
 		EventKind kind;
 		const char *icon = prv_event_icon(hourly_code[i], &color, &kind);
@@ -77,7 +80,7 @@ static int prv_find_spans(const uint8_t hourly_code[24],
 
 		// Group consecutive hours that map to the same visual event type.
 		int start = i;
-		while (i < (int)hours_remaining && i < GRAPH_HOURS) {
+		while (i < (int)hours_remaining && i < total_hours) {
 			GColor next_color;
 			EventKind next_kind;
 			if (!prv_event_icon(hourly_code[i], &next_color, &next_kind) ||
@@ -97,9 +100,9 @@ static int prv_find_spans(const uint8_t hourly_code[24],
 
 	// Only append a missing span when some valid data exists — total absence
 	// is indicated by the icon_bar disconnect icon instead.
-	if ((int)hours_remaining > 0 && (int)hours_remaining < GRAPH_HOURS) {
+	if ((int)hours_remaining > 0 && (int)hours_remaining < total_hours) {
 		spans[span_count].start_hour = (int)hours_remaining;
-		spans[span_count].end_hour = GRAPH_HOURS - 1;
+		spans[span_count].end_hour = total_hours - 1;
 		spans[span_count].kind = EVENT_KIND_MISSING;
 		spans[span_count].color = GColorRed;
 		spans[span_count].icon = ICON_CONNECTION_SIGNAL__OFF;
@@ -118,9 +121,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int graph_x = GRAPH_OFFSET_X;
 	int graph_w = bounds.size.w - graph_x;
 	int layer_h = bounds.size.h;
+	int total_hours = GRAPH_HOURS;
+	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
 
 	// Find all event spans in the hourly data
-	EventSpan spans[GRAPH_HOURS];
+	EventSpan spans[MAX_GRAPH_HOURS];
 	int span_count =
 	    prv_find_spans(el->hourly_code, el->hours_remaining, spans);
 
@@ -130,11 +135,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		EventSpan *span = &spans[s];
 
 		// Calculate x-position for the center of each hour
-		// Formula: graph_x + (hour * 2 + 1) / (GRAPH_HOURS * 2) * graph_w
 		int x_start = graph_x + (long)(span->start_hour * 2 + 1) * graph_w /
-		                            (GRAPH_HOURS * 2);
+		                            (total_hours * 2);
 		int x_end = graph_x + (long)(span->end_hour * 2 + 1) * graph_w /
-		                          (GRAPH_HOURS * 2);
+		                          (total_hours * 2);
 
 		// Center vertically in the layer
 		int center_y = layer_h / 2;
@@ -206,11 +210,13 @@ Layer *event_layer_get_layer(EventLayer *layer) {
 	return layer ? layer->layer : NULL;
 }
 
-void event_layer_set_data(EventLayer *layer, const uint8_t hourly_code[24],
+void event_layer_set_data(EventLayer *layer, const uint8_t *hourly_code,
                           uint8_t hours_remaining) {
 	if (!layer)
 		return;
-	memcpy(layer->hourly_code, hourly_code, GRAPH_HOURS);
+	int total_hours = GRAPH_HOURS;
+	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
+	memcpy(layer->hourly_code, hourly_code, total_hours);
 	layer->hours_remaining = hours_remaining;
 	layer_mark_dirty(layer->layer);
 }

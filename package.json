@@ -16,10 +16,11 @@
     "sdkVersion": "3",
     "enableMultiJS": true,
     "targetPlatforms": [
-      "aplite",
+      "emery",
+      "chalk",
       "basalt",
       "diorite",
-      "emery",
+      "aplite",
       "flint"
     ],
     "watchapp": {
@@ -56,7 +57,10 @@
       "SETTING_USE_STATIC_LOCATION",
       "SETTING_STATIC_LAT",
       "SETTING_STATIC_LON",
-      "SETTING_CLEAR_CACHE"
+      "SETTING_CLEAR_CACHE",
+      "SETTING_INFILL_MODE",
+      "SETTING_NEEDLE_MODE",
+      "SETTING_FORECAST_HOURS"
     ],
     "resources": {
       "media": [

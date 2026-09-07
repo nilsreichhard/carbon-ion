@@ -16,8 +16,8 @@
 
 struct CloudLayer {
 	Layer *layer;
-	uint8_t cover[GRAPH_HOURS];
-	uint8_t hourly_code[GRAPH_HOURS];
+	uint8_t cover[MAX_GRAPH_HOURS];
+	uint8_t hourly_code[MAX_GRAPH_HOURS];
 	uint8_t current_hour;
 };
 
@@ -33,10 +33,12 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int graph_x = GRAPH_OFFSET_X;
 	int graph_w = bounds.size.w - graph_x;
 	int cy = bounds.size.h / 2;
+	int total_hours = GRAPH_HOURS;
+	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
 
 	graphics_context_set_antialiased(ctx, false);
 
-	for (int i = GRAPH_HOURS - 1; i >= 0; i--) {
+	for (int i = total_hours - 1; i >= 0; i--) {
 		if (cl->cover[i] < CLEAR_THRESHOLD)
 			continue;
 
@@ -57,7 +59,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #endif
 
 		// Draw later hours first so sooner clouds overlap them.
-		int cx = graph_x + (long)(i * 2 + 1) * graph_w / (GRAPH_HOURS * 2);
+		int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
 		int r;
 		if (cl->cover[i] < 40) {
 			r = 2;
@@ -95,12 +97,14 @@ Layer *cloud_layer_get_layer(CloudLayer *layer) {
 	return layer ? layer->layer : NULL;
 }
 
-void cloud_layer_set_data(CloudLayer *layer, const uint8_t cover[24],
-                          const uint8_t hourly_code[24], uint8_t current_hour) {
+void cloud_layer_set_data(CloudLayer *layer, const uint8_t *cover,
+                          const uint8_t *hourly_code, uint8_t current_hour) {
 	if (!layer)
 		return;
-	memcpy(layer->cover, cover, GRAPH_HOURS);
-	memcpy(layer->hourly_code, hourly_code, GRAPH_HOURS);
+	int total_hours = GRAPH_HOURS;
+	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
+	memcpy(layer->cover, cover, total_hours);
+	memcpy(layer->hourly_code, hourly_code, total_hours);
 	layer->current_hour = current_hour;
 	layer_mark_dirty(layer->layer);
 }

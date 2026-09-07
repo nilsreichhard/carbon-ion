@@ -9,6 +9,7 @@
 
 #include "daylight_layer.h"
 #include "../generated/icons.h"
+#include "../modules/settings.h"
 #include "graph_common.h"
 #include <stddef.h>
 
@@ -17,6 +18,9 @@ struct DaylightLayer {
 	uint8_t sunrise_hour;
 	uint8_t sunset_hour;
 	uint8_t current_hour;
+	uint8_t current_minute;
+	uint8_t battery_percent;
+	bool battery_charging;
 	bool sunrise_approx;
 	bool sunset_approx;
 };
@@ -133,25 +137,38 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	GRect bounds = layer_get_bounds(layer);
 	int graph_x = GRAPH_OFFSET_X;
 	int graph_w = bounds.size.w - graph_x;
-	int bar_w = graph_w / GRAPH_HOURS;
+	int total_hours = GRAPH_HOURS;
+	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
+	int past_hours = graph_get_past_hours();
+	int forecast_hours = graph_get_forecast_hours();
+	int bar_w = graph_w / total_hours;
 	int lh = bounds.size.h;
 	int line_y = lh / 2;
 
+	// Timeline window: past_hours (1/5) in past, forecast_hours (4/5) in future.
+	// The red indicator stays permanently anchored at 1/5 (column past_hours = Now).
+	int base_hour = ((int)dl->current_hour - past_hours + 240) % 24;
+
 	// Markers drawn first; label column filled black after to clip any bleed
-	int noon_off = (12 - (int)dl->current_hour + 24) % 24;
-	int midn_off = (24 - (int)dl->current_hour) % 24;
+	int noon_off = (12 - base_hour + 24) % 24;
+	int midn_off = (24 - base_hour) % 24;
 	int moon_phase = prv_moon_phase();
 	prv_draw_col_marker(ctx, noon_off, 4, graph_x, bar_w, line_y,
 	                    bounds.size.w);
 	prv_draw_col_marker(ctx, midn_off, moon_phase, graph_x, bar_w, line_y,
 	                    bounds.size.w);
 
-	// Daylight line
+	// Daylight line (Soft grey on light theme, white on dark theme)
+#if defined(PBL_COLOR)
+	bool is_light = settings_get()->light_theme;
+	graphics_context_set_stroke_color(ctx, is_light ? GColorLightGray : GColorWhite);
+#else
 	graphics_context_set_stroke_color(ctx, GColorWhite);
+#endif
 	graphics_context_set_stroke_width(ctx, 1);
 
-	int rise_off = ((int)dl->sunrise_hour - (int)dl->current_hour + 24) % 24;
-	int set_off = ((int)dl->sunset_hour - (int)dl->current_hour + 24) % 24;
+	int rise_off = ((int)dl->sunrise_hour - base_hour + 24) % 24;
+	int set_off = ((int)dl->sunset_hour - base_hour + 24) % 24;
 
 	int x_rise = graph_x + rise_off * bar_w;
 	int x_set = graph_x + set_off * bar_w;
@@ -198,6 +215,66 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			                   GPoint(x_rise, line_y + 2));
 		}
 	}
+
+	// Red line indicator on the top stays FIXED at exactly 1/5 of the timeline (6h past, 24h future)
+	NeedleMode needle_mode = settings_get()->needle_mode;
+	if (needle_mode == NEEDLE_BOTH || needle_mode == NEEDLE_ABOVE) {
+		int x_now = graph_x + (graph_w / 5);
+#if defined(PBL_COLOR)
+		graphics_context_set_stroke_color(ctx, GColorRed);
+#else
+		graphics_context_set_stroke_color(ctx, GColorWhite);
+#endif
+		graphics_context_set_stroke_width(ctx, 2);
+		graphics_draw_line(ctx, GPoint(x_now, line_y - 4),
+		                   GPoint(x_now, line_y + 4));
+	}
+
+	// Battery life depletion projection on the bar (Yellow at 10%, Red when expected to die)
+	// Drawn directly and vertically center-aligned on the timeline bar
+	if (!dl->battery_charging && dl->battery_percent < 100) {
+		// Drain rate: ~1.25% per hour (100% in 80 hours)
+		if (dl->battery_percent > 10) {
+			int hrs_to_10 = (int)(dl->battery_percent - 10) * 4 / 5;
+			if (hrs_to_10 >= 0 && hrs_to_10 <= forecast_hours) {
+				int col10 = past_hours + hrs_to_10;
+				int x10 = graph_x + col10 * graph_w / total_hours;
+				graphics_context_set_fill_color(ctx, GColorBlack);
+				graphics_fill_circle(ctx, GPoint(x10, line_y), 6);
+#if defined(PBL_COLOR)
+				graphics_context_set_stroke_color(ctx, GColorChromeYellow);
+				graphics_context_set_fill_color(ctx, GColorChromeYellow);
+#else
+				graphics_context_set_stroke_color(ctx, GColorWhite);
+				graphics_context_set_fill_color(ctx, GColorWhite);
+#endif
+				graphics_context_set_stroke_width(ctx, 1);
+				// Battery body and terminal vertically centered on line_y
+				graphics_draw_round_rect(ctx, GRect(x10 - 4, line_y - 3, 8, 6), 1);
+				graphics_fill_rect(ctx, GRect(x10 + 4, line_y - 1, 1, 3), 0, GCornerNone);
+				graphics_fill_rect(ctx, GRect(x10 - 3, line_y - 2, 2, 4), 0, GCornerNone);
+			}
+		}
+
+		int hrs_to_0 = (int)dl->battery_percent * 4 / 5;
+		if (hrs_to_0 >= 0 && hrs_to_0 <= forecast_hours) {
+			int col0 = past_hours + hrs_to_0;
+			int x0 = graph_x + col0 * graph_w / total_hours;
+			graphics_context_set_fill_color(ctx, GColorBlack);
+			graphics_fill_circle(ctx, GPoint(x0, line_y), 6);
+#if defined(PBL_COLOR)
+			graphics_context_set_stroke_color(ctx, GColorRed);
+			graphics_context_set_fill_color(ctx, GColorRed);
+#else
+			graphics_context_set_stroke_color(ctx, GColorWhite);
+			graphics_context_set_fill_color(ctx, GColorWhite);
+#endif
+			graphics_context_set_stroke_width(ctx, 1);
+			// Empty battery body and terminal vertically centered on line_y
+			graphics_draw_round_rect(ctx, GRect(x0 - 4, line_y - 3, 8, 6), 1);
+			graphics_fill_rect(ctx, GRect(x0 + 4, line_y - 1, 1, 3), 0, GCornerNone);
+		}
+	}
 }
 
 DaylightLayer *daylight_layer_create(GRect frame) {
@@ -207,6 +284,9 @@ DaylightLayer *daylight_layer_create(GRect frame) {
 	dl->sunrise_hour = 6;
 	dl->sunset_hour = 18;
 	dl->current_hour = 0;
+	dl->current_minute = 0;
+	dl->battery_percent = 100;
+	dl->battery_charging = false;
 	dl->sunrise_approx = true;
 	dl->sunset_approx = true;
 
@@ -214,6 +294,22 @@ DaylightLayer *daylight_layer_create(GRect frame) {
 	*(DaylightLayer **)layer_get_data(dl->layer) = dl;
 	layer_set_update_proc(dl->layer, prv_update_proc);
 	return dl;
+}
+
+void daylight_layer_set_battery(DaylightLayer *layer, uint8_t percent, bool charging) {
+	if (!layer)
+		return;
+	layer->battery_percent = percent;
+	layer->battery_charging = charging;
+	layer_mark_dirty(layer->layer);
+}
+
+void daylight_layer_set_current_time(DaylightLayer *layer, uint8_t hour, uint8_t minute) {
+	if (!layer)
+		return;
+	layer->current_hour = hour;
+	layer->current_minute = minute;
+	layer_mark_dirty(layer->layer);
 }
 
 void daylight_layer_destroy(DaylightLayer *layer) {

@@ -14,8 +14,8 @@
 
 struct PrecipLayer {
 	Layer *layer;
-	uint8_t prob[GRAPH_HOURS];
-	uint8_t hourly_code[GRAPH_HOURS];
+	uint8_t prob[MAX_GRAPH_HOURS];
+	uint8_t hourly_code[MAX_GRAPH_HOURS];
 	uint8_t current_hour;
 };
 
@@ -77,9 +77,12 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	//   storm        → bright blue (GColorVividCerulean) + lightning bolt
 	//   heavy storm  → bright blue (GColorVividCerulean) + lightning bolt
 	//   hail storm   → white       (GColorWhite) + lightning bolt
-	for (int i = 0; i < GRAPH_HOURS; i++) {
-		int x0 = graph_x + (long)i * graph_w / GRAPH_HOURS;
-		int x1 = graph_x + (long)(i + 1) * graph_w / GRAPH_HOURS;
+	int total_hours = GRAPH_HOURS;
+	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
+
+	for (int i = 0; i < total_hours; i++) {
+		int x0 = graph_x + (long)i * graph_w / total_hours;
+		int x1 = graph_x + (long)(i + 1) * graph_w / total_hours;
 		int bar_w = x1 - x0 - 1;
 		if (bar_w < 1)
 			bar_w = 1;
@@ -154,13 +157,15 @@ Layer *precip_layer_get_layer(PrecipLayer *layer) {
 	return layer ? layer->layer : NULL;
 }
 
-void precip_layer_set_data(PrecipLayer *layer, const uint8_t prob[24],
-                           const uint8_t hourly_code[24],
+void precip_layer_set_data(PrecipLayer *layer, const uint8_t *prob,
+                           const uint8_t *hourly_code,
                            uint8_t current_hour) {
 	if (!layer)
 		return;
-	memcpy(layer->prob, prob, GRAPH_HOURS);
-	memcpy(layer->hourly_code, hourly_code, GRAPH_HOURS);
+	int total_hours = GRAPH_HOURS;
+	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
+	memcpy(layer->prob, prob, total_hours);
+	memcpy(layer->hourly_code, hourly_code, total_hours);
 	layer->current_hour = current_hour;
 	layer_mark_dirty(layer->layer);
 }

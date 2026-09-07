@@ -23,3 +23,9 @@ Layer *daylight_layer_get_layer(DaylightLayer *layer);
 void daylight_layer_set_data(DaylightLayer *layer, uint8_t sunrise_hour,
                              uint8_t sunset_hour, uint8_t current_hour,
                              bool sunrise_approx, bool sunset_approx);
+
+// Set current time for the small red current-time indicator line on the daylight track
+void daylight_layer_set_current_time(DaylightLayer *layer, uint8_t hour, uint8_t minute);
+
+// Set battery state for timeline depletion indicators (yellow at 10%, red when expected to die)
+void daylight_layer_set_battery(DaylightLayer *layer, uint8_t percent, bool charging);

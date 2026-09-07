@@ -12,16 +12,31 @@
 #include <stdlib.h>
 
 // Horizontal pixel offset shared by all graph layers (daylight, cloud,
-// precip, temp). The left column is reserved for icons / labels.
-// Wider on emery to accommodate larger fonts and icons.
-#if PBL_DISPLAY_HEIGHT >= 228
-#define GRAPH_OFFSET_X 32
-#else
-#define GRAPH_OFFSET_X 24
-#endif
+// precip, temp). Bleeds flush to screen edges with 0 offset.
+#define GRAPH_OFFSET_X 0
 
-// Number of hourly slots displayed across all graph layers
-#define GRAPH_HOURS 24
+// Number of hourly slots displayed across all graph layers:
+// User configurable: min 12h future (+3h past = 15h) to max 48h future (+12h past = 60h).
+// Fixed needle is always at 1/5 of the total window width.
+#include "../modules/settings.h"
+
+static inline int graph_get_forecast_hours(void) {
+	Settings *s = settings_get();
+	if (!s || s->forecast_hours < MIN_FORECAST_HOURS || s->forecast_hours > MAX_FORECAST_HOURS) {
+		return DEFAULT_FORECAST_HOURS;
+	}
+	return s->forecast_hours;
+}
+
+static inline int graph_get_past_hours(void) {
+	return graph_get_forecast_hours() / 4;
+}
+
+static inline int graph_get_total_hours(void) {
+	return graph_get_forecast_hours() * 5 / 4;
+}
+
+#define GRAPH_HOURS (graph_get_total_hours())
 
 // Draw a dotted line by sampling pixels along the segment. This is mainly for
 // monochrome screens where dashed strokes are not available.
