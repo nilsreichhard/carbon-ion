@@ -74,10 +74,17 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	for (int i = 0; i <= total_hours; i++) {
 		if (i == now_col && tl->current != 0) {
 			pts[i] = tl->current;
+		} else if (i > 0 && tl->hourly[i] == 0 && i >= tl->hours_remaining) {
+			pts[i] = pts[i - 1];
 		} else {
 			pts[i] = tl->hourly[i];
 		}
-		apt[i] = tl->apparent_hourly[i];
+
+		if (i > 0 && tl->apparent_hourly[i] == 0 && i >= tl->hours_remaining) {
+			apt[i] = apt[i - 1];
+		} else {
+			apt[i] = tl->apparent_hourly[i];
+		}
 	}
 
 	int16_t t_min = pts[0] < apt[0] ? pts[0] : apt[0];
@@ -228,8 +235,12 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #else
 		graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
-		graphics_context_set_stroke_width(ctx, 1);
+		graphics_context_set_stroke_width(ctx, 2);
 		graphics_draw_line(ctx, GPoint(x_now, 0), GPoint(x_now, lh));
+		// Top pointer pip (2px triangle pointing down into chart)
+		graphics_draw_line(ctx, GPoint(x_now - 2, 0), GPoint(x_now + 2, 0));
+		graphics_draw_line(ctx, GPoint(x_now - 1, 1), GPoint(x_now + 1, 1));
+		graphics_draw_pixel(ctx, GPoint(x_now, 2));
 	}
 
 	// Floating temperature labels overlapping on top of the left side of the chart (Right-aligned)

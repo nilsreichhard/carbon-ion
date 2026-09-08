@@ -164,16 +164,16 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	if (start_idx >= WEATHER_HOURLY_COUNT)
 		start_idx = WEATHER_HOURLY_COUNT - 1;
 
-	int copy_len = total_needed;
+	int copy_len = total_needed + 1;
 	if (start_idx + copy_len > WEATHER_HOURLY_COUNT)
 		copy_len = WEATHER_HOURLY_COUNT - start_idx;
 
 	// Shifted views: window starting at past_needed hours ago
-	uint8_t precip_view[MAX_GRAPH_HOURS];
-	int8_t temp_view[MAX_GRAPH_HOURS];
-	int8_t appar_view[MAX_GRAPH_HOURS];
-	uint8_t cloud_view[MAX_GRAPH_HOURS];
-	uint8_t code_view[MAX_GRAPH_HOURS];
+	uint8_t precip_view[MAX_GRAPH_HOURS + 1];
+	int8_t temp_view[MAX_GRAPH_HOURS + 1];
+	int8_t appar_view[MAX_GRAPH_HOURS + 1];
+	uint8_t cloud_view[MAX_GRAPH_HOURS + 1];
+	uint8_t code_view[MAX_GRAPH_HOURS + 1];
 	memset(precip_view, 0, sizeof(precip_view));
 	memset(temp_view, 0, sizeof(temp_view));
 	memset(appar_view, 0, sizeof(appar_view));
@@ -554,7 +554,7 @@ static void init(void) {
 	app_message_register_inbox_received(prv_inbox_received);
 	app_message_register_inbox_dropped(prv_inbox_dropped);
 	app_message_register_outbox_failed(prv_outbox_failed);
-	app_message_open(512, 64);
+	app_message_open(2048, 256);
 #endif
 
 	// Trigger initial weather fetch

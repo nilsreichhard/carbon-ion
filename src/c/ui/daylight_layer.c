@@ -163,9 +163,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #if defined(PBL_COLOR)
 	graphics_context_set_stroke_color(ctx, is_light ? GColorLightGray : GColorWhite);
 #else
-	graphics_context_set_stroke_color(ctx, GColorWhite);
+	graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
-	graphics_context_set_stroke_width(ctx, 1);
+	graphics_context_set_stroke_width(ctx, 2);
 
 	int rise_off = ((int)dl->sunrise_hour - base_hour + 24) % 24;
 	int set_off = ((int)dl->sunset_hour - base_hour + 24) % 24;
@@ -223,11 +223,16 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #if defined(PBL_COLOR)
 		graphics_context_set_stroke_color(ctx, GColorRed);
 #else
-		graphics_context_set_stroke_color(ctx, GColorWhite);
+		graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
 		graphics_context_set_stroke_width(ctx, 2);
-		graphics_draw_line(ctx, GPoint(x_now, line_y - 4),
-		                   GPoint(x_now, line_y + 4));
+		graphics_draw_line(ctx, GPoint(x_now, line_y - 5),
+		                   GPoint(x_now, line_y + 5));
+		graphics_draw_line(ctx, GPoint(x_now - 2, line_y + 5),
+		                   GPoint(x_now + 2, line_y + 5));
+		graphics_draw_line(ctx, GPoint(x_now - 1, line_y + 6),
+		                   GPoint(x_now + 1, line_y + 6));
+		graphics_draw_pixel(ctx, GPoint(x_now, line_y + 7));
 	}
 
 	// Battery life depletion projection on the bar (Yellow at 10%, Red when expected to die)
