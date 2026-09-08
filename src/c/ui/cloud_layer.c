@@ -8,6 +8,7 @@
  */
 
 #include "cloud_layer.h"
+#include "../modules/settings.h"
 #include "graph_common.h"
 #include <stddef.h>
 #include <stdlib.h>
@@ -43,6 +44,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			continue;
 
 #if defined(PBL_COLOR)
+		bool is_light = settings_get()->light_theme;
 		// Color clouds based on WMO severity for severe conditions only
 		uint8_t code = cl->hourly_code[i];
 		GColor cloud_color;
@@ -51,7 +53,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		} else if (code == 75 || code == 77 || code == 85 || code == 86) {
 			cloud_color = GColorCeleste; // blizzard clouds — light blue
 		} else {
-			cloud_color = GColorWhite;
+			cloud_color = is_light ? GColorLightGray : GColorWhite;
 		}
 		graphics_context_set_fill_color(ctx, cloud_color);
 #else
