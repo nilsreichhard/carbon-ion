@@ -1005,7 +1005,9 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		tempUnit = shouldUseFahrenheit() ? 1 : 0;
 	}
 
-	var dict = { 'SETTING_TEMP_UNIT': tempUnit };
+	var dict = {};
+	dict[10014] = tempUnit;
+	dict['SETTING_TEMP_UNIT'] = tempUnit;
 
 	// Date format is a strftime string, not an integer — extract the raw value.
 	var rawDateFmt = rawSettings['SETTING_DATE_FORMAT'];
@@ -1013,47 +1015,71 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		'value' in rawDateFmt)
 		? rawDateFmt.value : rawDateFmt;
 	if (typeof dateFormat === 'string' && dateFormat.length > 0) {
+		dict[10017] = dateFormat;
 		dict['SETTING_DATE_FORMAT'] = dateFormat;
 	}
 
 	var batteryDisplay = extractInt(rawSettings['SETTING_BATTERY_DISPLAY']);
-	if (!isNaN(batteryDisplay)) dict['SETTING_BATTERY_DISPLAY'] = batteryDisplay;
+	if (!isNaN(batteryDisplay)) {
+		dict[10018] = batteryDisplay;
+		dict['SETTING_BATTERY_DISPLAY'] = batteryDisplay;
+	}
 
 	var fetchInterval = extractInt(rawSettings['SETTING_FETCH_INTERVAL']);
 	if (fetchInterval === 15 || fetchInterval === 30 || fetchInterval === 60) {
+		dict[10015] = fetchInterval;
 		dict['SETTING_FETCH_INTERVAL'] = fetchInterval;
 	}
 
 	var showTimezone = extractBool(rawSettings['SETTING_SHOW_TIMEZONE']);
-	if (showTimezone !== null) dict['SETTING_SHOW_TIMEZONE'] = showTimezone;
+	if (showTimezone !== null) {
+		dict[10019] = showTimezone;
+		dict['SETTING_SHOW_TIMEZONE'] = showTimezone;
+	}
 
 	var showAmpm = extractBool(rawSettings['SETTING_SHOW_AMPM']);
-	if (showAmpm !== null) dict['SETTING_SHOW_AMPM'] = showAmpm;
+	if (showAmpm !== null) {
+		dict[10020] = showAmpm;
+		dict['SETTING_SHOW_AMPM'] = showAmpm;
+	}
 
 	var forecastHours = extractInt(rawSettings['SETTING_FORECAST_HOURS']);
-	if (!isNaN(forecastHours)) dict['SETTING_FORECAST_HOURS'] = forecastHours;
+	if (!isNaN(forecastHours)) {
+		dict[10029] = forecastHours;
+		dict['SETTING_FORECAST_HOURS'] = forecastHours;
+	}
 
 	var infillMode = extractInt(rawSettings['SETTING_INFILL_MODE']);
-	if (!isNaN(infillMode)) dict['SETTING_INFILL_MODE'] = infillMode;
+	if (!isNaN(infillMode)) {
+		dict[10027] = infillMode;
+		dict['SETTING_INFILL_MODE'] = infillMode;
+	}
 
 	var needleMode = extractInt(rawSettings['SETTING_NEEDLE_MODE']);
-	if (!isNaN(needleMode)) dict['SETTING_NEEDLE_MODE'] = needleMode;
+	if (!isNaN(needleMode)) {
+		dict[10028] = needleMode;
+		dict['SETTING_NEEDLE_MODE'] = needleMode;
+	}
 
 	var lightTheme = extractInt(rawSettings['SETTING_LIGHT_THEME']) === 1;
+	dict[10030] = lightTheme ? 1 : 0;
 	dict['SETTING_LIGHT_THEME'] = lightTheme ? 1 : 0;
 
 	var showBtAlert = extractBool(rawSettings['SETTING_SHOW_BT_ALERT']);
-	if (showBtAlert !== null) dict['SETTING_SHOW_BT_ALERT'] = showBtAlert;
+	if (showBtAlert !== null) {
+		dict[10031] = showBtAlert;
+		dict['SETTING_SHOW_BT_ALERT'] = showBtAlert;
+	}
 
 	var showSilentMode = extractBool(rawSettings['SETTING_SHOW_SILENT_MODE']);
-	if (showSilentMode !== null) dict['SETTING_SHOW_SILENT_MODE'] = showSilentMode;
+	if (showSilentMode !== null) {
+		dict[10032] = showSilentMode;
+		dict['SETTING_SHOW_SILENT_MODE'] = showSilentMode;
+	}
 
 	var clearCacheRequested = extractBool(rawSettings['SETTING_CLEAR_CACHE']) === 1;
 
-	Pebble.sendAppMessage(dict,
-		function () { console.log('Carbon Ion: settings sent to watch'); },
-		function (err) { console.log('Carbon Ion: settings send failed: ' + JSON.stringify(err)); }
-	);
+	sendToWatchWithRetry(dict);
 
 	var newSettings = readClaySettings();
 	if (clearCacheRequested) {

@@ -264,6 +264,14 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 		time_layer_update(s_time_layer, now_stm, settings_get());
 		prv_push_weather_to_layers(now_stm);
 	}
+	if (s_time_layer) layer_mark_dirty(time_layer_get_layer(s_time_layer));
+	if (s_temp_layer) layer_mark_dirty(temp_layer_get_layer(s_temp_layer));
+	if (s_daylight_layer) layer_mark_dirty(daylight_layer_get_layer(s_daylight_layer));
+	if (s_cloud_layer) layer_mark_dirty(cloud_layer_get_layer(s_cloud_layer));
+	if (s_precip_layer) layer_mark_dirty(precip_layer_get_layer(s_precip_layer));
+	if (s_event_layer) layer_mark_dirty(event_layer_get_layer(s_event_layer));
+	if (s_icon_bar_layer) layer_mark_dirty(icon_bar_layer_get_layer(s_icon_bar_layer));
+	if (s_main_window) layer_mark_dirty(window_get_root_layer(s_main_window));
 
 	// Parse scalar weather fields — track whether any weather key was present
 	// so a settings-only message can't corrupt the weather state.
