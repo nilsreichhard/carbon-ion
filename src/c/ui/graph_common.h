@@ -38,6 +38,29 @@ static inline int graph_get_total_hours(void) {
 
 #define GRAPH_HOURS (graph_get_total_hours())
 
+// Draw a dashed line by sampling pixels along the segment.
+static inline void graph_draw_dashed_line(GContext *ctx, GPoint start,
+                                          GPoint end, int dash_len,
+                                          int gap_len) {
+	int dx = end.x - start.x;
+	int dy = end.y - start.y;
+	int steps = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
+	if (steps == 0) {
+		graphics_draw_pixel(ctx, start);
+		return;
+	}
+	int period = dash_len + gap_len;
+	if (period == 0)
+		period = 1;
+	for (int step = 0; step <= steps; step++) {
+		if ((step % period) < dash_len) {
+			int x = start.x + dx * step / steps;
+			int y = start.y + dy * step / steps;
+			graphics_draw_pixel(ctx, GPoint(x, y));
+		}
+	}
+}
+
 // Draw a dotted line by sampling pixels along the segment. This is mainly for
 // monochrome screens where dashed strokes are not available.
 static inline void graph_draw_dotted_line(GContext *ctx, GPoint start,

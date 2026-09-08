@@ -137,8 +137,26 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	 : (tf) <= 84 ? GColorIcterine                                             \
 	 : (tf) <= 96 ? GColorChromeYellow                                         \
 	              : GColorRed)
+#define LIGHT_THEME_INFILL(tf)                                                 \
+	((tf) <= 10   ? GColorLavenderIndigo                                       \
+	 : (tf) <= 32 ? GColorCeleste                                              \
+	 : (tf) <= 45 ? GColorTiffanyBlue                                          \
+	 : (tf) <= 59 ? GColorMediumAquamarine                                     \
+	 : (tf) <= 76 ? GColorSpringBud                                            \
+	 : (tf) <= 84 ? GColorIcterine                                             \
+	 : (tf) <= 96 ? GColorChromeYellow                                         \
+	              : GColorMelon)
+#define LIGHT_THEME_STROKE(tf)                                                 \
+	((tf) <= 10   ? GColorImperialPurple                                       \
+	 : (tf) <= 32 ? GColorCobaltBlue                                           \
+	 : (tf) <= 45 ? GColorJaegerGreen                                          \
+	 : (tf) <= 59 ? GColorIslamicGreen                                         \
+	 : (tf) <= 76 ? GColorKellyGreen                                           \
+	 : (tf) <= 84 ? GColorOrange                                               \
+	 : (tf) <= 96 ? GColorChromeYellow                                         \
+	              : GColorRed)
 
-	// Pass 1: dark fills based on infill_mode setting
+	// Pass 1: infill based on infill_mode setting
 	InfillMode infill = settings_get()->infill_mode;
 	if (infill != INFILL_NONE) {
 		int now_col = graph_get_past_hours(); // Fixed at 1/5
@@ -147,7 +165,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 		for (int i = start_col; i <= end_col && i <= (int)tl->hours_remaining && i <= total_hours; i++) {
 			int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
-			graphics_context_set_fill_color(ctx, DARK_TEMP_COLOR(TEMP_TO_F(avg)));
+			GColor fill_col = is_light ? LIGHT_THEME_INFILL(TEMP_TO_F(avg))
+			                           : DARK_TEMP_COLOR(TEMP_TO_F(avg));
+			graphics_context_set_fill_color(ctx, fill_col);
 			int x0 = spx[i - 1], y0 = spy[i - 1], x1 = spx[i], y1 = spy[i];
 			int dx = x1 - x0, dy = y1 - y0;
 			int steps = (abs(dx) > abs(dy)) ? abs(dx) : abs(dy);
@@ -155,7 +175,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				steps = 1;
 			for (int s = 0; s <= steps; s++) {
 				int col_x = x0 + dx * s / steps;
-				int col_y = y0 + dy * s / steps;
+				int col_y = y0 + dy * s / steps + 2; // Offset down so line cleanly covers top of infill
 				int col_h = line_bottom - col_y + 1;
 				if (col_h > 0) {
 					graphics_fill_rect(ctx, GRect(col_x, col_y, 1, col_h), 0,
@@ -165,40 +185,41 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// Pass 2: light-colored actual-temp line on top of the fill
-	graphics_context_set_stroke_width(ctx, 1);
+	// Pass 2: bold actual-temp line on top of the fill
+	graphics_context_set_stroke_width(ctx, 2);
 	for (int i = 1; i <= (int)tl->hours_remaining && i <= total_hours; i++) {
 		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
-		graphics_context_set_stroke_color(ctx,
-		                                  LIGHT_TEMP_COLOR(TEMP_TO_F(avg)));
+		GColor stroke_col = is_light ? LIGHT_THEME_STROKE(TEMP_TO_F(avg))
+		                             : LIGHT_TEMP_COLOR(TEMP_TO_F(avg));
+		graphics_context_set_stroke_color(ctx, stroke_col);
 		graphics_draw_line(ctx, GPoint(spx[i - 1], spy[i - 1]),
 		                   GPoint(spx[i], spy[i]));
 	}
 
-	// Pass 3: apparent-temp line over everything (white in dark theme, black in light theme)
+	// Pass 3: apparent-temp ("feels like") dashed line
 	graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 	for (int i = 1; i <= (int)tl->hours_remaining && i <= total_hours; i++) {
-		graphics_draw_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
-		                   GPoint(apx[i], apy[i]));
+		graph_draw_dashed_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
+		                       GPoint(apx[i], apy[i]), 3, 2);
 	}
 
 #undef DARK_TEMP_COLOR
 #undef LIGHT_TEMP_COLOR
+#undef LIGHT_THEME_INFILL
+#undef LIGHT_THEME_STROKE
 #undef TEMP_TO_F
 #else
 	// B&W: white actual-temp line + dotted apparent-temp line.
-	graphics_context_set_stroke_width(ctx, 1);
+	graphics_context_set_stroke_width(ctx, 2);
 	graphics_context_set_stroke_color(ctx, GColorWhite);
 	for (int i = 1; i <= (int)tl->hours_remaining && i <= total_hours; i++) {
 		graphics_draw_line(ctx, GPoint(spx[i - 1], spy[i - 1]),
 		                   GPoint(spx[i], spy[i]));
 	}
 
-	// Pebble's b&w path does not offer dashed strokes, so render the apparent
-	// temperature as sampled pixels along each segment instead.
 	for (int i = 1; i <= (int)tl->hours_remaining && i <= total_hours; i++) {
-		graph_draw_dotted_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
-		                       GPoint(apx[i], apy[i]), 3);
+		graph_draw_dashed_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
+		                       GPoint(apx[i], apy[i]), 3, 2);
 	}
 #endif
 
