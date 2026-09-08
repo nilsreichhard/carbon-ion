@@ -253,11 +253,16 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
 	icon_bar_layer_set_battery_display(s_icon_bar_layer,
 	                                   settings_get()->battery_display);
-	// Apply date format immediately rather than waiting for the next tick.
+	window_set_background_color(s_main_window,
+	                            settings_get()->light_theme ? GColorWhite
+	                                                        : GColorBlack);
+	// Apply settings and re-push weather immediately rather than waiting for next tick.
 	time_t now_s = time(NULL);
 	struct tm *now_stm = localtime(&now_s);
-	if (now_stm)
+	if (now_stm) {
 		time_layer_update(s_time_layer, now_stm, settings_get());
+		prv_push_weather_to_layers(now_stm);
+	}
 
 	// Parse scalar weather fields — track whether any weather key was present
 	// so a settings-only message can't corrupt the weather state.

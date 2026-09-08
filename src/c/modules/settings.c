@@ -95,5 +95,34 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		}
 	}
 
+	t = dict_find(iter, MESSAGE_KEY_SETTING_FORECAST_HOURS);
+	if (t) {
+		int fh = (int)t->value->int32;
+		if (fh == 12 || fh == 18 || fh == 24 || fh == 36 || fh == 48) {
+			s_settings.forecast_hours = (uint8_t)fh;
+		}
+	}
+
+	t = dict_find(iter, MESSAGE_KEY_SETTING_INFILL_MODE);
+	if (t) {
+		int im = (int)t->value->int8;
+		if (im >= 0 && im <= 3) {
+			s_settings.infill_mode = (InfillMode)im;
+		}
+	}
+
+	t = dict_find(iter, MESSAGE_KEY_SETTING_NEEDLE_MODE);
+	if (t) {
+		int nm = (int)t->value->int8;
+		if (nm >= 0 && nm <= 3) {
+			s_settings.needle_mode = (NeedleMode)nm;
+		}
+	}
+
+	t = dict_find(iter, MESSAGE_KEY_SETTING_LIGHT_THEME);
+	if (t) {
+		s_settings.light_theme = (t->value->int8 != 0);
+	}
+
 	settings_save();
 }

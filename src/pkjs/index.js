@@ -1030,11 +1030,23 @@ Pebble.addEventListener('webviewclosed', function (e) {
 	var showAmpm = extractBool(rawSettings['SETTING_SHOW_AMPM']);
 	if (showAmpm !== null) dict['SETTING_SHOW_AMPM'] = showAmpm;
 
+	var forecastHours = extractInt(rawSettings['SETTING_FORECAST_HOURS']);
+	if (!isNaN(forecastHours)) dict['SETTING_FORECAST_HOURS'] = forecastHours;
+
+	var infillMode = extractInt(rawSettings['SETTING_INFILL_MODE']);
+	if (!isNaN(infillMode)) dict['SETTING_INFILL_MODE'] = infillMode;
+
+	var needleMode = extractInt(rawSettings['SETTING_NEEDLE_MODE']);
+	if (!isNaN(needleMode)) dict['SETTING_NEEDLE_MODE'] = needleMode;
+
+	var lightTheme = extractBool(rawSettings['SETTING_LIGHT_THEME']);
+	if (lightTheme !== null) dict['SETTING_LIGHT_THEME'] = lightTheme;
+
 	var clearCacheRequested = extractBool(rawSettings['SETTING_CLEAR_CACHE']) === 1;
 
 	Pebble.sendAppMessage(dict,
-		function () { console.log('Carbon: settings sent to watch'); },
-		function (err) { console.log('Carbon: settings send failed: ' + JSON.stringify(err)); }
+		function () { console.log('Carbon Ion: settings sent to watch'); },
+		function (err) { console.log('Carbon Ion: settings send failed: ' + JSON.stringify(err)); }
 	);
 
 	var newSettings = readClaySettings();

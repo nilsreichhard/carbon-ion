@@ -48,7 +48,8 @@
         "SETTING_CLEAR_CACHE": 10026,
         "SETTING_INFILL_MODE": 10027,
         "SETTING_NEEDLE_MODE": 10028,
-        "SETTING_FORECAST_HOURS": 10029
+        "SETTING_FORECAST_HOURS": 10029,
+        "SETTING_LIGHT_THEME": 10030
     },
     "resources": {
         "media": [

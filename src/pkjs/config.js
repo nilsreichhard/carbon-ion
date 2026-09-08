@@ -1,10 +1,9 @@
 /**
- * Clay configuration for Carbon
+ * Clay configuration for Carbon Ion
  *
- * @author    Cory Hughart <cory@coryhughart.com>
- * @copyright 2026 Cory Hughart
- * @license   https://www.gnu.org/licenses/gpl-3.0.html GPL-3.0-or-later
- * @link      https://cr0ybot.com/project/pebble-watchface-carbon
+ * @author    Cory Hughart & Nils Reich
+ * @copyright 2026
+ * @license   GPL-3.0-or-later
  */
 
 // Build metadata inlined for robust offline/CloudPebble builds
@@ -18,7 +17,119 @@ module.exports = [
 	},
 	{
 		'type': 'text',
-		'defaultValue': `v${version} (${hash})`,
+		'defaultValue': `v${version} (Emery & Gabbro Edition)`,
+	},
+	{
+		'type': 'section',
+		'items': [
+			{
+				'type': 'heading',
+				'defaultValue': 'Timeline & Horizon',
+			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_FORECAST_HOURS',
+				'label': 'Forecast Window',
+				'description': 'Select timeline horizon ahead with matching 1/5 past ratio.',
+				'defaultValue': 24,
+				'options': [
+					{ 'label': '12hr future (+3h past = 15h)', 'value': 12 },
+					{ 'label': '18hr future (+4.5h past = 22.5h)', 'value': 18 },
+					{ 'label': '24hr future (+6h past = 30h)', 'value': 24 },
+					{ 'label': '36hr future (+9h past = 45h)', 'value': 36 },
+					{ 'label': '48hr future (+12h past = 60h)', 'value': 48 },
+				],
+			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_INFILL_MODE',
+				'label': 'Thermal Infill Shading',
+				'description': 'Shading area under temperature curve on meteogram.',
+				'defaultValue': 0,
+				'options': [
+					{ 'label': 'Forecast Only (After Now)', 'value': 0 },
+					{ 'label': 'Past Only (Before Now)', 'value': 1 },
+					{ 'label': 'All (Full Horizon)', 'value': 2 },
+					{ 'label': 'None (Curves Only)', 'value': 3 },
+				],
+			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_NEEDLE_MODE',
+				'label': 'Current Time Indicator Bar',
+				'description': 'Position of the vertical needle marking current hour.',
+				'defaultValue': 0,
+				'options': [
+					{ 'label': 'Both (Top Track & Meteogram)', 'value': 0 },
+					{ 'label': 'Top Track Only (Daylight & Sky)', 'value': 1 },
+					{ 'label': 'Bottom Only (Meteogram)', 'value': 2 },
+					{ 'label': 'None (Hide Needle)', 'value': 3 },
+				],
+			},
+		],
+	},
+	{
+		'type': 'section',
+		'items': [
+			{
+				'type': 'heading',
+				'defaultValue': 'Theme & Display',
+			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_LIGHT_THEME',
+				'label': 'Color Theme',
+				'description': 'Background and contrast appearance.',
+				'defaultValue': false,
+				'options': [
+					{ 'label': 'Dark Theme (Black)', 'value': false },
+					{ 'label': 'Light Theme (White)', 'value': true },
+				],
+			},
+			{
+				'type': 'text',
+				'defaultValue': 'Time format (12h/24h) is determined by the watch system settings.',
+			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_DATE_FORMAT',
+				'label': 'Date Format',
+				'defaultValue': '%A, %m/%d',
+				'options': [
+					{ 'label': 'Monday, 1/15', 'value': '%A, %m/%d' },
+					{ 'label': 'Monday, 15/1', 'value': '%A, %d/%m' },
+					{ 'label': 'Monday, Jan 15', 'value': '%A, %b %d' },
+					{ 'label': '1/15/2026', 'value': '%m/%d/%Y' },
+					{ 'label': '15/1/2026', 'value': '%d/%m/%Y' },
+					{ 'label': '15 Jan 2026', 'value': '%d %b %Y' },
+					{ 'label': '2026-01-15', 'value': '%Y-0%m-0%d' },
+				],
+			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_BATTERY_DISPLAY',
+				'label': 'Battery Indicator',
+				'defaultValue': 0,
+				'options': [
+					{ 'label': 'Icon (along timeline track)', 'value': 0 },
+					{ 'label': 'Percentage', 'value': 1 },
+				],
+			},
+			{
+				'type': 'toggle',
+				'messageKey': 'SETTING_SHOW_TIMEZONE',
+				'label': 'Show Timezone',
+				'description': 'Show timezone abbreviation left of the clock (hidden when Bluetooth or Silent mode icons are active).',
+				'defaultValue': false,
+			},
+			{
+				'type': 'toggle',
+				'messageKey': 'SETTING_SHOW_AMPM',
+				'label': 'Show AM/PM / 24h Indicator',
+				'description': 'Show AM/PM or 24h indicator to the right of the clock.',
+				'defaultValue': true,
+			},
+		],
 	},
 	{
 		'type': 'section',
@@ -57,72 +168,20 @@ module.exports = [
 		'items': [
 			{
 				'type': 'heading',
-				'defaultValue': 'Display',
-			},
-			{
-				'type': 'text',
-				'defaultValue': 'Time Format (12h/24h) is determined by the watch\'s system settings.',
-			},
-			{
-				'type': 'select',
-				'messageKey': 'SETTING_DATE_FORMAT',
-				'label': 'Date Format',
-				'defaultValue': '%A, %m/%d',
-				'options': [
-					{ 'label': 'Monday, 1/15', 'value': '%A, %m/%d' },
-					{ 'label': 'Monday, 15/1', 'value': '%A, %d/%m' },
-					{ 'label': 'Monday, Jan 15', 'value': '%A, %b %d' },
-					{ 'label': '1/15/2026', 'value': '%m/%d/%Y' },
-					{ 'label': '15/1/2026', 'value': '%d/%m/%Y' },
-					{ 'label': '15 Jan 2026', 'value': '%d %b %Y' },
-					{ 'label': '2026-01-15', 'value': '%Y-0%m-0%d' },
-				],
-			},
-			{
-				'type': 'select',
-				'messageKey': 'SETTING_BATTERY_DISPLAY',
-				'label': 'Battery Display',
-				'defaultValue': 0,
-				'options': [
-					{ 'label': 'Icon', 'value': 0 },
-					{ 'label': 'Percentage', 'value': 1 },
-				],
-			},
-			{
-				'type': 'toggle',
-				'messageKey': 'SETTING_SHOW_TIMEZONE',
-				'label': 'Show Timezone',
-				'description': 'Show the timezone abbreviation to the left of the time.',
-				'defaultValue': true,
-			},
-			{
-				'type': 'toggle',
-				'messageKey': 'SETTING_SHOW_AMPM',
-				'label': 'Show AM/PM / 24h Indicator',
-				'description': 'Show the AM/PM or 24h indicator to the right of the time.',
-				'defaultValue': true,
-			},
-		],
-	},
-	{
-		'type': 'section',
-		'items': [
-			{
-				'type': 'heading',
 				'defaultValue': 'Location',
 			},
 			{
 				'type': 'toggle',
 				'messageKey': 'SETTING_GEOCODE_ENABLED',
 				'label': 'Detect Location Name',
-				'description': 'Look up your city name from your location (reverse geocoding). When off, the custom text below is shown instead.',
+				'description': 'Look up city name from GPS (reverse geocoding). When off, custom text below is shown.',
 				'defaultValue': true,
 			},
 			{
 				'type': 'input',
 				'messageKey': 'SETTING_LOCATION_OVERRIDE',
 				'label': 'Custom Location Text',
-				'description': 'Shown when location detection is off. Leave blank to show no location.',
+				'description': 'Shown when location detection is off. Leave blank to hide.',
 				'defaultValue': '',
 				'attributes': {
 					'placeholder': 'e.g. Home',
@@ -133,7 +192,7 @@ module.exports = [
 				'type': 'toggle',
 				'messageKey': 'SETTING_USE_STATIC_LOCATION',
 				'label': 'Use Static Location',
-				'description': 'Skip GPS and always use fixed coordinates for weather and location name.',
+				'description': 'Skip GPS and use fixed coordinates for weather and location name.',
 				'defaultValue': false,
 			},
 			{
@@ -177,14 +236,14 @@ module.exports = [
 				'type': 'toggle',
 				'messageKey': 'SETTING_SHOW_ADVANCED_OPTIONS',
 				'label': 'Show advanced options',
-				'description': 'Advanced options are geared toward developers and troubleshooting. Most users should not mess with these.',
+				'description': 'Advanced options for diagnostics and troubleshooting.',
 				'defaultValue': false,
 			},
 			{
 				'type': 'toggle',
 				'messageKey': 'SETTING_CLEAR_CACHE',
 				'label': 'Clear cached data on save',
-				'description': 'Wipes cached weather and location data and refetches. Resets itself after use. *Intended for debugging and should not be necessary for normal use.*',
+				'description': 'Wipes cached weather and refetches immediately.',
 				'defaultValue': false,
 			},
 		],
