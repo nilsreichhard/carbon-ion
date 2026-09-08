@@ -11,6 +11,19 @@
 #include <pebble.h>
 #include <stdlib.h>
 
+#ifndef PBL_DISPLAY_HEIGHT
+#if defined(PBL_PLATFORM_EMERY)
+#define PBL_DISPLAY_WIDTH 200
+#define PBL_DISPLAY_HEIGHT 228
+#elif defined(PBL_PLATFORM_CHALK)
+#define PBL_DISPLAY_WIDTH 180
+#define PBL_DISPLAY_HEIGHT 180
+#else
+#define PBL_DISPLAY_WIDTH 144
+#define PBL_DISPLAY_HEIGHT 168
+#endif
+#endif
+
 // Horizontal pixel offset shared by all graph layers (daylight, cloud,
 // precip, temp). Bleeds flush to screen edges with 0 offset.
 #define GRAPH_OFFSET_X 0

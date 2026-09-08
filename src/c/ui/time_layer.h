@@ -8,6 +8,7 @@
  */
 
 #pragma once
+#include "graph_common.h"
 #include "../modules/settings.h"
 #include "../modules/weather.h"
 #include <pebble.h>

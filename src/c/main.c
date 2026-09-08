@@ -39,18 +39,18 @@ static inline int32_t prv_tuple_int(const Tuple *t) {
 // used for the icon bar overlay and the temp layer so all three match. Must be
 // tall enough to fit the icon slots: >= 228 uses 22px icons (need 66px+),
 // middle tier uses 18px icons (56px gives zone_h=18), small uses 14px icons.
-#if PBL_DISPLAY_HEIGHT >= 228
+#if defined(PBL_PLATFORM_EMERY) || (defined(PBL_DISPLAY_HEIGHT) && PBL_DISPLAY_HEIGHT >= 228)
 #define DAYLIGHT_H 18
 #define CLOUD_H 14
 #define PRECIP_H 22
 #define EVENT_H 12
 // Sums to 66
-#elif PBL_DISPLAY_HEIGHT <= 168
-#define DAYLIGHT_H 10
-#define CLOUD_H 12
-#define PRECIP_H 12
-#define EVENT_H 11
-// Sums to 45
+#elif defined(PBL_PLATFORM_CHALK)
+#define DAYLIGHT_H 14
+#define CLOUD_H 15
+#define PRECIP_H 15
+#define EVENT_H 12
+// Sums to 56
 #else
 #define DAYLIGHT_H 14
 #define CLOUD_H 15
