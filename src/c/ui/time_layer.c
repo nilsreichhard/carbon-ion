@@ -34,6 +34,31 @@ struct TimeLayer {
 	char date_buf[32];
 };
 
+static void prv_draw_silent_bell(GContext *ctx, GPoint origin, GColor color) {
+	graphics_context_set_stroke_color(ctx, color);
+	graphics_context_set_stroke_width(ctx, 1);
+	int ox = origin.x;
+	int oy = origin.y;
+
+	// Bell top finial / loop
+	graphics_draw_line(ctx, GPoint(ox + 6, oy + 1), GPoint(ox + 7, oy + 1));
+
+	// Bell dome & flared body
+	graphics_draw_line(ctx, GPoint(ox + 5, oy + 3), GPoint(ox + 8, oy + 3));
+	graphics_draw_line(ctx, GPoint(ox + 5, oy + 3), GPoint(ox + 3, oy + 8));
+	graphics_draw_line(ctx, GPoint(ox + 8, oy + 3), GPoint(ox + 10, oy + 8));
+
+	// Bell rim / lip
+	graphics_draw_line(ctx, GPoint(ox + 2, oy + 9), GPoint(ox + 11, oy + 9));
+
+	// Bell clapper
+	graphics_draw_line(ctx, GPoint(ox + 6, oy + 10), GPoint(ox + 7, oy + 10));
+
+	// Diagonal slash across the bell (silent mode indicator)
+	graphics_context_set_stroke_width(ctx, 2);
+	graphics_draw_line(ctx, GPoint(ox + 1, oy + 1), GPoint(ox + 12, oy + 12));
+}
+
 static void prv_status_update_proc(Layer *layer, GContext *ctx) {
 	TimeLayer *tl = *(TimeLayer **)layer_get_data(layer);
 	if (!tl)
@@ -53,10 +78,12 @@ static void prv_status_update_proc(Layer *layer, GContext *ctx) {
 	icon_size = 14;
 #endif
 
+	int ox = (bounds.size.w - 14) / 2;
+
 	if (show_bt && show_quiet) {
 		int half_h = bounds.size.h / 2;
 		int y_bt = (half_h - icon_size) / 2;
-		int y_qm = half_h + (half_h - icon_size) / 2;
+		int y_qm = half_h + (half_h - 14) / 2;
 
 #if defined(PBL_COLOR)
 		graphics_context_set_text_color(ctx, tl->light_theme ? GColorRed : GColorSunsetOrange);
@@ -69,17 +96,14 @@ static void prv_status_update_proc(Layer *layer, GContext *ctx) {
 		                   GTextAlignmentCenter, NULL);
 
 #if defined(PBL_COLOR)
-		graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlue : GColorPictonBlue);
+		GColor quiet_col = tl->light_theme ? GColorCobaltBlue : GColorPictonBlue;
 #else
-		graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlack : GColorWhite);
+		GColor quiet_col = tl->light_theme ? GColorBlack : GColorWhite;
 #endif
-		graphics_draw_text(ctx, ICON_MOON, tl->icon_font,
-		                   GRect(0, y_qm, bounds.size.w, icon_size),
-		                   GTextOverflowModeTrailingEllipsis,
-		                   GTextAlignmentCenter, NULL);
+		prv_draw_silent_bell(ctx, GPoint(ox, y_qm), quiet_col);
 	} else {
-		int y = (bounds.size.h - icon_size) / 2;
 		if (show_bt) {
+			int y = (bounds.size.h - icon_size) / 2;
 #if defined(PBL_COLOR)
 			graphics_context_set_text_color(ctx, tl->light_theme ? GColorRed : GColorSunsetOrange);
 #else
@@ -90,15 +114,13 @@ static void prv_status_update_proc(Layer *layer, GContext *ctx) {
 			                   GTextOverflowModeTrailingEllipsis,
 			                   GTextAlignmentCenter, NULL);
 		} else {
+			int y = (bounds.size.h - 14) / 2;
 #if defined(PBL_COLOR)
-			graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlue : GColorPictonBlue);
+			GColor quiet_col = tl->light_theme ? GColorCobaltBlue : GColorPictonBlue;
 #else
-			graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlack : GColorWhite);
+			GColor quiet_col = tl->light_theme ? GColorBlack : GColorWhite;
 #endif
-			graphics_draw_text(ctx, ICON_MOON, tl->icon_font,
-			                   GRect(0, y, bounds.size.w, icon_size),
-			                   GTextOverflowModeTrailingEllipsis,
-			                   GTextAlignmentCenter, NULL);
+			prv_draw_silent_bell(ctx, GPoint(ox, y), quiet_col);
 		}
 	}
 }
