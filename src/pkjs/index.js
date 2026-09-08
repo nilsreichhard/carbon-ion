@@ -610,23 +610,55 @@ function sendToWatch(payload) {
 
 	var dict = {
 		'WEATHER_PRECIP_PROB': packUint8Array(precipProb, hourlyCount),
+		10005: packUint8Array(precipProb, hourlyCount),
 		'WEATHER_TEMP_HOURLY': packInt8Array(tempHourly, hourlyCount),
+		10006: packInt8Array(tempHourly, hourlyCount),
 		'WEATHER_APPARENT_TEMP_HOURLY': packInt8Array(apparentHourly, hourlyCount),
+		10007: packInt8Array(apparentHourly, hourlyCount),
 		'WEATHER_CLOUD_COVER': packUint8Array(cloudCover, hourlyCount),
+		10008: packUint8Array(cloudCover, hourlyCount),
 		'WEATHER_HOURLY_CODE': packUint8Array(hourlyCode, hourlyCount),
+		10009: packUint8Array(hourlyCode, hourlyCount),
 		'CITY_NAME': cityName.substring(0, 23),
+		10013: cityName.substring(0, 23),
 		'SETTING_TEMP_UNIT': tempUnitFlag,
+		10014: tempUnitFlag,
 	};
 
 	// Scalar weather fields are only included when the value is actually present;
 	// omitting a key is the AppMessage equivalent of null.
-	if (payload.current_temp != null) dict['WEATHER_TEMP'] = Math.round(payload.current_temp);
-	if (payload.high_temp != null) dict['WEATHER_TEMP_HIGH'] = Math.round(payload.high_temp);
-	if (payload.low_temp != null) dict['WEATHER_TEMP_LOW'] = Math.round(payload.low_temp);
-	if (payload.weather_code != null) dict['WEATHER_CODE'] = payload.weather_code;
-	if (payload.sunrise_hour != null) dict['WEATHER_SUNRISE_HOUR'] = payload.sunrise_hour;
-	if (payload.sunset_hour != null) dict['WEATHER_SUNSET_HOUR'] = payload.sunset_hour;
-	if (payload.fetch_time != null) dict['WEATHER_FETCH_TIME'] = Math.floor(payload.fetch_time);
+	if (payload.current_temp != null) {
+		var curT = Math.round(payload.current_temp);
+		dict['WEATHER_TEMP'] = curT;
+		dict[10001] = curT;
+	}
+	if (payload.high_temp != null) {
+		var hiT = Math.round(payload.high_temp);
+		dict['WEATHER_TEMP_HIGH'] = hiT;
+		dict[10002] = hiT;
+	}
+	if (payload.low_temp != null) {
+		var loT = Math.round(payload.low_temp);
+		dict['WEATHER_TEMP_LOW'] = loT;
+		dict[10003] = loT;
+	}
+	if (payload.weather_code != null) {
+		dict['WEATHER_CODE'] = payload.weather_code;
+		dict[10004] = payload.weather_code;
+	}
+	if (payload.sunrise_hour != null) {
+		dict['WEATHER_SUNRISE_HOUR'] = payload.sunrise_hour;
+		dict[10010] = payload.sunrise_hour;
+	}
+	if (payload.sunset_hour != null) {
+		dict['WEATHER_SUNSET_HOUR'] = payload.sunset_hour;
+		dict[10011] = payload.sunset_hour;
+	}
+	if (payload.fetch_time != null) {
+		var fTime = Math.floor(payload.fetch_time);
+		dict['WEATHER_FETCH_TIME'] = fTime;
+		dict[10012] = fTime;
+	}
 
 	var nowMs = Date.now();
 	var signature = JSON.stringify(dict);
@@ -686,14 +718,14 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 		sendToWatch(payload);
 	}
 
-	// Open-Meteo weather — 8 past hours and 28 forecast hours for a rolling continuous window
+	// Open-Meteo weather — 12 past hours and 48 forecast hours for a rolling continuous window
 	var weatherUrl = WEATHER_BASE_URL +
 		'?latitude=' + lat +
 		'&longitude=' + lon +
 		'&current=temperature_2m,weather_code' +
 		'&hourly=precipitation_probability,temperature_2m,apparent_temperature,cloud_cover,weather_code' +
-		'&past_hours=8' +
-		'&forecast_hours=28' +
+		'&past_hours=12' +
+		'&forecast_hours=48' +
 		'&daily=sunrise,sunset,temperature_2m_min,temperature_2m_max' +
 		'&temperature_unit=' + tempUnit +
 		'&timeformat=unixtime' +
@@ -1130,8 +1162,8 @@ Pebble.addEventListener('webviewclosed', function (e) {
 });
 
 Pebble.addEventListener('appmessage', function (e) {
-	if (e.payload && e.payload['WEATHER_REQUEST'] !== undefined) {
-		var seq = e.payload['WEATHER_REQUEST'];
+	if (e.payload && (e.payload['WEATHER_REQUEST'] !== undefined || e.payload[10000] !== undefined || e.payload['10000'] !== undefined)) {
+		var seq = e.payload['WEATHER_REQUEST'] || e.payload[10000] || e.payload['10000'];
 		var dropReason = getWeather();
 		if (dropReason === 'dedupe_req') {
 			eventLog.aggregate('dedupe_req', 'seq=' + seq);

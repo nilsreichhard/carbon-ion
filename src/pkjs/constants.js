@@ -15,7 +15,7 @@ module.exports = {
 	GEONAME_COORD_PRECISION: 2,
 	CACHE_TTL_MARGIN_MS: 2 * 60 * 1000, // Interval-minus-margin avoids alternating cache hits.
 	XHR_TIMEOUT_MS: 10 * 1000, // Fail fast enough to allow retries.
-	FORECAST_HOURS: 36,
+	FORECAST_HOURS: 60,
 	WEATHER_RETRY_ATTEMPTS: 3,
 	WEATHER_RETRY_BASE_DELAY_MS: 2 * 1000, // 2s/4s smooths top-of-hour API bursts.
 	GEOCODE_RETRY_ATTEMPTS: 2,

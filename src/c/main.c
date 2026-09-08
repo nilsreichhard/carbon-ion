@@ -21,8 +21,19 @@
 #include <pebble.h>
 #include <stddef.h>
 
+static inline int32_t prv_tuple_int(const Tuple *t) {
+	if (!t)
+		return 0;
+	if (t->length == 1)
+		return (int32_t)t->value->int8;
+	if (t->length == 2)
+		return (int32_t)t->value->int16;
+	return t->value->int32;
+}
+
 // Storage key for persisting last-received weather across cold starts
 #define STORAGE_KEY_WEATHER 2
+#define STORAGE_KEY_WEATHER_PART2 3
 
 // GRAPH_LAYERS_H is the combined height of daylight+cloud+precip+event — also
 // used for the icon bar overlay and the temp layer so all three match. Must be
@@ -128,93 +139,65 @@ static void prv_push_weather_to_layers(struct tm *now) {
 		return;
 	}
 
-	// How many array slots separate the fetch hour from the current hour
+	// Calculate how many hours have elapsed since the fetch
 	int data_offset = 0;
 	if (s_weather.fetch_time > 0) {
 		time_t now_t = time(NULL);
-		struct tm fetch_tm;
-		struct tm now_tm;
-		struct tm *fetch_ptr = localtime(&s_weather.fetch_time);
-		if (fetch_ptr) {
-			fetch_tm = *fetch_ptr;
-		}
-		struct tm *now_ptr = localtime(&now_t);
-		if (now_ptr) {
-			now_tm = *now_ptr;
-		}
-
-		if (fetch_ptr && now_ptr) {
-			int fetch_hour_index = fetch_tm.tm_yday * 24 + fetch_tm.tm_hour;
-			int now_hour_index = now_tm.tm_yday * 24 + now_tm.tm_hour;
-
-			if (now_tm.tm_year == fetch_tm.tm_year) {
-				data_offset = now_hour_index - fetch_hour_index;
-			} else if (now_tm.tm_year == fetch_tm.tm_year + 1) {
-				int full_year_hours = 365 * 24;
-				int fetch_year = fetch_tm.tm_year + 1900;
-				if ((fetch_year % 4 == 0 && fetch_year % 100 != 0) ||
-				    (fetch_year % 400 == 0)) {
-					full_year_hours = 366 * 24;
-				}
-				data_offset =
-				    (full_year_hours - fetch_hour_index) + now_hour_index;
-			} else {
-				long elapsed = (long)(now_t - s_weather.fetch_time);
-				if (elapsed > 0)
-					data_offset = (int)(elapsed / 3600);
-			}
-		}
-
-		if (data_offset < 0) {
-			data_offset = 0;
+		long elapsed = (long)(now_t - s_weather.fetch_time);
+		if (elapsed > 0) {
+			data_offset = (int)(elapsed / 3600);
 		}
 	}
+	if (data_offset < 0)
+		data_offset = 0;
+	if (data_offset >= WEATHER_HOURLY_COUNT)
+		data_offset = WEATHER_HOURLY_COUNT - 1;
 
-	// If the entire cached window is in the past, nothing useful to show
-	if (data_offset >= (int)s_weather.valid_hours ||
-	    data_offset >= WEATHER_HOURLY_COUNT) {
-		daylight_layer_set_data(s_daylight_layer, 6, 18, current_hour, true,
-		                        true);
-		temp_layer_set_current_hour(s_temp_layer, current_hour, 0);
-		icon_bar_layer_set_condition(s_icon_bar_layer,
-		                             WEATHER_CONDITION_UNKNOWN);
-		icon_bar_layer_set_disconnected(s_icon_bar_layer, true);
-		return;
-	}
+	int past_needed = graph_get_past_hours();
+	int total_needed = graph_get_total_hours();
+	if (total_needed > WEATHER_HOURLY_COUNT)
+		total_needed = WEATHER_HOURLY_COUNT;
 
-	uint8_t hours_remaining = (uint8_t)(s_weather.valid_hours - data_offset);
-	if (hours_remaining > WEATHER_HOURLY_COUNT)
-		hours_remaining = WEATHER_HOURLY_COUNT;
+	int start_idx = WEATHER_PAST_HOURS - past_needed + data_offset;
+	if (start_idx < 0)
+		start_idx = 0;
+	if (start_idx >= WEATHER_HOURLY_COUNT)
+		start_idx = WEATHER_HOURLY_COUNT - 1;
 
-	// Shifted views: index 0 == current hour's forecast
-	uint8_t precip_view[WEATHER_HOURLY_COUNT];
-	int8_t temp_view[WEATHER_HOURLY_COUNT];
-	int8_t appar_view[WEATHER_HOURLY_COUNT];
-	uint8_t cloud_view[WEATHER_HOURLY_COUNT];
-	uint8_t code_view[WEATHER_HOURLY_COUNT];
+	int copy_len = total_needed;
+	if (start_idx + copy_len > WEATHER_HOURLY_COUNT)
+		copy_len = WEATHER_HOURLY_COUNT - start_idx;
+
+	// Shifted views: window starting at past_needed hours ago
+	uint8_t precip_view[MAX_GRAPH_HOURS];
+	int8_t temp_view[MAX_GRAPH_HOURS];
+	int8_t appar_view[MAX_GRAPH_HOURS];
+	uint8_t cloud_view[MAX_GRAPH_HOURS];
+	uint8_t code_view[MAX_GRAPH_HOURS];
 	memset(precip_view, 0, sizeof(precip_view));
 	memset(temp_view, 0, sizeof(temp_view));
 	memset(appar_view, 0, sizeof(appar_view));
 	memset(cloud_view, 0, sizeof(cloud_view));
 	memset(code_view, 0, sizeof(code_view));
 
-	int copy_len = (int)hours_remaining;
-	if (data_offset + copy_len > WEATHER_HOURLY_COUNT)
-		copy_len = WEATHER_HOURLY_COUNT - data_offset;
+	memcpy(precip_view, &s_weather.precip_prob[start_idx], copy_len);
+	memcpy(temp_view, &s_weather.temp_hourly[start_idx], copy_len);
+	memcpy(appar_view, &s_weather.apparent_temp_hourly[start_idx], copy_len);
+	memcpy(cloud_view, &s_weather.cloud_cover[start_idx], copy_len);
+	memcpy(code_view, &s_weather.hourly_weather_code[start_idx], copy_len);
 
-	memcpy(precip_view, &s_weather.precip_prob[data_offset], copy_len);
-	memcpy(temp_view, &s_weather.temp_hourly[data_offset], copy_len);
-	memcpy(appar_view, &s_weather.apparent_temp_hourly[data_offset], copy_len);
-	memcpy(cloud_view, &s_weather.cloud_cover[data_offset], copy_len);
-	memcpy(code_view, &s_weather.hourly_weather_code[data_offset], copy_len);
+	uint8_t hours_remaining = copy_len;
 
-	// When stale, use hourly forecast for current hour instead of scalar fields
-	int16_t display_temp = (data_offset > 0)
-	                           ? (int16_t)s_weather.temp_hourly[data_offset]
-	                           : s_weather.current_temp;
-	uint8_t display_code = (data_offset > 0)
-	                           ? s_weather.hourly_weather_code[data_offset]
-	                           : s_weather.weather_code;
+	int now_idx = WEATHER_PAST_HOURS + data_offset;
+	if (now_idx >= WEATHER_HOURLY_COUNT)
+		now_idx = WEATHER_HOURLY_COUNT - 1;
+
+	int16_t display_temp = (s_weather.current_temp != 0)
+	                           ? s_weather.current_temp
+	                           : (int16_t)s_weather.temp_hourly[now_idx];
+	uint8_t display_code = (s_weather.weather_code != 0)
+	                           ? s_weather.weather_code
+	                           : s_weather.hourly_weather_code[now_idx];
 
 	bool is_day = (current_hour >= s_weather.sunrise_hour &&
 	               current_hour < s_weather.sunset_hour);
@@ -283,60 +266,75 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 	bool got_weather = false;
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_TEMP);
+	if (!t) t = dict_find(iter, 10001);
 	if (t) {
-		s_weather.current_temp = (int16_t)t->value->int32;
+		s_weather.current_temp = (int16_t)prv_tuple_int(t);
 		got_weather = true;
 	}
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_TEMP_HIGH);
+	if (!t) t = dict_find(iter, 10002);
 	if (t)
-		s_weather.high_temp = (int16_t)t->value->int32;
+		s_weather.high_temp = (int16_t)prv_tuple_int(t);
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_TEMP_LOW);
+	if (!t) t = dict_find(iter, 10003);
 	if (t)
-		s_weather.low_temp = (int16_t)t->value->int32;
+		s_weather.low_temp = (int16_t)prv_tuple_int(t);
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_CODE);
+	if (!t) t = dict_find(iter, 10004);
 	if (t)
-		s_weather.weather_code = (uint8_t)t->value->int32;
+		s_weather.weather_code = (uint8_t)prv_tuple_int(t);
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_SUNRISE_HOUR);
+	if (!t) t = dict_find(iter, 10010);
 	if (t)
-		s_weather.sunrise_hour = (uint8_t)t->value->int32;
+		s_weather.sunrise_hour = (uint8_t)prv_tuple_int(t);
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_SUNSET_HOUR);
+	if (!t) t = dict_find(iter, 10011);
 	if (t)
-		s_weather.sunset_hour = (uint8_t)t->value->int32;
+		s_weather.sunset_hour = (uint8_t)prv_tuple_int(t);
 
 	// Hourly byte arrays
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_PRECIP_PROB);
-	if (t && t->type == TUPLE_BYTE_ARRAY && t->length >= WEATHER_HOURLY_COUNT) {
-		memcpy(s_weather.precip_prob, t->value->data, WEATHER_HOURLY_COUNT);
+	if (!t) t = dict_find(iter, 10005);
+	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+		int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
+		memcpy(s_weather.precip_prob, t->value->data, len);
 	}
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_TEMP_HOURLY);
-	if (t && t->type == TUPLE_BYTE_ARRAY && t->length >= WEATHER_HOURLY_COUNT) {
-		memcpy(s_weather.temp_hourly, t->value->data, WEATHER_HOURLY_COUNT);
+	if (!t) t = dict_find(iter, 10006);
+	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+		int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
+		memcpy(s_weather.temp_hourly, t->value->data, len);
 	}
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_APPARENT_TEMP_HOURLY);
-	if (t && t->type == TUPLE_BYTE_ARRAY && t->length >= WEATHER_HOURLY_COUNT) {
-		memcpy(s_weather.apparent_temp_hourly, t->value->data,
-		       WEATHER_HOURLY_COUNT);
+	if (!t) t = dict_find(iter, 10007);
+	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+		int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
+		memcpy(s_weather.apparent_temp_hourly, t->value->data, len);
 	}
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_CLOUD_COVER);
-	if (t && t->type == TUPLE_BYTE_ARRAY && t->length >= WEATHER_HOURLY_COUNT) {
-		memcpy(s_weather.cloud_cover, t->value->data, WEATHER_HOURLY_COUNT);
+	if (!t) t = dict_find(iter, 10008);
+	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+		int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
+		memcpy(s_weather.cloud_cover, t->value->data, len);
 	}
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_HOURLY_CODE);
-	if (t && t->type == TUPLE_BYTE_ARRAY && t->length >= WEATHER_HOURLY_COUNT) {
-		memcpy(s_weather.hourly_weather_code, t->value->data,
-		       WEATHER_HOURLY_COUNT);
+	if (!t) t = dict_find(iter, 10009);
+	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+		int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
+		memcpy(s_weather.hourly_weather_code, t->value->data, len);
 	}
 
 	t = dict_find(iter, MESSAGE_KEY_CITY_NAME);
+	if (!t) t = dict_find(iter, 10013);
 	if (t && t->type == TUPLE_CSTRING) {
 		strncpy(s_weather.city_name, t->value->cstring,
 		        sizeof(s_weather.city_name) - 1);
@@ -349,19 +347,23 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 	if (!got_weather)
 		goto done;
 
-	// Require a fetch timestamp — without it we cannot compute data_offset and
-	// would wrongly treat data of unknown age as current.
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_FETCH_TIME);
-	if (!t)
-		goto done;
+	if (!t) t = dict_find(iter, 10012);
+	if (t) {
+		s_weather.fetch_time = (time_t)prv_tuple_int(t);
+	} else {
+		s_weather.fetch_time = time(NULL);
+	}
 
 	s_weather.is_valid = true;
-	s_weather.fetch_time = (time_t)t->value->int32;
 	s_weather.valid_hours = WEATHER_HOURLY_COUNT;
 	s_last_answered_seq = s_last_sent_request_seq;
 
-	// Persist for cold-start restoration
-	persist_write_data(STORAGE_KEY_WEATHER, &s_weather, sizeof(s_weather));
+	// Persist for cold-start restoration across 2 storage keys
+	persist_write_data(STORAGE_KEY_WEATHER, &s_weather, 256);
+	persist_write_data(STORAGE_KEY_WEATHER_PART2,
+	                   ((const uint8_t *)&s_weather) + 256,
+	                   sizeof(s_weather) - 256);
 
 	// Push data to layers
 	time_t now_push = time(NULL);
@@ -522,12 +524,11 @@ static void init(void) {
 	demo_data_load(&s_weather, settings_get());
 #else
 	if (persist_exists(STORAGE_KEY_WEATHER)) {
-		int stored_size = persist_get_size(STORAGE_KEY_WEATHER);
-		if (stored_size == (int)sizeof(s_weather)) {
-			persist_read_data(STORAGE_KEY_WEATHER, &s_weather,
-			                  sizeof(s_weather));
-		} else {
-			persist_delete(STORAGE_KEY_WEATHER);
+		persist_read_data(STORAGE_KEY_WEATHER, &s_weather, 256);
+		if (persist_exists(STORAGE_KEY_WEATHER_PART2)) {
+			persist_read_data(STORAGE_KEY_WEATHER_PART2,
+			                  ((uint8_t *)&s_weather) + 256,
+			                  sizeof(s_weather) - 256);
 		}
 	}
 #endif

@@ -67,16 +67,18 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int zone_h =
 	    (lh - 2) / 3; // 2px bottom padding keeps low label off the edge
 
-	// Sparkline — total_hours + 1 points: current temp followed by hourly forecasts.
+	// Sparkline — total_hours + 1 points with current temp anchored at needle (now_col)
+	int now_col = graph_get_past_hours();
 	int16_t pts[MAX_GRAPH_HOURS + 1];
-	pts[0] = tl->current;
-	for (int i = 0; i < total_hours; i++)
-		pts[i + 1] = tl->hourly[i];
-
 	int16_t apt[MAX_GRAPH_HOURS + 1];
-	apt[0] = tl->apparent_hourly[0];
-	for (int i = 0; i < total_hours; i++)
-		apt[i + 1] = tl->apparent_hourly[i];
+	for (int i = 0; i <= total_hours; i++) {
+		if (i == now_col && tl->current != 0) {
+			pts[i] = tl->current;
+		} else {
+			pts[i] = tl->hourly[i];
+		}
+		apt[i] = tl->apparent_hourly[i];
+	}
 
 	int16_t t_min = pts[0] < apt[0] ? pts[0] : apt[0];
 	int16_t t_max = pts[0] > apt[0] ? pts[0] : apt[0];
@@ -231,19 +233,24 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 
 	// Floating temperature labels overlapping on top of the left side of the chart (Right-aligned)
-	int label_x = 30;
+	int label_x = 32;
 	GColor text_color = is_light ? GColorBlack : GColorWhite;
 	graphics_context_set_text_color(ctx, text_color);
+	int y_high = (zone_h - sm_h) / 2;
+	if (y_high < 1) y_high = 1;
+	int y_curr = zone_h + (zone_h - md_h) / 2;
+	if (y_curr < y_high + sm_h - 2) y_curr = y_high + sm_h - 2;
+	int y_low = 2 * zone_h + (zone_h - sm_h) / 2;
+	if (y_low < y_curr + md_h - 2) y_low = y_curr + md_h - 2;
+
 	graphics_draw_text(ctx, high_buf, font_sm,
-	                   GRect(4, (zone_h - sm_h) / 2 - sm_lead, label_x, sm_h),
+	                   GRect(2, y_high, label_x, sm_h),
 	                   GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
-	graphics_draw_text(
-	    ctx, curr_buf, font_md,
-	    GRect(4, zone_h + (zone_h - md_h) / 2 - md_lead, label_x, md_h),
-	    GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
+	graphics_draw_text(ctx, curr_buf, font_md,
+	                   GRect(2, y_curr, label_x, md_h),
+	                   GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
 	graphics_draw_text(ctx, low_buf, font_sm,
-	                   GRect(4, 2 * zone_h + (zone_h - (sm_h - sm_lead)) / 2,
-	                         label_x, sm_h - sm_lead),
+	                   GRect(2, y_low, label_x, sm_h),
 	                   GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
 }
 
