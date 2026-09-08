@@ -29,13 +29,12 @@ struct DaylightLayer {
 // Dots are drawn at center-2, center, center+2 (centered on the approx hour).
 #define DITHER_REACH 4
 
-// Calculate the current moon phase (0=new, 1=wax crescent, 2=first quarter,
+// Calculate the moon phase at a specific timestamp (0=new, 1=wax crescent, 2=first quarter,
 // 3=wax gibbous, 4=full, 5=wan gibbous, 6=last quarter, 7=wan crescent).
 // Integer-only adaptation of the classic algorithm, scaled x10000 and
 // epoch-offset to year 2000 so all values fit in 32-bit long.
-static int prv_moon_phase(void) {
-	time_t now = time(NULL);
-	struct tm *t = localtime(&now);
+static int prv_moon_phase_at(time_t target_time) {
+	struct tm *t = localtime(&target_time);
 	if (!t)
 		return 0;
 	int year = t->tm_year + 1900;
@@ -217,7 +216,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 
 	// 3. Solar Noon Markers across all cycles
-	for (int k = -48; k <= total_hours + 24; k += 24) {
+	for (int k = -72; k <= total_hours + 48; k += 24) {
 		int noon_t = ((12 - base_hour + 240) % 24) + k;
 		if (noon_t >= 0 && noon_t <= total_hours) {
 			int x_noon = graph_x + noon_t * graph_w / total_hours;
@@ -226,11 +225,13 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 
 	// 4. Midnight Moon Phase Markers across all cycles
-	int moon_phase = prv_moon_phase();
-	for (int k = -48; k <= total_hours + 24; k += 24) {
+	time_t now_sec = time(NULL);
+	for (int k = -72; k <= total_hours + 48; k += 24) {
 		int midn_t = ((24 - base_hour + 240) % 24) + k;
 		if (midn_t >= 0 && midn_t <= total_hours) {
 			int x_midn = graph_x + midn_t * graph_w / total_hours;
+			time_t target_sec = now_sec + (midn_t - past_hours) * 3600;
+			int moon_phase = prv_moon_phase_at(target_sec);
 			prv_draw_col_marker(ctx, x_midn, moon_phase, line_y);
 		}
 	}

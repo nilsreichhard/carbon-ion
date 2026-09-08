@@ -9,13 +9,13 @@
 module.exports = {
 	WEATHER_BASE_URL: 'https://api.open-meteo.com/v1/forecast',
 	GEOCODE_BASE_URL: 'https://api.bigdatacloud.net/data/reverse-geocode-client',
-	CACHE_KEY: 'carbon.weather.v5',
+	CACHE_KEY: 'carbon.weather.v6',
 	GEONAME_CACHE_KEY: 'carbon.geoname.v1',
 	GEONAME_TTL_MS: 24 * 60 * 60 * 1000,
 	GEONAME_COORD_PRECISION: 2,
 	CACHE_TTL_MARGIN_MS: 2 * 60 * 1000, // Interval-minus-margin avoids alternating cache hits.
 	XHR_TIMEOUT_MS: 10 * 1000, // Fail fast enough to allow retries.
-	FORECAST_HOURS: 60,
+	FORECAST_HOURS: 72,
 	WEATHER_RETRY_ATTEMPTS: 3,
 	WEATHER_RETRY_BASE_DELAY_MS: 2 * 1000, // 2s/4s smooths top-of-hour API bursts.
 	GEOCODE_RETRY_ATTEMPTS: 2,

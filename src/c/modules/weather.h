@@ -10,8 +10,9 @@
 #pragma once
 #include <pebble.h>
 
-#define WEATHER_HOURLY_COUNT 60
+#define WEATHER_HOURLY_COUNT 72
 #define WEATHER_PAST_HOURS 12
+#define WEATHER_FORECAST_HOURS 60
 #define WEATHER_CITY_MAX_LEN 24
 
 typedef enum {
