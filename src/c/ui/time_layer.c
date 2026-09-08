@@ -59,7 +59,7 @@ static void prv_draw_silent_bell(GContext *ctx, GPoint origin, GColor color) {
 	graphics_draw_line(ctx, GPoint(ox + 6, oy + 10), GPoint(ox + 7, oy + 10));
 
 	// Diagonal slash across the bell (silent mode indicator)
-	graphics_context_set_stroke_width(ctx, 2);
+	graphics_context_set_stroke_width(ctx, 1);
 	graphics_draw_line(ctx, GPoint(ox + 1, oy + 1), GPoint(ox + 12, oy + 12));
 }
 

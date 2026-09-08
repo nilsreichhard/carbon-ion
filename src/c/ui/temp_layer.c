@@ -160,11 +160,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	InfillMode infill = settings_get()->infill_mode;
 	if (infill != INFILL_NONE) {
 		int now_col = graph_get_past_hours(); // Fixed at 1/5
-		int start_col = (infill == INFILL_PAST) ? 1 : now_col;
-		if (infill == INFILL_ALL) start_col = 1;
+		int x_now = graph_x + (graph_w / 5);
+		int start_col = (infill == INFILL_FUTURE) ? (now_col + 1) : 1;
 		int end_col = (infill == INFILL_PAST) ? now_col : total_hours;
 
-		for (int i = (start_col < 1 ? 1 : start_col); i <= end_col && i <= total_hours; i++) {
+		for (int i = start_col; i <= end_col && i <= total_hours; i++) {
 			int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
 			GColor fill_col = is_light ? LIGHT_THEME_INFILL(TEMP_TO_F(avg))
 			                           : DARK_TEMP_COLOR(TEMP_TO_F(avg));
@@ -176,6 +176,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				steps = 1;
 			for (int s = 0; s <= steps; s++) {
 				int col_x = x0 + dx * s / steps;
+				if (infill == INFILL_FUTURE && col_x < x_now)
+					continue;
+				if (infill == INFILL_PAST && col_x > x_now)
+					continue;
 				int col_y = y0 + dy * s / steps + 2; // Offset down so line cleanly covers top of infill
 				int col_h = line_bottom - col_y;
 				if (col_h > 0) {

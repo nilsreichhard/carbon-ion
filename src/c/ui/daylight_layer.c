@@ -139,9 +139,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int base_hour = ((int)dl->current_hour - past_hours + 240) % 24;
 
 	// Theme colors
-	GColor night_col = is_light ? GColorBlack : GColorOxfordBlue;
+	GColor night_col = is_light ? GColorBlack : GColorDarkGray;
 	GColor day_col = is_light ? GColorLightGray : GColorWhite;
-	GColor bracket_col = GColorWhite;
+	GColor bracket_col = is_light ? GColorBlack : GColorWhite;
 
 	// Calculate daylight spans across the rolling multi-day window
 	int raw_rise = ((int)dl->sunrise_hour - base_hour + 240) % 24;
@@ -198,21 +198,19 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			graphics_draw_line(ctx, GPoint(x1, line_y), GPoint(x2, line_y));
 		}
 
-		// Endcap brackets (in dark theme only)
-		if (!is_light) {
-			graphics_context_set_stroke_color(ctx, bracket_col);
-			graphics_context_set_stroke_width(ctx, 2);
-			if (day_spans[i].orig_rise >= 0 && day_spans[i].orig_rise <= total_hours) {
-				int xr = graph_x + day_spans[i].orig_rise * graph_w / total_hours;
-				graphics_draw_line(ctx, GPoint(xr, line_y - 4), GPoint(xr, line_y + 4));
-			}
-			if (day_spans[i].orig_set >= 0 && day_spans[i].orig_set <= total_hours) {
-				int xs = graph_x + day_spans[i].orig_set * graph_w / total_hours;
-				graphics_draw_line(ctx, GPoint(xs, line_y - 4), GPoint(xs, line_y + 4));
-			}
-			graphics_context_set_stroke_width(ctx, 3);
-			graphics_context_set_stroke_color(ctx, day_col);
+		// Endcap brackets at sunrise and sunset (in both dark and light theme)
+		graphics_context_set_stroke_color(ctx, bracket_col);
+		graphics_context_set_stroke_width(ctx, 2);
+		if (day_spans[i].orig_rise >= 0 && day_spans[i].orig_rise <= total_hours) {
+			int xr = graph_x + day_spans[i].orig_rise * graph_w / total_hours;
+			graphics_draw_line(ctx, GPoint(xr, line_y - 4), GPoint(xr, line_y + 4));
 		}
+		if (day_spans[i].orig_set >= 0 && day_spans[i].orig_set <= total_hours) {
+			int xs = graph_x + day_spans[i].orig_set * graph_w / total_hours;
+			graphics_draw_line(ctx, GPoint(xs, line_y - 4), GPoint(xs, line_y + 4));
+		}
+		graphics_context_set_stroke_width(ctx, 3);
+		graphics_context_set_stroke_color(ctx, day_col);
 	}
 
 	// 3. Solar Noon Markers across all cycles
