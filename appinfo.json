@@ -78,9 +78,9 @@
             }
         ]
     },
-    "name": "carbon",
-    "shortName": "Carbon",
-    "longName": "Carbon",
+    "name": "carbon-ion",
+    "shortName": "Carbon Ion",
+    "longName": "Carbon Ion",
     "versionLabel": "1.5.0",
     "companyName": "Cory Hughart",
     "appKeys": {

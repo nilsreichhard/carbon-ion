@@ -14,7 +14,7 @@ var hash = 'custom';
 module.exports = [
 	{
 		'type': 'heading',
-		'defaultValue': 'Carbon',
+		'defaultValue': 'Carbon Ion',
 	},
 	{
 		'type': 'text',

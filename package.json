@@ -1,6 +1,6 @@
 {
-  "name": "carbon",
-  "description": "24-hour weather graph watchface for Pebble smartwatches",
+  "name": "carbon-ion",
+  "description": "Weather graph watchface for Pebble Time 2 (Emery) and Round 2 (Gabbro)",
   "author": {
     "name": "Cory Hughart",
     "url": "https://coryhughart.com"
@@ -11,7 +11,7 @@
   ],
   "private": true,
   "pebble": {
-    "displayName": "Carbon",
+    "displayName": "Carbon Ion",
     "uuid": "4a34b9c0-93b3-43ff-b1ba-a19d00cbcc60",
     "sdkVersion": "3",
     "enableMultiJS": true,
