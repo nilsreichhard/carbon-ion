@@ -42,6 +42,14 @@ typedef enum {
 #define DEFAULT_FORECAST_HOURS 24
 #define MAX_GRAPH_HOURS 60
 
+// Direct message key tags for robust compilation across CloudPebble environments
+#define KEY_SETTING_INFILL_MODE 10027
+#define KEY_SETTING_NEEDLE_MODE 10028
+#define KEY_SETTING_FORECAST_HOURS 10029
+#define KEY_SETTING_LIGHT_THEME 10030
+#define KEY_SETTING_SHOW_BT_ALERT 10031
+#define KEY_SETTING_SHOW_SILENT_MODE 10032
+
 typedef struct {
 	bool temp_unit_celsius;
 	bool light_theme;

@@ -97,7 +97,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		}
 	}
 
-	t = dict_find(iter, MESSAGE_KEY_SETTING_FORECAST_HOURS);
+	t = dict_find(iter, KEY_SETTING_FORECAST_HOURS);
 	if (t) {
 		int fh = (int)t->value->int32;
 		if (fh == 12 || fh == 18 || fh == 24 || fh == 36 || fh == 48) {
@@ -105,7 +105,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		}
 	}
 
-	t = dict_find(iter, MESSAGE_KEY_SETTING_INFILL_MODE);
+	t = dict_find(iter, KEY_SETTING_INFILL_MODE);
 	if (t) {
 		int im = (int)t->value->int8;
 		if (im >= 0 && im <= 3) {
@@ -113,7 +113,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		}
 	}
 
-	t = dict_find(iter, MESSAGE_KEY_SETTING_NEEDLE_MODE);
+	t = dict_find(iter, KEY_SETTING_NEEDLE_MODE);
 	if (t) {
 		int nm = (int)t->value->int8;
 		if (nm >= 0 && nm <= 3) {
@@ -121,17 +121,17 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		}
 	}
 
-	t = dict_find(iter, MESSAGE_KEY_SETTING_LIGHT_THEME);
+	t = dict_find(iter, KEY_SETTING_LIGHT_THEME);
 	if (t) {
 		s_settings.light_theme = (t->value->int8 != 0);
 	}
 
-	t = dict_find(iter, MESSAGE_KEY_SETTING_SHOW_BT_ALERT);
+	t = dict_find(iter, KEY_SETTING_SHOW_BT_ALERT);
 	if (t) {
 		s_settings.show_bt_alert = (t->value->int8 != 0);
 	}
 
-	t = dict_find(iter, MESSAGE_KEY_SETTING_SHOW_SILENT_MODE);
+	t = dict_find(iter, KEY_SETTING_SHOW_SILENT_MODE);
 	if (t) {
 		s_settings.show_silent_mode = (t->value->int8 != 0);
 	}
