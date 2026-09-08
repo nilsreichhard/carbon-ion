@@ -9,7 +9,7 @@
 module.exports = {
 	WEATHER_BASE_URL: 'https://api.open-meteo.com/v1/forecast',
 	GEOCODE_BASE_URL: 'https://api.bigdatacloud.net/data/reverse-geocode-client',
-	CACHE_KEY: 'carbon.weather.v3',
+	CACHE_KEY: 'carbon.weather.v5',
 	GEONAME_CACHE_KEY: 'carbon.geoname.v1',
 	GEONAME_TTL_MS: 24 * 60 * 60 * 1000,
 	GEONAME_COORD_PRECISION: 2,

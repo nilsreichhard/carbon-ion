@@ -718,14 +718,14 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 		sendToWatch(payload);
 	}
 
-	// Open-Meteo weather — 12 past hours and 48 forecast hours for a rolling continuous window
+	// Open-Meteo weather — 12 past hours and 60 forecast hours for a rolling continuous window
 	var weatherUrl = WEATHER_BASE_URL +
 		'?latitude=' + lat +
 		'&longitude=' + lon +
 		'&current=temperature_2m,weather_code' +
 		'&hourly=precipitation_probability,temperature_2m,apparent_temperature,cloud_cover,weather_code' +
 		'&past_hours=12' +
-		'&forecast_hours=48' +
+		'&forecast_hours=60' +
 		'&daily=sunrise,sunset,temperature_2m_min,temperature_2m_max' +
 		'&temperature_unit=' + tempUnit +
 		'&timeformat=unixtime' +
