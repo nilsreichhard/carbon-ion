@@ -26,6 +26,8 @@ struct TimeLayer {
 	bool bt_connected;
 	bool quiet_mode;
 	bool light_theme;
+	bool show_bt_alert;
+	bool show_silent_mode;
 	char city_buf[24];
 	char time_buf[8];
 	char tz_buf[8];
@@ -64,8 +66,8 @@ static void prv_status_update_proc(Layer *layer, GContext *ctx) {
 	if (!tl)
 		return;
 
-	bool show_bt = !tl->bt_connected;
-	bool show_quiet = tl->quiet_mode;
+	bool show_bt = tl->show_bt_alert && !tl->bt_connected;
+	bool show_quiet = tl->show_silent_mode && tl->quiet_mode;
 
 	if (!show_bt && !show_quiet)
 		return;
@@ -152,6 +154,8 @@ TimeLayer *time_layer_create(GRect frame) {
 	tl->bt_connected = true;
 	tl->quiet_mode = false;
 	tl->light_theme = false;
+	tl->show_bt_alert = true;
+	tl->show_silent_mode = true;
 
 #if PBL_DISPLAY_HEIGHT >= 228
 	tl->icon_font = fonts_load_custom_font(
@@ -295,6 +299,8 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	GColor text_color = settings->light_theme ? GColorBlack : GColorWhite;
 	GColor sub_color = settings->light_theme ? GColorDarkGray : GColorLightGray;
 	layer->light_theme = settings->light_theme;
+	layer->show_bt_alert = settings->show_bt_alert;
+	layer->show_silent_mode = settings->show_silent_mode;
 	layer_mark_dirty(layer->status_layer);
 	text_layer_set_text_color(layer->city_label, text_color);
 	text_layer_set_text_color(layer->time_label, text_color);

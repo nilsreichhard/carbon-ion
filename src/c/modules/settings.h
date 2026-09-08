@@ -54,6 +54,8 @@ typedef struct {
 	InfillMode infill_mode;
 	NeedleMode needle_mode;
 	uint8_t forecast_hours; // 12, 24, 36, or 48 (default 24)
+	bool show_bt_alert;
+	bool show_silent_mode;
 } Settings;
 
 void settings_init(void);

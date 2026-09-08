@@ -61,7 +61,9 @@
       "SETTING_INFILL_MODE",
       "SETTING_NEEDLE_MODE",
       "SETTING_FORECAST_HOURS",
-      "SETTING_LIGHT_THEME"
+      "SETTING_LIGHT_THEME",
+      "SETTING_SHOW_BT_ALERT",
+      "SETTING_SHOW_SILENT_MODE"
     ],
     "resources": {
       "media": [

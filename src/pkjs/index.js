@@ -1039,8 +1039,14 @@ Pebble.addEventListener('webviewclosed', function (e) {
 	var needleMode = extractInt(rawSettings['SETTING_NEEDLE_MODE']);
 	if (!isNaN(needleMode)) dict['SETTING_NEEDLE_MODE'] = needleMode;
 
-	var lightTheme = extractBool(rawSettings['SETTING_LIGHT_THEME']);
-	if (lightTheme !== null) dict['SETTING_LIGHT_THEME'] = lightTheme;
+	var lightTheme = extractInt(rawSettings['SETTING_LIGHT_THEME']) === 1;
+	dict['SETTING_LIGHT_THEME'] = lightTheme ? 1 : 0;
+
+	var showBtAlert = extractBool(rawSettings['SETTING_SHOW_BT_ALERT']);
+	if (showBtAlert !== null) dict['SETTING_SHOW_BT_ALERT'] = showBtAlert;
+
+	var showSilentMode = extractBool(rawSettings['SETTING_SHOW_SILENT_MODE']);
+	if (showSilentMode !== null) dict['SETTING_SHOW_SILENT_MODE'] = showSilentMode;
 
 	var clearCacheRequested = extractBool(rawSettings['SETTING_CLEAR_CACHE']) === 1;
 

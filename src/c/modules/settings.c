@@ -27,6 +27,8 @@ static const Settings s_defaults = {
     .infill_mode = INFILL_FUTURE,
     .needle_mode = NEEDLE_BOTH,
     .forecast_hours = DEFAULT_FORECAST_HOURS,
+    .show_bt_alert = true,
+    .show_silent_mode = true,
 };
 
 void settings_init(void) {
@@ -122,6 +124,16 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	t = dict_find(iter, MESSAGE_KEY_SETTING_LIGHT_THEME);
 	if (t) {
 		s_settings.light_theme = (t->value->int8 != 0);
+	}
+
+	t = dict_find(iter, MESSAGE_KEY_SETTING_SHOW_BT_ALERT);
+	if (t) {
+		s_settings.show_bt_alert = (t->value->int8 != 0);
+	}
+
+	t = dict_find(iter, MESSAGE_KEY_SETTING_SHOW_SILENT_MODE);
+	if (t) {
+		s_settings.show_silent_mode = (t->value->int8 != 0);
 	}
 
 	settings_save();

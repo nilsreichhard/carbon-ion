@@ -49,7 +49,9 @@
         "SETTING_INFILL_MODE": 10027,
         "SETTING_NEEDLE_MODE": 10028,
         "SETTING_FORECAST_HOURS": 10029,
-        "SETTING_LIGHT_THEME": 10030
+        "SETTING_LIGHT_THEME": 10030,
+        "SETTING_SHOW_BT_ALERT": 10031,
+        "SETTING_SHOW_SILENT_MODE": 10032
     },
     "resources": {
         "media": [

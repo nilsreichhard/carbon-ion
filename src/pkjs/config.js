@@ -80,11 +80,25 @@ module.exports = [
 				'messageKey': 'SETTING_LIGHT_THEME',
 				'label': 'Color Theme',
 				'description': 'Background and contrast appearance.',
-				'defaultValue': false,
+				'defaultValue': 0,
 				'options': [
-					{ 'label': 'Dark Theme (Black)', 'value': false },
-					{ 'label': 'Light Theme (White)', 'value': true },
+					{ 'label': 'Dark Theme (Black)', 'value': 0 },
+					{ 'label': 'Light Theme (White)', 'value': 1 },
 				],
+			},
+			{
+				'type': 'toggle',
+				'messageKey': 'SETTING_SHOW_BT_ALERT',
+				'label': 'Bluetooth Disconnect Alert',
+				'description': 'Show red alert icon left of the time when disconnected from phone.',
+				'defaultValue': true,
+			},
+			{
+				'type': 'toggle',
+				'messageKey': 'SETTING_SHOW_SILENT_MODE',
+				'label': 'Silent Mode Indicator',
+				'description': 'Show muted bell icon left of the time when Quiet Time is active.',
+				'defaultValue': true,
 			},
 			{
 				'type': 'text',
