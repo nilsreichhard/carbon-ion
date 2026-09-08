@@ -140,7 +140,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int base_hour = ((int)dl->current_hour - past_hours + 240) % 24;
 
 	// Theme colors
-	GColor night_col = is_light ? GColorBlack : GColorDarkGray;
+	GColor night_col = is_light ? GColorBlack : GColorOxfordBlue;
 	GColor day_col = is_light ? GColorLightGray : GColorWhite;
 	GColor bracket_col = GColorWhite;
 
@@ -156,16 +156,16 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		int orig_rise;
 		int orig_set;
 	} DaySpan;
-	DaySpan day_spans[6];
+	DaySpan day_spans[8];
 	int day_span_count = 0;
 
-	for (int k = -48; k <= total_hours + 24; k += 24) {
+	for (int k = -72; k <= total_hours + 48; k += 24) {
 		int span_rise = raw_rise + k;
 		int span_set = raw_set + k;
 		int clip_start = span_rise < 0 ? 0 : (span_rise > total_hours ? total_hours : span_rise);
 		int clip_end = span_set < 0 ? 0 : (span_set > total_hours ? total_hours : span_set);
 
-		if (clip_end > clip_start && day_span_count < 6) {
+		if (clip_end > clip_start && day_span_count < 8) {
 			day_spans[day_span_count].start = clip_start;
 			day_spans[day_span_count].end = clip_end;
 			day_spans[day_span_count].orig_rise = span_rise;
@@ -174,35 +174,35 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// 1. Draw Night Spans across full width
-	graphics_context_set_stroke_width(ctx, 2);
-	graphics_context_set_stroke_color(ctx, night_col);
-	int last_t = 0;
-	for (int i = 0; i < day_span_count; i++) {
-		if (day_spans[i].start > last_t) {
-			int x1 = graph_x + last_t * graph_w / total_hours;
-			int x2 = graph_x + day_spans[i].start * graph_w / total_hours;
-			graphics_draw_line(ctx, GPoint(x1, line_y), GPoint(x2, line_y));
+	// Sort day spans chronologically
+	for (int i = 0; i < day_span_count - 1; i++) {
+		for (int j = i + 1; j < day_span_count; j++) {
+			if (day_spans[j].start < day_spans[i].start) {
+				DaySpan tmp = day_spans[i];
+				day_spans[i] = day_spans[j];
+				day_spans[j] = tmp;
+			}
 		}
-		if (day_spans[i].end > last_t)
-			last_t = day_spans[i].end;
-	}
-	if (last_t < total_hours) {
-		int x1 = graph_x + last_t * graph_w / total_hours;
-		int x2 = graph_x + graph_w;
-		graphics_draw_line(ctx, GPoint(x1, line_y), GPoint(x2, line_y));
 	}
 
-	// 2. Draw Daylight Spans & Brackets
+	// 1. Draw solid Night Track across 100% full screen width (3px bold)
+	graphics_context_set_stroke_width(ctx, 3);
+	graphics_context_set_stroke_color(ctx, night_col);
+	graphics_draw_line(ctx, GPoint(graph_x, line_y), GPoint(graph_x + graph_w, line_y));
+
+	// 2. Draw Daylight Spans & Brackets across all multi-day cycles (3px bold)
 	graphics_context_set_stroke_color(ctx, day_col);
 	for (int i = 0; i < day_span_count; i++) {
 		int x1 = graph_x + day_spans[i].start * graph_w / total_hours;
 		int x2 = graph_x + day_spans[i].end * graph_w / total_hours;
-		graphics_draw_line(ctx, GPoint(x1, line_y), GPoint(x2, line_y));
+		if (x2 > x1) {
+			graphics_draw_line(ctx, GPoint(x1, line_y), GPoint(x2, line_y));
+		}
 
 		// Endcap brackets (in dark theme only)
 		if (!is_light) {
 			graphics_context_set_stroke_color(ctx, bracket_col);
+			graphics_context_set_stroke_width(ctx, 2);
 			if (day_spans[i].orig_rise >= 0 && day_spans[i].orig_rise <= total_hours) {
 				int xr = graph_x + day_spans[i].orig_rise * graph_w / total_hours;
 				graphics_draw_line(ctx, GPoint(xr, line_y - 4), GPoint(xr, line_y + 4));
@@ -211,6 +211,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				int xs = graph_x + day_spans[i].orig_set * graph_w / total_hours;
 				graphics_draw_line(ctx, GPoint(xs, line_y - 4), GPoint(xs, line_y + 4));
 			}
+			graphics_context_set_stroke_width(ctx, 3);
 			graphics_context_set_stroke_color(ctx, day_col);
 		}
 	}
@@ -234,7 +235,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// 5. Red line indicator at 1/5 of the timeline (stroke width 2 + pointer pip)
+	// 5. Red line indicator at 1/5 of the timeline (crisp 1px with T-top)
 	NeedleMode needle_mode = settings_get()->needle_mode;
 	if (needle_mode == NEEDLE_BOTH || needle_mode == NEEDLE_ABOVE) {
 		int x_now = graph_x + (graph_w / 5);
@@ -243,14 +244,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #else
 		graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
-		graphics_context_set_stroke_width(ctx, 2);
-		graphics_draw_line(ctx, GPoint(x_now, line_y - 5),
-		                   GPoint(x_now, line_y + 5));
-		graphics_draw_line(ctx, GPoint(x_now - 2, line_y + 5),
-		                   GPoint(x_now + 2, line_y + 5));
-		graphics_draw_line(ctx, GPoint(x_now - 1, line_y + 6),
-		                   GPoint(x_now + 1, line_y + 6));
-		graphics_draw_pixel(ctx, GPoint(x_now, line_y + 7));
+		graphics_context_set_stroke_width(ctx, 1);
+		graphics_draw_line(ctx, GPoint(x_now, line_y - 6),
+		                   GPoint(x_now, line_y + 6));
+		graphics_draw_line(ctx, GPoint(x_now - 2, line_y - 6),
+		                   GPoint(x_now + 2, line_y - 6));
 	}
 
 	// 6. Battery life depletion markers directly on the timeline bar

@@ -33,7 +33,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	GRect bounds = layer_get_bounds(layer);
 	int graph_x = GRAPH_OFFSET_X;
 	int graph_w = bounds.size.w - graph_x;
-	int cy = bounds.size.h / 2;
+	int cy = bounds.size.h / 2 - 2;
 	int total_hours = GRAPH_HOURS;
 	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
 

@@ -121,13 +121,13 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #define TEMP_TO_F(t) (tl->celsius ? ((t) * 9 / 5 + 32) : (t))
 #define DARK_TEMP_COLOR(tf)                                                    \
 	((tf) <= 10   ? GColorPurple                                               \
-	 : (tf) <= 32 ? GColorImperialPurple                                       \
+	 : (tf) <= 32 ? GColorElectricUltramarine                                  \
 	 : (tf) <= 45 ? GColorTiffanyBlue                                          \
 	 : (tf) <= 59 ? GColorCadetBlue                                            \
 	 : (tf) <= 76 ? GColorKellyGreen                                           \
-	 : (tf) <= 84 ? GColorBrass                                                \
-	 : (tf) <= 96 ? GColorWindsorTan                                           \
-	              : GColorDarkCandyAppleRed)
+	 : (tf) <= 84 ? GColorChromeYellow                                         \
+	 : (tf) <= 96 ? GColorOrange                                               \
+	              : GColorRed)
 #define LIGHT_TEMP_COLOR(tf)                                                   \
 	((tf) <= 10   ? GColorShockingPink                                         \
 	 : (tf) <= 32 ? GColorLavenderIndigo                                       \
@@ -156,14 +156,15 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	 : (tf) <= 96 ? GColorChromeYellow                                         \
 	              : GColorRed)
 
-	// Pass 1: infill based on infill_mode setting
+	// Pass 1: solid infill based on infill_mode setting
 	InfillMode infill = settings_get()->infill_mode;
 	if (infill != INFILL_NONE) {
 		int now_col = graph_get_past_hours(); // Fixed at 1/5
-		int start_col = (infill == INFILL_FUTURE) ? (now_col + 1) : 1;
+		int start_col = (infill == INFILL_PAST) ? 1 : now_col;
+		if (infill == INFILL_ALL) start_col = 1;
 		int end_col = (infill == INFILL_PAST) ? now_col : total_hours;
 
-		for (int i = start_col; i <= end_col && i <= (int)tl->hours_remaining && i <= total_hours; i++) {
+		for (int i = (start_col < 1 ? 1 : start_col); i <= end_col && i <= total_hours; i++) {
 			int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
 			GColor fill_col = is_light ? LIGHT_THEME_INFILL(TEMP_TO_F(avg))
 			                           : DARK_TEMP_COLOR(TEMP_TO_F(avg));
@@ -176,7 +177,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			for (int s = 0; s <= steps; s++) {
 				int col_x = x0 + dx * s / steps;
 				int col_y = y0 + dy * s / steps + 2; // Offset down so line cleanly covers top of infill
-				int col_h = line_bottom - col_y + 1;
+				int col_h = line_bottom - col_y;
 				if (col_h > 0) {
 					graphics_fill_rect(ctx, GRect(col_x, col_y, 1, col_h), 0,
 					                   GCornerNone);
@@ -187,7 +188,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	// Pass 2: bold actual-temp line on top of the fill
 	graphics_context_set_stroke_width(ctx, 2);
-	for (int i = 1; i <= (int)tl->hours_remaining && i <= total_hours; i++) {
+	for (int i = 1; i <= total_hours; i++) {
 		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
 		GColor stroke_col = is_light ? LIGHT_THEME_STROKE(TEMP_TO_F(avg))
 		                             : LIGHT_TEMP_COLOR(TEMP_TO_F(avg));
@@ -198,7 +199,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	// Pass 3: apparent-temp ("feels like") dashed line
 	graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
-	for (int i = 1; i <= (int)tl->hours_remaining && i <= total_hours; i++) {
+	for (int i = 1; i <= total_hours; i++) {
 		graph_draw_dashed_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
 		                       GPoint(apx[i], apy[i]), 3, 2);
 	}
@@ -212,12 +213,12 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	// B&W: white actual-temp line + dotted apparent-temp line.
 	graphics_context_set_stroke_width(ctx, 2);
 	graphics_context_set_stroke_color(ctx, GColorWhite);
-	for (int i = 1; i <= (int)tl->hours_remaining && i <= total_hours; i++) {
+	for (int i = 1; i <= total_hours; i++) {
 		graphics_draw_line(ctx, GPoint(spx[i - 1], spy[i - 1]),
 		                   GPoint(spx[i], spy[i]));
 	}
 
-	for (int i = 1; i <= (int)tl->hours_remaining && i <= total_hours; i++) {
+	for (int i = 1; i <= total_hours; i++) {
 		graph_draw_dashed_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
 		                       GPoint(apx[i], apy[i]), 3, 2);
 	}
@@ -256,12 +257,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #else
 		graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
-		graphics_context_set_stroke_width(ctx, 2);
+		graphics_context_set_stroke_width(ctx, 1);
 		graphics_draw_line(ctx, GPoint(x_now, 0), GPoint(x_now, lh));
-		// Top pointer pip (2px triangle pointing down into chart)
+		// Top horizontal crossbar T matching reference HTML
 		graphics_draw_line(ctx, GPoint(x_now - 2, 0), GPoint(x_now + 2, 0));
-		graphics_draw_line(ctx, GPoint(x_now - 1, 1), GPoint(x_now + 1, 1));
-		graphics_draw_pixel(ctx, GPoint(x_now, 2));
 	}
 
 	// Floating temperature labels overlapping on top of the left side of the chart (Right-aligned)

@@ -40,8 +40,8 @@ static inline int32_t prv_tuple_int(const Tuple *t) {
 // tall enough to fit the icon slots: >= 228 uses 22px icons (need 66px+),
 // middle tier uses 18px icons (56px gives zone_h=18), small uses 14px icons.
 #if PBL_DISPLAY_HEIGHT >= 228
-#define DAYLIGHT_H 16
-#define CLOUD_H 16
+#define DAYLIGHT_H 18
+#define CLOUD_H 14
 #define PRECIP_H 22
 #define EVENT_H 12
 // Sums to 66
