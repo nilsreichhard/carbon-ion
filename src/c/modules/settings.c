@@ -54,12 +54,20 @@ void settings_save(void) {
 	persist_write_data(STORAGE_KEY_SETTINGS, &s_settings, sizeof(s_settings));
 }
 
+static int prv_tuple_int(Tuple *t) {
+	if (!t) return 0;
+	if (t->length == 1) return (int)t->value->int8;
+	if (t->length == 2) return (int)t->value->int16;
+	if (t->length == 4) return (int)t->value->int32;
+	return (int)t->value->int32;
+}
+
 void settings_apply_from_message(DictionaryIterator *iter) {
 	Tuple *t;
 
 	t = dict_find(iter, MESSAGE_KEY_SETTING_TEMP_UNIT);
 	if (t)
-		s_settings.temp_unit_celsius = (t->value->int8 == 0);
+		s_settings.temp_unit_celsius = (prv_tuple_int(t) == 0);
 
 	t = dict_find(iter, MESSAGE_KEY_SETTING_DATE_FORMAT);
 	if (t && t->type == TUPLE_CSTRING && t->length > 0) {
@@ -75,7 +83,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 
 	t = dict_find(iter, MESSAGE_KEY_SETTING_BATTERY_DISPLAY);
 	if (t) {
-		int bd = (int)t->value->int8;
+		int bd = prv_tuple_int(t);
 		if (bd >= 0 && bd < 2) {
 			s_settings.battery_display = (BatteryDisplay)bd;
 		}
@@ -83,15 +91,15 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 
 	t = dict_find(iter, MESSAGE_KEY_SETTING_SHOW_TIMEZONE);
 	if (t)
-		s_settings.show_timezone = (t->value->int8 != 0);
+		s_settings.show_timezone = (prv_tuple_int(t) != 0);
 
 	t = dict_find(iter, MESSAGE_KEY_SETTING_SHOW_AMPM);
 	if (t)
-		s_settings.show_ampm = (t->value->int8 != 0);
+		s_settings.show_ampm = (prv_tuple_int(t) != 0);
 
 	t = dict_find(iter, MESSAGE_KEY_SETTING_FETCH_INTERVAL);
 	if (t) {
-		int interval = (int)t->value->int32;
+		int interval = prv_tuple_int(t);
 		if (interval == 15 || interval == 30 || interval == 60) {
 			s_settings.fetch_interval_min = (uint8_t)interval;
 		}
@@ -99,7 +107,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 
 	t = dict_find(iter, KEY_SETTING_FORECAST_HOURS);
 	if (t) {
-		int fh = (int)t->value->int32;
+		int fh = prv_tuple_int(t);
 		if (fh == 12 || fh == 18 || fh == 24 || fh == 36 || fh == 48) {
 			s_settings.forecast_hours = (uint8_t)fh;
 		}
@@ -107,7 +115,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 
 	t = dict_find(iter, KEY_SETTING_INFILL_MODE);
 	if (t) {
-		int im = (int)t->value->int8;
+		int im = prv_tuple_int(t);
 		if (im >= 0 && im <= 3) {
 			s_settings.infill_mode = (InfillMode)im;
 		}
@@ -115,7 +123,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 
 	t = dict_find(iter, KEY_SETTING_NEEDLE_MODE);
 	if (t) {
-		int nm = (int)t->value->int8;
+		int nm = prv_tuple_int(t);
 		if (nm >= 0 && nm <= 3) {
 			s_settings.needle_mode = (NeedleMode)nm;
 		}
@@ -123,17 +131,17 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 
 	t = dict_find(iter, KEY_SETTING_LIGHT_THEME);
 	if (t) {
-		s_settings.light_theme = (t->value->int8 != 0);
+		s_settings.light_theme = (prv_tuple_int(t) != 0);
 	}
 
 	t = dict_find(iter, KEY_SETTING_SHOW_BT_ALERT);
 	if (t) {
-		s_settings.show_bt_alert = (t->value->int8 != 0);
+		s_settings.show_bt_alert = (prv_tuple_int(t) != 0);
 	}
 
 	t = dict_find(iter, KEY_SETTING_SHOW_SILENT_MODE);
 	if (t) {
-		s_settings.show_silent_mode = (t->value->int8 != 0);
+		s_settings.show_silent_mode = (prv_tuple_int(t) != 0);
 	}
 
 	settings_save();

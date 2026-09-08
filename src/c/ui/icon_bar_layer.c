@@ -93,15 +93,17 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int icon_size = 18;
 #endif
 
-	// Black column fill covers any graph bleed from underlying layers
-	graphics_context_set_fill_color(ctx, GColorBlack);
+	bool is_light = settings_get()->light_theme;
+
+	// Column fill covers any graph bleed from underlying layers
+	graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
 	graphics_fill_rect(ctx, GRect(0, 0, graph_x - 1, lh), 0, GCornerNone);
 
 	// Single separator spanning the full combined height
 	graph_draw_separator(ctx, graph_x, lh);
 
 	// Three equally-spaced icon slots: battery, bluetooth, weather condition
-	graphics_context_set_text_color(ctx, GColorWhite);
+	graphics_context_set_text_color(ctx, is_light ? GColorBlack : GColorWhite);
 
 	// Slot 0: battery (always shown)
 	if (sl->battery_display == BATTERY_DISPLAY_PERCENT) {

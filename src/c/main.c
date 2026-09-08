@@ -122,6 +122,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
 		icon_bar_layer_set_condition(s_icon_bar_layer,
 		                             WEATHER_CONDITION_UNKNOWN);
 		icon_bar_layer_set_disconnected(s_icon_bar_layer, true);
+		layer_mark_dirty(window_get_root_layer(s_main_window));
 		return;
 	}
 
