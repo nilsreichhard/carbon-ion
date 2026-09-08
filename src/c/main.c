@@ -83,6 +83,9 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 	(void)units_changed;
 #else
 	time_layer_update(s_time_layer, tick_time, settings_get());
+	bool bt_conn = connection_service_peek_pebble_app_connection();
+	bool quiet = quiet_time_is_active();
+	time_layer_set_status(s_time_layer, bt_conn, quiet);
 	daylight_layer_set_current_time(s_daylight_layer, tick_time->tm_hour, tick_time->tm_min);
 
 	// Re-push graph layers each hour for display rollover, and request weather
@@ -396,6 +399,9 @@ static void prv_update_pending_state(void) {
 
 static void prv_bt_handler(bool connected) {
 	icon_bar_layer_notify_bt(s_icon_bar_layer, connected);
+	if (s_time_layer) {
+		time_layer_set_status(s_time_layer, connected, quiet_time_is_active());
+	}
 	prv_update_pending_state();
 }
 
@@ -441,6 +447,11 @@ static void prv_window_load(Window *window) {
 	int time_y = (bounds.size.h - TL_TIME_BLOCK_H) / 2;
 	s_time_layer = time_layer_create(GRect(0, time_y, w, TL_TIME_BLOCK_H));
 	layer_add_child(root, time_layer_get_layer(s_time_layer));
+
+	bool init_bt = connection_service_peek_pebble_app_connection();
+	bool init_quiet = quiet_time_is_active();
+	time_layer_set_status(s_time_layer, init_bt, init_quiet);
+	icon_bar_layer_notify_bt(s_icon_bar_layer, init_bt);
 
 	// Temp info + sparkline — same height as the top graph group, pinned to
 	// bottom

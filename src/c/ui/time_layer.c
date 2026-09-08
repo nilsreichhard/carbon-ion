@@ -8,6 +8,7 @@
  */
 
 #include "time_layer.h"
+#include "../generated/icons.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +21,11 @@ struct TimeLayer {
 	TextLayer *tz_label;   // timezone abbreviation, left of time
 	TextLayer *ampm_label; // AM/PM indicator, right of time (12h only)
 	TextLayer *date_label;
+	Layer *status_layer;   // BT disconnected & quiet mode indicators left of time
+	GFont icon_font;
+	bool bt_connected;
+	bool quiet_mode;
+	bool light_theme;
 	char city_buf[24];
 	char time_buf[8];
 	char tz_buf[8];
@@ -27,6 +33,75 @@ struct TimeLayer {
 	char ampm_buf[4];
 	char date_buf[32];
 };
+
+static void prv_status_update_proc(Layer *layer, GContext *ctx) {
+	TimeLayer *tl = *(TimeLayer **)layer_get_data(layer);
+	if (!tl)
+		return;
+
+	bool show_bt = !tl->bt_connected;
+	bool show_quiet = tl->quiet_mode;
+
+	if (!show_bt && !show_quiet)
+		return;
+
+	GRect bounds = layer_get_bounds(layer);
+	int icon_size = 18;
+#if PBL_DISPLAY_HEIGHT >= 228
+	icon_size = 18;
+#else
+	icon_size = 14;
+#endif
+
+	if (show_bt && show_quiet) {
+		int half_h = bounds.size.h / 2;
+		int y_bt = (half_h - icon_size) / 2;
+		int y_qm = half_h + (half_h - icon_size) / 2;
+
+#if defined(PBL_COLOR)
+		graphics_context_set_text_color(ctx, tl->light_theme ? GColorRed : GColorSunsetOrange);
+#else
+		graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlack : GColorWhite);
+#endif
+		graphics_draw_text(ctx, ICON_BLUETOOTH__OFF, tl->icon_font,
+		                   GRect(0, y_bt, bounds.size.w, icon_size),
+		                   GTextOverflowModeTrailingEllipsis,
+		                   GTextAlignmentCenter, NULL);
+
+#if defined(PBL_COLOR)
+		graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlue : GColorPictonBlue);
+#else
+		graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlack : GColorWhite);
+#endif
+		graphics_draw_text(ctx, ICON_MOON, tl->icon_font,
+		                   GRect(0, y_qm, bounds.size.w, icon_size),
+		                   GTextOverflowModeTrailingEllipsis,
+		                   GTextAlignmentCenter, NULL);
+	} else {
+		int y = (bounds.size.h - icon_size) / 2;
+		if (show_bt) {
+#if defined(PBL_COLOR)
+			graphics_context_set_text_color(ctx, tl->light_theme ? GColorRed : GColorSunsetOrange);
+#else
+			graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlack : GColorWhite);
+#endif
+			graphics_draw_text(ctx, ICON_BLUETOOTH__OFF, tl->icon_font,
+			                   GRect(0, y, bounds.size.w, icon_size),
+			                   GTextOverflowModeTrailingEllipsis,
+			                   GTextAlignmentCenter, NULL);
+		} else {
+#if defined(PBL_COLOR)
+			graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlue : GColorPictonBlue);
+#else
+			graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlack : GColorWhite);
+#endif
+			graphics_draw_text(ctx, ICON_MOON, tl->icon_font,
+			                   GRect(0, y, bounds.size.w, icon_size),
+			                   GTextOverflowModeTrailingEllipsis,
+			                   GTextAlignmentCenter, NULL);
+		}
+	}
+}
 
 static void prv_remove_leading_zero(char *buf, size_t len) {
 	bool prev_nondigit = true;
@@ -52,6 +127,17 @@ TimeLayer *time_layer_create(GRect frame) {
 	tl->tz_override[0] = '\0';
 	tl->ampm_buf[0] = '\0';
 	tl->date_buf[0] = '\0';
+	tl->bt_connected = true;
+	tl->quiet_mode = false;
+	tl->light_theme = false;
+
+#if PBL_DISPLAY_HEIGHT >= 228
+	tl->icon_font = fonts_load_custom_font(
+	    resource_get_handle(RESOURCE_ID_CARBON_ICONS_18));
+#else
+	tl->icon_font = fonts_load_custom_font(
+	    resource_get_handle(RESOURCE_ID_CARBON_ICONS_14));
+#endif
 
 	tl->container = layer_create(frame);
 	int w = frame.size.w;
@@ -95,6 +181,18 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text(tl->tz_label, tl->tz_buf);
 	layer_add_child(tl->container, text_layer_get_layer(tl->tz_label));
 
+	// Status indicators (BT disconnected & Quiet mode) left of time
+#if PBL_PLATFORM_GABBRO || defined(PBL_ROUND)
+	int status_x = 16;
+#else
+	int status_x = 2;
+#endif
+	int status_h = TL_TIME_H - TL_TIME_PAD;
+	tl->status_layer = layer_create_with_data(GRect(status_x, time_y + TL_TIME_PAD, 34, status_h), sizeof(TimeLayer *));
+	*(TimeLayer **)layer_get_data(tl->status_layer) = tl;
+	layer_set_update_proc(tl->status_layer, prv_status_update_proc);
+	layer_add_child(tl->container, tl->status_layer);
+
 	// AM/PM — small font, right side of time row
 	tl->ampm_label = text_layer_create(GRect(w - 34, tz_ampm_y, 32, TL_TZ_H));
 	text_layer_set_background_color(tl->ampm_label, GColorClear);
@@ -121,6 +219,8 @@ TimeLayer *time_layer_create(GRect frame) {
 void time_layer_destroy(TimeLayer *layer) {
 	if (!layer)
 		return;
+	layer_destroy(layer->status_layer);
+	fonts_unload_custom_font(layer->icon_font);
 	text_layer_destroy(layer->date_label);
 	text_layer_destroy(layer->ampm_label);
 	text_layer_destroy(layer->tz_label);
@@ -132,6 +232,18 @@ void time_layer_destroy(TimeLayer *layer) {
 
 Layer *time_layer_get_layer(TimeLayer *layer) {
 	return layer ? layer->container : NULL;
+}
+
+void time_layer_set_status(TimeLayer *layer, bool bt_connected, bool quiet_time) {
+	if (!layer)
+		return;
+	if (layer->bt_connected != bt_connected || layer->quiet_mode != quiet_time) {
+		layer->bt_connected = bt_connected;
+		layer->quiet_mode = quiet_time;
+		bool show_indicators = (!bt_connected || quiet_time);
+		layer_set_hidden(text_layer_get_layer(layer->tz_label), show_indicators);
+		layer_mark_dirty(layer->status_layer);
+	}
 }
 
 void time_layer_set_timezone(TimeLayer *layer, const char *tz) {
@@ -160,6 +272,8 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 
 	GColor text_color = settings->light_theme ? GColorBlack : GColorWhite;
 	GColor sub_color = settings->light_theme ? GColorDarkGray : GColorLightGray;
+	layer->light_theme = settings->light_theme;
+	layer_mark_dirty(layer->status_layer);
 	text_layer_set_text_color(layer->city_label, text_color);
 	text_layer_set_text_color(layer->time_label, text_color);
 	text_layer_set_text_color(layer->date_label, text_color);

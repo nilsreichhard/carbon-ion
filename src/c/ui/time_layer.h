@@ -43,6 +43,7 @@ TimeLayer *time_layer_create(GRect frame);
 void time_layer_destroy(TimeLayer *layer);
 Layer *time_layer_get_layer(TimeLayer *layer);
 void time_layer_set_city(TimeLayer *layer, const char *city);
+void time_layer_set_status(TimeLayer *layer, bool bt_connected, bool quiet_time);
 // Override the timezone abbreviation shown left of the clock. Pass an empty
 // string to revert to the system-derived value from strftime.
 void time_layer_set_timezone(TimeLayer *layer, const char *tz);
