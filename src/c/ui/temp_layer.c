@@ -42,7 +42,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	GFont font_sm = fonts_get_system_font(FONT_KEY_GOTHIC_14);
 	GFont font_md = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
 #endif
-	graphics_context_set_text_color(ctx, GColorWhite);
+	bool is_light = settings_get()->light_theme;
+	graphics_context_set_text_color(ctx, is_light ? GColorBlack : GColorWhite);
 
 	// Left column: high, current, low — three equal zones matching
 	// icon_bar_layer. Each item is centered in its zone; sm_lead compensates
@@ -166,7 +167,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 
 	// Pass 3: apparent-temp line over everything (white in dark theme, black in light theme)
-	bool is_light = settings_get()->light_theme;
 	graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 	for (int i = 1; i <= (int)tl->hours_remaining && i <= total_hours; i++) {
 		graphics_draw_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
@@ -210,8 +210,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				continue;
 			bool in_sparkline = (off < (int)tl->hours_remaining);
 			graphics_context_set_stroke_color(
-			    ctx, PBL_IF_COLOR_ELSE(in_sparkline ? GColorBlack : GColorWhite,
-			                           GColorWhite));
+			    ctx, PBL_IF_COLOR_ELSE(in_sparkline ? GColorBlack : (is_light ? GColorDarkGray : GColorWhite),
+			                           is_light ? GColorDarkGray : GColorWhite));
 			int tx = graph_x + off * bar_w;
 			graphics_draw_line(ctx, GPoint(tx, lh - 4), GPoint(tx, lh - 1));
 		}
@@ -224,7 +224,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #if defined(PBL_COLOR)
 		graphics_context_set_stroke_color(ctx, GColorRed);
 #else
-		graphics_context_set_stroke_color(ctx, GColorWhite);
+		graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
 		graphics_context_set_stroke_width(ctx, 1);
 		graphics_draw_line(ctx, GPoint(x_now, 0), GPoint(x_now, lh));
@@ -232,7 +232,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	// Floating temperature labels overlapping on top of the left side of the chart (Right-aligned)
 	int label_x = 30;
-	GColor text_color = GColorWhite;
+	GColor text_color = is_light ? GColorBlack : GColorWhite;
 	graphics_context_set_text_color(ctx, text_color);
 	graphics_draw_text(ctx, high_buf, font_sm,
 	                   GRect(4, (zone_h - sm_h) / 2 - sm_lead, label_x, sm_h),

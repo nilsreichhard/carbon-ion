@@ -65,7 +65,8 @@ static int prv_moon_phase(void) {
 // Draw a dithered fade centered at x to indicate an approximate endpoint.
 // Three white pixels at offsets -2, 0, +2 create the sparse `——∙∙∙` look.
 static void prv_draw_dither_end(GContext *ctx, int x, int line_y) {
-	graphics_context_set_stroke_color(ctx, GColorWhite);
+	bool is_light = settings_get()->light_theme;
+	graphics_context_set_stroke_color(ctx, is_light ? GColorDarkGray : GColorWhite);
 	graphics_context_set_stroke_width(ctx, 1);
 	graphics_draw_pixel(ctx, GPoint(x - 2, line_y));
 	graphics_draw_pixel(ctx, GPoint(x, line_y));
@@ -74,6 +75,7 @@ static void prv_draw_dither_end(GContext *ctx, int x, int line_y) {
 
 static void prv_draw_col_marker(GContext *ctx, int col, int phase, int graph_x,
                                 int bar_w, int line_y, int layer_w) {
+	bool is_light = settings_get()->light_theme;
 	// Lit-side threshold indexed by phase (0 and 4 are special-cased below)
 	static const int s_thr[8] = {0, 2, 1, -1, 0, 1, -1, -2};
 	const int r = 3;
@@ -86,10 +88,10 @@ static void prv_draw_col_marker(GContext *ctx, int col, int phase, int graph_x,
 	for (int i = 0; i < n; i++) {
 		GPoint pt = GPoint(xs[i], line_y);
 
-		// Base: black fill + white outline
-		graphics_context_set_fill_color(ctx, GColorBlack);
+		// Base: fill + outline
+		graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
 		graphics_fill_circle(ctx, pt, r);
-		graphics_context_set_stroke_color(ctx, GColorWhite);
+		graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 		graphics_context_set_stroke_width(ctx, 1);
 		graphics_draw_circle(ctx, pt, r);
 
@@ -97,19 +99,17 @@ static void prv_draw_col_marker(GContext *ctx, int col, int phase, int graph_x,
 			continue; // new moon: all dark, done
 
 		if (phase == 4) {
-			// Full / noon: solid white on top of outline
-			graphics_context_set_fill_color(ctx, GColorWhite);
+			// Full / noon: solid on top of outline
+			graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
 			graphics_fill_circle(ctx, pt, r);
 			continue;
 		}
 
-		// Partial phases: paint lit interior columns with white horizontal
-		// lines. Interior pixels satisfy dx^2 + dy^2 < r^2 (strictly inside
-		// outline).
+		// Partial phases: paint lit interior columns with horizontal lines
 		bool waxing = (phase >= 1 && phase <= 3);
 		int thr = s_thr[phase];
 
-		graphics_context_set_stroke_color(ctx, GColorWhite);
+		graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 		graphics_context_set_stroke_width(ctx, 1);
 		for (int dy = -(r - 1); dy <= r - 1; dy++) {
 			// Find max dx strictly inside the circle at this row
@@ -144,6 +144,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int bar_w = graph_w / total_hours;
 	int lh = bounds.size.h;
 	int line_y = lh / 2;
+	bool is_light = settings_get()->light_theme;
 
 	// Timeline window: past_hours (1/5) in past, forecast_hours (4/5) in future.
 	// The red indicator stays permanently anchored at 1/5 (column past_hours = Now).
@@ -160,7 +161,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	// Daylight line (Soft grey on light theme, white on dark theme)
 #if defined(PBL_COLOR)
-	bool is_light = settings_get()->light_theme;
 	graphics_context_set_stroke_color(ctx, is_light ? GColorLightGray : GColorWhite);
 #else
 	graphics_context_set_stroke_color(ctx, GColorWhite);
@@ -239,14 +239,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			if (hrs_to_10 >= 0 && hrs_to_10 <= forecast_hours) {
 				int col10 = past_hours + hrs_to_10;
 				int x10 = graph_x + col10 * graph_w / total_hours;
-				graphics_context_set_fill_color(ctx, GColorBlack);
+				graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
 				graphics_fill_circle(ctx, GPoint(x10, line_y), 6);
 #if defined(PBL_COLOR)
 				graphics_context_set_stroke_color(ctx, GColorChromeYellow);
 				graphics_context_set_fill_color(ctx, GColorChromeYellow);
 #else
-				graphics_context_set_stroke_color(ctx, GColorWhite);
-				graphics_context_set_fill_color(ctx, GColorWhite);
+				graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
+				graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
 				graphics_context_set_stroke_width(ctx, 1);
 				// Battery body and terminal vertically centered on line_y
@@ -260,14 +260,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		if (hrs_to_0 >= 0 && hrs_to_0 <= forecast_hours) {
 			int col0 = past_hours + hrs_to_0;
 			int x0 = graph_x + col0 * graph_w / total_hours;
-			graphics_context_set_fill_color(ctx, GColorBlack);
+			graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
 			graphics_fill_circle(ctx, GPoint(x0, line_y), 6);
 #if defined(PBL_COLOR)
 			graphics_context_set_stroke_color(ctx, GColorRed);
 			graphics_context_set_fill_color(ctx, GColorRed);
 #else
-			graphics_context_set_stroke_color(ctx, GColorWhite);
-			graphics_context_set_fill_color(ctx, GColorWhite);
+			graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
+			graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
 			graphics_context_set_stroke_width(ctx, 1);
 			// Empty battery body and terminal vertically centered on line_y

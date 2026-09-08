@@ -9,6 +9,7 @@
 
 #pragma once
 #include "../modules/settings.h"
+#include "../modules/weather.h"
 #include <pebble.h>
 
 // Time block layout constants — all tweakable values live here.
@@ -43,6 +44,7 @@ TimeLayer *time_layer_create(GRect frame);
 void time_layer_destroy(TimeLayer *layer);
 Layer *time_layer_get_layer(TimeLayer *layer);
 void time_layer_set_city(TimeLayer *layer, const char *city);
+void time_layer_set_condition(TimeLayer *layer, WeatherCondition cond, bool is_day);
 void time_layer_set_status(TimeLayer *layer, bool bt_connected, bool quiet_time);
 // Override the timezone abbreviation shown left of the clock. Pass an empty
 // string to revert to the system-derived value from strftime.

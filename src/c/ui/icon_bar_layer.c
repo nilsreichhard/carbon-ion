@@ -38,45 +38,7 @@ static const char *prv_battery_icon(int pct, bool charging) {
 	return ICON_BATTERY__EMPTY;
 }
 
-static const char *prv_condition_icon(WeatherCondition cond, bool is_day) {
-	switch (cond) {
-	case WEATHER_CONDITION_CLEAR:
-		return is_day ? ICON_SUN : ICON_MOON;
-	case WEATHER_CONDITION_PARTLY_CLOUDY:
-		return is_day ? ICON_PARTLY_CLOUDY : ICON_PARTLY_CLOUDY__NIGHT;
-	case WEATHER_CONDITION_MOSTLY_CLOUDY:
-		return is_day ? ICON_MOSTLY_CLOUDY : ICON_MOSTLY_CLOUDY__NIGHT;
-	case WEATHER_CONDITION_CLOUDY:
-		return ICON_CLOUDY;
-	case WEATHER_CONDITION_FOG:
-		return is_day ? ICON_CLOUD : ICON_HAZE__NIGHT;
-	case WEATHER_CONDITION_WINDY:
-		return ICON_WINDY;
-	case WEATHER_CONDITION_DRIZZLE:
-		return ICON_RAIN__DRIZZLE;
-	case WEATHER_CONDITION_RAIN:
-		return is_day ? ICON_RAIN : ICON_RAIN__SCATTERED__NIGHT;
-	case WEATHER_CONDITION_RAIN_HEAVY:
-		return ICON_RAIN__HEAVY;
-	case WEATHER_CONDITION_SLEET:
-		return ICON_SLEET;
-	case WEATHER_CONDITION_SNOW:
-		return is_day ? ICON_SNOW : ICON_SNOW__SCATTERED__NIGHT;
-	case WEATHER_CONDITION_SNOW_HEAVY:
-		return ICON_SNOW__HEAVY;
-	case WEATHER_CONDITION_HAIL:
-		return ICON_HAIL;
-	case WEATHER_CONDITION_STORM:
-		return is_day ? ICON_THUNDERSTORM__SCATTERED
-		              : ICON_THUNDERSTORM__SCATTERED__NIGHT;
-	case WEATHER_CONDITION_STORM_SEVERE:
-		return ICON_THUNDERSTORM__STRONG;
-	case WEATHER_CONDITION_TORNADO:
-		return ICON_TORNADO;
-	default:
-		return ICON_CLOUD__OFFLINE;
-	}
-}
+// Condition icon is resolved via weather_condition_to_icon() declared in weather.h
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
 	IconBarLayer *sl = *(IconBarLayer **)layer_get_data(layer);
@@ -142,7 +104,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	// current hour (condition != UNKNOWN means set_condition was called).
 	if (sl->condition != WEATHER_CONDITION_UNKNOWN) {
 		int y2 = 2 * zone_h + (zone_h - icon_size) / 2;
-		graphics_draw_text(ctx, prv_condition_icon(sl->condition, sl->is_day),
+		graphics_draw_text(ctx, weather_condition_to_icon(sl->condition, sl->is_day),
 		                   sl->icon_font, GRect(0, y2, graph_x, icon_size),
 		                   GTextOverflowModeTrailingEllipsis,
 		                   GTextAlignmentCenter, NULL);

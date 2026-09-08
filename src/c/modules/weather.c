@@ -8,6 +8,7 @@
  */
 
 #include "weather.h"
+#include "../generated/icons.h"
 
 /**
  * Converts a WMO weather code (0-99) to a WeatherCondition enum.
@@ -106,4 +107,44 @@ WeatherCondition weather_code_to_condition(uint8_t wmo_code) {
   if (wmo_code == 99)
     return WEATHER_CONDITION_STORM_SEVERE; // severe + hail
   return WEATHER_CONDITION_UNKNOWN;
+}
+
+const char *weather_condition_to_icon(WeatherCondition cond, bool is_day) {
+  switch (cond) {
+  case WEATHER_CONDITION_CLEAR:
+    return is_day ? ICON_SUN : ICON_MOON;
+  case WEATHER_CONDITION_PARTLY_CLOUDY:
+    return is_day ? ICON_PARTLY_CLOUDY : ICON_PARTLY_CLOUDY__NIGHT;
+  case WEATHER_CONDITION_MOSTLY_CLOUDY:
+    return is_day ? ICON_MOSTLY_CLOUDY : ICON_MOSTLY_CLOUDY__NIGHT;
+  case WEATHER_CONDITION_CLOUDY:
+    return ICON_CLOUDY;
+  case WEATHER_CONDITION_FOG:
+    return is_day ? ICON_CLOUD : ICON_HAZE__NIGHT;
+  case WEATHER_CONDITION_WINDY:
+    return ICON_WINDY;
+  case WEATHER_CONDITION_DRIZZLE:
+    return ICON_RAIN__DRIZZLE;
+  case WEATHER_CONDITION_RAIN:
+    return is_day ? ICON_RAIN : ICON_RAIN__SCATTERED__NIGHT;
+  case WEATHER_CONDITION_RAIN_HEAVY:
+    return ICON_RAIN__HEAVY;
+  case WEATHER_CONDITION_SLEET:
+    return ICON_SLEET;
+  case WEATHER_CONDITION_SNOW:
+    return is_day ? ICON_SNOW : ICON_SNOW__SCATTERED__NIGHT;
+  case WEATHER_CONDITION_SNOW_HEAVY:
+    return ICON_SNOW__HEAVY;
+  case WEATHER_CONDITION_HAIL:
+    return ICON_HAIL;
+  case WEATHER_CONDITION_STORM:
+    return is_day ? ICON_THUNDERSTORM__SCATTERED
+                  : ICON_THUNDERSTORM__SCATTERED__NIGHT;
+  case WEATHER_CONDITION_STORM_SEVERE:
+    return ICON_THUNDERSTORM__STRONG;
+  case WEATHER_CONDITION_TORNADO:
+    return ICON_TORNADO;
+  default:
+    return ICON_CLOUD__OFFLINE;
+  }
 }

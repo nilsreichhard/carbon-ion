@@ -121,6 +121,8 @@ static void prv_push_weather_to_layers(struct tm *now) {
 		temp_layer_set_current_hour(s_temp_layer, current_hour, 0);
 		icon_bar_layer_set_condition(s_icon_bar_layer,
 		                             WEATHER_CONDITION_UNKNOWN);
+		time_layer_set_condition(s_time_layer,
+		                         WEATHER_CONDITION_UNKNOWN, true);
 		icon_bar_layer_set_disconnected(s_icon_bar_layer, true);
 		layer_mark_dirty(window_get_root_layer(s_main_window));
 		return;
@@ -224,6 +226,8 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	icon_bar_layer_set_condition(s_icon_bar_layer,
 	                             weather_code_to_condition(display_code));
 	icon_bar_layer_set_daytime(s_icon_bar_layer, is_day);
+	time_layer_set_condition(s_time_layer,
+	                         weather_code_to_condition(display_code), is_day);
 	time_t now_t = time(NULL);
 	long data_age_sec = (long)(now_t - s_weather.fetch_time);
 	if (data_age_sec < 0)

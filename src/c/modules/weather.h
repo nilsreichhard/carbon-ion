@@ -59,3 +59,4 @@ _Static_assert(sizeof(WeatherData) <= PERSIST_DATA_MAX_LENGTH,
  * Converts a WMO weather code (0-99) to a WeatherCondition enum.
  */
 WeatherCondition weather_code_to_condition(uint8_t wmo_code);
+const char *weather_condition_to_icon(WeatherCondition cond, bool is_day);

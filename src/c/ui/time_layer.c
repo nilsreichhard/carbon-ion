@@ -17,6 +17,7 @@
 struct TimeLayer {
 	Layer *container;
 	TextLayer *city_label;
+	TextLayer *cond_label; // weather condition icon right of city
 	TextLayer *time_label;
 	TextLayer *tz_label;   // timezone abbreviation, left of time
 	TextLayer *ampm_label; // AM/PM indicator, right of time (12h only)
@@ -29,6 +30,7 @@ struct TimeLayer {
 	bool show_bt_alert;
 	bool show_silent_mode;
 	char city_buf[24];
+	char cond_glyph[8];
 	char time_buf[8];
 	char tz_buf[8];
 	char tz_override[8]; // set by time_layer_set_timezone; overrides strftime
@@ -140,12 +142,70 @@ static void prv_remove_leading_zero(char *buf, size_t len) {
 	}
 }
 
+static const char *const s_day_names[] = {
+	"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+};
+
+static void prv_format_date(char *out, size_t out_len, const char *fmt, const struct tm *t) {
+	char custom_fmt[64];
+	const char *a_pos = strstr(fmt, "%A");
+	if (a_pos) {
+		int day_idx = (t->tm_wday >= 0 && t->tm_wday < 7) ? t->tm_wday : 0;
+		const char *day_name = s_day_names[day_idx];
+		snprintf(custom_fmt, sizeof(custom_fmt), "%.*s%s%s",
+		         (int)(a_pos - fmt), fmt, day_name, a_pos + 2);
+		fmt = custom_fmt;
+	}
+	strftime(out, out_len, fmt, t);
+	prv_remove_leading_zero(out, out_len);
+}
+
+static void prv_update_location_row(TimeLayer *tl) {
+	if (!tl || !tl->container)
+		return;
+	GRect frame = layer_get_frame(tl->container);
+	int w = frame.size.w;
+	GFont city_font = fonts_get_system_font(TL_SMALL_FONT_KEY);
+	GColor col = tl->light_theme ? GColorBlack : GColorWhite;
+	text_layer_set_text_color(tl->city_label, col);
+	text_layer_set_text_color(tl->cond_label, col);
+
+	if (tl->cond_glyph[0] == '\0') {
+		layer_set_frame(text_layer_get_layer(tl->city_label), GRect(0, 0, w, TL_SMALL_H));
+		text_layer_set_text_alignment(tl->city_label, GTextAlignmentCenter);
+		layer_set_hidden(text_layer_get_layer(tl->cond_label), true);
+		return;
+	}
+
+	// Calculate city text content width
+	GSize city_size = graphics_text_layout_get_content_size(
+	    tl->city_buf, city_font, GRect(0, 0, w - 28, TL_SMALL_H),
+	    GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
+
+	int icon_w = 18;
+	int gap = 5;
+	int total_w = city_size.w + gap + icon_w;
+	if (total_w > w)
+		total_w = w;
+	int start_x = (w - total_w) / 2;
+
+	layer_set_frame(text_layer_get_layer(tl->city_label),
+	                GRect(start_x, 0, city_size.w, TL_SMALL_H));
+	text_layer_set_text_alignment(tl->city_label, GTextAlignmentLeft);
+
+	layer_set_frame(text_layer_get_layer(tl->cond_label),
+	                GRect(start_x + city_size.w + gap, 1, icon_w, TL_SMALL_H));
+	text_layer_set_text(tl->cond_label, tl->cond_glyph);
+	layer_set_hidden(text_layer_get_layer(tl->cond_label), false);
+}
+
 TimeLayer *time_layer_create(GRect frame) {
 	TimeLayer *tl = malloc(sizeof(TimeLayer));
 	if (!tl)
 		return NULL;
 
 	tl->city_buf[0] = '\0';
+	tl->cond_glyph[0] = '\0';
 	tl->time_buf[0] = '\0';
 	tl->tz_buf[0] = '\0';
 	tl->tz_override[0] = '\0';
@@ -177,6 +237,16 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text_alignment(tl->city_label, GTextAlignmentCenter);
 	text_layer_set_text(tl->city_label, tl->city_buf);
 	layer_add_child(tl->container, text_layer_get_layer(tl->city_label));
+
+	// Weather condition glyph right next to city
+	tl->cond_label = text_layer_create(GRect(0, 0, 18, TL_SMALL_H));
+	text_layer_set_background_color(tl->cond_label, GColorClear);
+	text_layer_set_text_color(tl->cond_label, GColorWhite);
+	text_layer_set_font(tl->cond_label, tl->icon_font);
+	text_layer_set_text_alignment(tl->cond_label, GTextAlignmentCenter);
+	text_layer_set_text(tl->cond_label, tl->cond_glyph);
+	layer_set_hidden(text_layer_get_layer(tl->cond_label), true);
+	layer_add_child(tl->container, text_layer_get_layer(tl->cond_label));
 
 	// Time — large centered. LECO_60 on emery (>=228px); LECO_36_BOLD
 	// everywhere else. TL_TIME_PAD is the internal top gap measured from each
@@ -252,6 +322,7 @@ void time_layer_destroy(TimeLayer *layer) {
 	text_layer_destroy(layer->tz_label);
 	text_layer_destroy(layer->time_label);
 	text_layer_destroy(layer->city_label);
+	text_layer_destroy(layer->cond_label);
 	layer_destroy(layer->container);
 	free(layer);
 }
@@ -288,7 +359,24 @@ void time_layer_set_city(TimeLayer *layer, const char *city) {
 		return;
 	strncpy(layer->city_buf, city, sizeof(layer->city_buf) - 1);
 	layer->city_buf[sizeof(layer->city_buf) - 1] = '\0';
-	text_layer_set_text(layer->city_label, layer->city_buf);
+	prv_update_location_row(layer);
+}
+
+void time_layer_set_condition(TimeLayer *layer, WeatherCondition cond, bool is_day) {
+	if (!layer)
+		return;
+	if (cond == WEATHER_CONDITION_UNKNOWN) {
+		layer->cond_glyph[0] = '\0';
+	} else {
+		const char *icon = weather_condition_to_icon(cond, is_day);
+		if (icon) {
+			strncpy(layer->cond_glyph, icon, sizeof(layer->cond_glyph) - 1);
+			layer->cond_glyph[sizeof(layer->cond_glyph) - 1] = '\0';
+		} else {
+			layer->cond_glyph[0] = '\0';
+		}
+	}
+	prv_update_location_row(layer);
 }
 
 void time_layer_update(TimeLayer *layer, struct tm *tick_time,
@@ -302,7 +390,7 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	layer->show_bt_alert = settings->show_bt_alert;
 	layer->show_silent_mode = settings->show_silent_mode;
 	layer_mark_dirty(layer->status_layer);
-	text_layer_set_text_color(layer->city_label, text_color);
+	prv_update_location_row(layer);
 	text_layer_set_text_color(layer->time_label, text_color);
 	text_layer_set_text_color(layer->date_label, text_color);
 	text_layer_set_text_color(layer->tz_label, sub_color);
@@ -343,9 +431,8 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	layer_set_hidden(text_layer_get_layer(layer->tz_label), true);
 
 	// Date — format string stored in settings; leading zeros stripped
-	// automatically.
-	strftime(layer->date_buf, sizeof(layer->date_buf), settings->date_format,
-	         tick_time);
-	prv_remove_leading_zero(layer->date_buf, sizeof(layer->date_buf));
+	// automatically. Full weekday name expanded if %A is used.
+	prv_format_date(layer->date_buf, sizeof(layer->date_buf), settings->date_format,
+	                tick_time);
 	text_layer_set_text(layer->date_label, layer->date_buf);
 }
