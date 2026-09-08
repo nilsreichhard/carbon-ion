@@ -1,38 +1,37 @@
 [![Latest Release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcr0ybot%2Fcarbon%2Frefs%2Fheads%2Fmain%2Fpackage.json&query=%24.version&style=flat&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAQAAABKfvVzAAAAAmJLR0QA/4ePzL8AAAC0SURBVDjLldLLCcJAFEbhP4oIE1xYhw1pA4JWYRGCVbhxoTshWIUNaAnBgB4XBiTJ3HncbALznXAZIpnDmHnnmSqAS470p2Fn8wrfNEzS+INX++ZS+J6CRZu4lGWWEgVPT2DsfmfFwbMSjiuxcXn8H5gX6Q+S+ZtRDofT7/uXRF5RSmJEncEliS2fDC5JrCPJjVn/lwglQx5M/NxMbO5NwnyQxHknSeOSxIaac+feo0lhn30BIXaN/u4MXmAAAAAASUVORK5CYII=&label=latest)](https://github.com/cr0ybot/carbon/releases/latest/download/carbon.pbw)
 [![Pebble Store Hearts](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fappstore-api.repebble.com%2Fapi%2Fv1%2Fapps%2Fid%2F48b38a54db6d45cb85be6521&query=%24.data%5B0%5D.hearts&style=flat&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHRpdGxlPmhlYXJ0PC90aXRsZT48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTEyLDIxLjM1TDEwLjU1LDIwLjAzQzUuNCwxNS4zNiAyLDEyLjI3IDIsOC41QzIsNS40MSA0LjQyLDMgNy41LDNDOS4yNCwzIDEwLjkxLDMuODEgMTIsNS4wOEMxMy4wOSwzLjgxIDE0Ljc2LDMgMTYuNSwzQzE5LjU4LDMgMjIsNS40MSAyMiw4LjVDMjIsMTIuMjcgMTguNiwxNS4zNiAxMy40NSwyMC4wM0wxMiwyMS4zNVoiIC8%2BPC9zdmc%2B&label=pebble%20store&color=ff4700)](https://apps.repebble.com/48b38a54db6d45cb85be6521)
 
-# Carbon - Pebble Weather Watchface
+# Carbon Ion - Pebble Weather Watchface
 
-A weather-focused, highly readable-at-a-glance Pebble watchface for the day ahead, with live weather via the free [Open-Meteo](https://open-meteo.com) API.
-
-![Screenshots of the color version of the watchface showing weather data](./info/screenshots.emery.png)
-![Screenshots of the monochrome version of the watchface showing weather data](./info/screenshots.flint.png)
-
-There are several other weather-focused Pebble watchfaces that might look similar, but I found most of those *too* maximal for my needs (forecast for more than 24 hours, too visually busy, etc.). I wanted something focused just on the things that are most relevant to me over the next 24-hour period that I can grok at a glance.
+A high-precision, weather-focused watchface engineered for **Pebble Time 2** (`emery`, 200×228) and **Pebble Round 2** (`gabbro`, 260×260 / `chalk`), with live weather telemetry via the free [Open-Meteo](https://open-meteo.com) API.
 
 ## Features
 
-- The current time, of course, with a large, high-contrast font.
-- The current date and day of week in the system locale's language.
-- The current location and timezone.
-- Current temperature and high/low for the day.
-- 24-hour temperature graph with secondary apparent temperature line.
-- 24-hour precipitation probability graph with cloud cover.
-- Daylight indicator with sunrise and sunset times.
-- Moon phase on the midnight indicator.
-- Current weather condition icon.
-- Battery level and charging status.
-- Bluetooth disconnect indicator.
-- Respects system 12/24-hour time format.
-- Temperature unit detection based on locale (defaults to Celsius, but Fahrenheit if you're in the US).
+- **Dead-Center Time & Clean Layout**: High-contrast, large time digits with date below and location + condition at top right.
+- **Rolling Timeline with Past Context**: Configurable forecast horizon (12h, 18h, 24h, 36h, 48h) with a fixed 1/5 past ratio.
+- **Dual Temperature Curves & Thermal Infill**: Shows actual and apparent temperatures with configurable gradient thermal infill shading (Forecast only, Past only, All, or None).
+- **Current Time Indicator Bar**: Configurable needle (Both tracks, Top only, Bottom only, or None).
+- **Status Indicators (Left of Time)**:
+  - **Bluetooth Disconnected**: Alert red Bluetooth icon with diagonal slash.
+  - **Silent Mode (Quiet Time)**: Muted bell icon with strike-through slash.
+- **Precipitation & Cloud Cover Graph**: 60-minute resolution precipitation probability and cloud density tracks.
+- **Astronomical Daylight Track**: Sunrise, sunset, and solar progression with timeline battery depletion warnings.
+- **Theme Options**: Dark Theme (classic black) and Light Theme (crisp white).
+- **Full CloudPebble & Offline Support**: Pre-bundled Clay configuration framework with offline resolution.
 
 ## Settings
 
-- Temperature unit: Auto (default), Celsius, or Fahrenheit
-- Date format: "Monday, 1/15" default, several other presets (please open an issue if your preferred date format isn't available)
-- Battery indicator: Icon (default), Percentage, or Off
-- Show Timezone: On (default) or Off
-- Show AM/PM / 24h Indicator: On (default) or Off
+Configurable on your phone via Pebble app settings (Clay):
+- **Forecast Window**: 12hr (+3h past), 18hr (+4.5h past), 24hr (+6h past), 36hr (+9h past), 48hr (+12h past).
+- **Thermal Infill Shading**: Forecast Only (default), Past Only, All, or None.
+- **Current Time Indicator Bar**: Both tracks, Top only, Bottom only, or None.
+- **Color Theme**: Dark (Black) or Light (White).
+- **Temperature Unit**: Auto (locale), Celsius, or Fahrenheit.
+- **Date Format**: Multiple localization presets.
+- **Battery Display**: Icon on timeline or Percentage.
+- **Show Timezone**: Toggle (auto-yields to Bluetooth / Silent Mode status icons).
+- **Show AM/PM / 24h**: Toggle.
+- **Location & Geocoding**: Automatic GPS reverse geocoding or custom static coordinates.
 
 ## To do
 
