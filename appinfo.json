@@ -1,15 +1,10 @@
 {
     "displayName": "Carbon Ion",
-    "uuid": "fe986670-9763-47c0-a24b-a36a7d69d1df",
+    "uuid": "b3e351bb-53f8-4af7-8b98-9b44da3bad50",
     "sdkVersion": "3",
     "enableMultiJS": true,
     "targetPlatforms": [
-        "emery",
-        "chalk",
-        "basalt",
-        "diorite",
-        "aplite",
-        "flint"
+        "emery"
     ],
     "watchapp": {
         "watchface": true
