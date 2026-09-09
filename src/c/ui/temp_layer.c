@@ -19,8 +19,8 @@ struct TempLayer {
 	int16_t current;
 	int16_t high;
 	int16_t low;
-	int8_t hourly[MAX_GRAPH_HOURS];
-	int8_t apparent_hourly[MAX_GRAPH_HOURS];
+	int8_t hourly[MAX_GRAPH_HOURS + 1];
+	int8_t apparent_hourly[MAX_GRAPH_HOURS + 1];
 	uint8_t current_hour;
 	uint8_t hours_remaining;
 	bool celsius;
@@ -62,13 +62,13 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	for (int i = 0; i <= total_hours; i++) {
 		if (i == now_col && tl->current != 0) {
 			pts[i] = tl->current;
-		} else if (i > 0 && tl->hourly[i] == 0 && i >= tl->hours_remaining) {
+		} else if (i > 0 && (tl->hourly[i] == 0 || i >= tl->hours_remaining)) {
 			pts[i] = pts[i - 1];
 		} else {
 			pts[i] = tl->hourly[i];
 		}
 
-		if (i > 0 && tl->apparent_hourly[i] == 0 && i >= tl->hours_remaining) {
+		if (i > 0 && (tl->apparent_hourly[i] == 0 || i >= tl->hours_remaining)) {
 			apt[i] = apt[i - 1];
 		} else {
 			apt[i] = tl->apparent_hourly[i];
@@ -327,8 +327,8 @@ void temp_layer_set_data(TempLayer *layer, int16_t current, int16_t high,
 	layer->low = low;
 	layer->current_hour = current_hour;
 	layer->hours_remaining = hours_remaining;
-	memcpy(layer->hourly, hourly, GRAPH_HOURS);
-	memcpy(layer->apparent_hourly, apparent_hourly, GRAPH_HOURS);
+	memcpy(layer->hourly, hourly, sizeof(layer->hourly));
+	memcpy(layer->apparent_hourly, apparent_hourly, sizeof(layer->apparent_hourly));
 	layer_mark_dirty(layer->layer);
 }
 
