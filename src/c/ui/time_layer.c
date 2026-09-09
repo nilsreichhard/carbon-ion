@@ -82,7 +82,7 @@ static void prv_status_update_proc(Layer *layer, GContext *ctx) {
 	icon_size = 14;
 #endif
 
-	int ox = (bounds.size.w - 14) / 2;
+	int ox = 3;
 
 	if (show_bt && show_quiet) {
 		int half_h = bounds.size.h / 2;
@@ -95,9 +95,9 @@ static void prv_status_update_proc(Layer *layer, GContext *ctx) {
 		graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlack : GColorWhite);
 #endif
 		graphics_draw_text(ctx, ICON_BLUETOOTH__OFF, tl->icon_font,
-		                   GRect(0, y_bt, bounds.size.w, icon_size),
+		                   GRect(ox, y_bt, icon_size + 4, icon_size),
 		                   GTextOverflowModeTrailingEllipsis,
-		                   GTextAlignmentCenter, NULL);
+		                   GTextAlignmentLeft, NULL);
 
 #if defined(PBL_COLOR)
 		GColor quiet_col = tl->light_theme ? GColorCobaltBlue : GColorPictonBlue;
@@ -114,9 +114,9 @@ static void prv_status_update_proc(Layer *layer, GContext *ctx) {
 			graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlack : GColorWhite);
 #endif
 			graphics_draw_text(ctx, ICON_BLUETOOTH__OFF, tl->icon_font,
-			                   GRect(0, y, bounds.size.w, icon_size),
+			                   GRect(ox, y, icon_size + 4, icon_size),
 			                   GTextOverflowModeTrailingEllipsis,
-			                   GTextAlignmentCenter, NULL);
+			                   GTextAlignmentLeft, NULL);
 		} else {
 			int y = (bounds.size.h - 14) / 2;
 #if defined(PBL_COLOR)
