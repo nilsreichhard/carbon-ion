@@ -200,7 +200,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 		// Endcap brackets at sunrise and sunset (in both dark and light theme)
 		graphics_context_set_stroke_color(ctx, bracket_col);
-		graphics_context_set_stroke_width(ctx, 2);
+		graphics_context_set_stroke_width(ctx, 1);
 		if (day_spans[i].orig_rise >= 0 && day_spans[i].orig_rise <= total_hours) {
 			int xr = graph_x + day_spans[i].orig_rise * graph_w / total_hours;
 			graphics_draw_line(ctx, GPoint(xr, line_y - 4), GPoint(xr, line_y + 4));
