@@ -3,23 +3,21 @@
 
 # Carbon Ion — Pebble Weather Watchface
 
-**Carbon Ion** is a high-precision, weather-focused watchface engineered for **Pebble Time 2** (`emery`, 200×228) and **Pebble Round 2** (`gabbro` / `chalk`, 260×260), featuring live meteorological and astronomical telemetry powered by the free [Open-Meteo](https://open-meteo.com) API.
+**Carbon Ion** is a high-precision, weather-focused watchface engineered exclusively for **Pebble Time 2** (`emery`, 200×228 color display), featuring live meteorological and astronomical telemetry powered by the free [Open-Meteo](https://open-meteo.com) API with zero API keys required.
 
 Developed by **Nils Reich** ([@nilsreichhard](https://github.com/nilsreichhard)), based on the original open-source [Carbon watchface](https://github.com/cr0ybot/carbon) by **Cory Hughart** ([@cr0ybot](https://github.com/cr0ybot)).
 
 ## Features
 
-- **Dead-Center Time & Clean Layout**: High-contrast, large time digits with date below and location + condition at top right.
-- **Rolling Timeline with Past Context**: Configurable forecast horizon (12h, 18h, 24h, 36h, 48h) with a fixed 1/5 past ratio.
-- **Dual Temperature Curves & Thermal Infill**: Shows actual and apparent temperatures with configurable gradient thermal infill shading (Forecast only, Past only, All, or None).
-- **Current Time Indicator Bar**: Configurable needle (Both tracks, Top only, Bottom only, or None).
-- **Status Indicators (Left of Time)**:
-  - **Bluetooth Disconnected**: Alert red Bluetooth icon with diagonal slash.
-  - **Silent Mode (Quiet Time)**: Muted bell icon with strike-through slash.
-- **Precipitation & Cloud Cover Graph**: 60-minute resolution precipitation probability and cloud density tracks.
-- **Astronomical Daylight Track**: Sunrise, sunset, and solar progression with timeline battery depletion warnings.
-- **Theme Options**: Dark Theme (classic black) and Light Theme (crisp white).
-- **Full CloudPebble & Offline Support**: Pre-bundled Clay configuration framework with offline resolution.
+- **Flexible Rolling Timeline (12h–48h)**: Configurable forecast horizons (12h, 18h, 24h, 36h, 48h) with a fixed 1/5 past ratio anchoring the current time needle at 20% width.
+- **Timeline Battery Milestones**: Projects remaining battery life onto the top timeline track (20% yellow, 10% orange, 0% red death projection).
+- **Dual Temperature Curves & Synchronized Infill**: Actual temperature spline matching infill colors across thermal bands (Freezing, Cold, Cool, Mild, Warm, Hot, Burning), paired with parallel dashed feels-like temperature curve.
+- **Dynamic High/Low Labels**: Left-side numeric readouts calculate peak and valley temperatures across the active timeline window.
+- **Continuous Astronomical Daylight Track**: Full-width 3px baseline track, multi-day daylight spans with sunrise/sunset delimiter brackets, and per-midnight astronomical lunar phases.
+- **Hourly Timeline Axis Scale**: Bottom ticks marking hourly intervals (3px) and solar noon/midnight milestones (5px).
+- **Dead-Center Time & Zero-Overlap Status Icons**: Large bold digital clock with date below, city and condition icon above, and dedicated left margin for Bluetooth alert and Quiet Time bell runes.
+- **Precipitation & Cloud Density Tracks**: Inverted rain histogram and vector cloud lobes.
+- **Theme Parity**: Full Dark Theme and Light Theme support.
 
 ## Settings
 
