@@ -45,24 +45,12 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	bool is_light = settings_get()->light_theme;
 	graphics_context_set_text_color(ctx, is_light ? GColorBlack : GColorWhite);
 
-	// Left column: high, current, low — three equal zones matching
-	// icon_bar_layer. Each item is centered in its zone; sm_lead compensates
-	// for GOTHIC_14's internal top leading.
-	static char curr_buf[10], high_buf[8], low_buf[8];
-	snprintf(high_buf, sizeof(high_buf), "%d", (int)tl->high);
-	snprintf(curr_buf, sizeof(curr_buf), "%d", (int)tl->current);
-	snprintf(low_buf, sizeof(low_buf), "%d", (int)tl->low);
-
 #if PBL_DISPLAY_HEIGHT >= 228
 	int sm_h = 20;   // GOTHIC_18 rect height
 	int md_h = 28;   // GOTHIC_24_BOLD rect height
-	int sm_lead = 2; // GOTHIC_18 internal top leading
-	int md_lead = 2; // GOTHIC_24_BOLD internal top leading
 #else
 	int sm_h = 15;   // GOTHIC_14 rect height
 	int md_h = 20;   // GOTHIC_18_BOLD rect height
-	int sm_lead = 1; // GOTHIC_14 internal top leading
-	int md_lead = 2; // GOTHIC_18_BOLD internal top leading
 #endif
 	int zone_h =
 	    (lh - 2) / 3; // 2px bottom padding keeps low label off the edge
@@ -86,6 +74,19 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			apt[i] = tl->apparent_hourly[i];
 		}
 	}
+
+	// Dynamic High and Low across the active visible timeline window
+	int16_t window_high = pts[0];
+	int16_t window_low = pts[0];
+	for (int i = 1; i <= total_hours; i++) {
+		if (pts[i] > window_high) window_high = pts[i];
+		if (pts[i] < window_low) window_low = pts[i];
+	}
+
+	static char curr_buf[10], high_buf[8], low_buf[8];
+	snprintf(high_buf, sizeof(high_buf), "%d", (int)window_high);
+	snprintf(curr_buf, sizeof(curr_buf), "%d", (int)tl->current);
+	snprintf(low_buf, sizeof(low_buf), "%d", (int)window_low);
 
 	int16_t t_min = pts[0] < apt[0] ? pts[0] : apt[0];
 	int16_t t_max = pts[0] > apt[0] ? pts[0] : apt[0];
@@ -228,27 +229,23 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 #endif
 
-	// Noon/midnight ticks — temp is the bottommost graph layer, draw bottom
-	// only. Each tick is colored individually: black when it falls within the
-	// sparkline fill (contrasts against color), white when it falls in the
-	// empty region or there is no sparkline at all.
+	// Vertical ticks at the bottom of the meteogram indicating hourly gaps
 	{
-		int bar_w = graph_w / total_hours;
-		int offsets[2] = {
-		    (12 - (int)tl->current_hour + 24) % 24, // noon
-		    (24 - (int)tl->current_hour) % 24,      // midnight
-		};
+		int base_hour = ((int)tl->current_hour - now_col + 240) % 24;
+		int tick_step = (total_hours > 36) ? 3 : 1;
 		graphics_context_set_stroke_width(ctx, 1);
-		for (int i = 0; i < 2; i++) {
-			int off = offsets[i];
-			if (off == 0)
-				continue;
-			bool in_sparkline = (off < (int)tl->hours_remaining);
-			graphics_context_set_stroke_color(
-			    ctx, PBL_IF_COLOR_ELSE(in_sparkline ? GColorBlack : (is_light ? GColorDarkGray : GColorWhite),
-			                           is_light ? GColorDarkGray : GColorWhite));
-			int tx = graph_x + off * bar_w;
-			graphics_draw_line(ctx, GPoint(tx, lh - 4), GPoint(tx, lh - 1));
+		for (int i = 0; i <= total_hours; i += tick_step) {
+			int tx = graph_x + i * graph_w / total_hours;
+			int hour_val = (base_hour + i) % 24;
+			int tick_len = (hour_val == 0 || hour_val == 12) ? 5 : 3;
+			GColor tick_col;
+			if (is_light) {
+				tick_col = (hour_val == 0 || hour_val == 12) ? GColorBlack : GColorDarkGray;
+			} else {
+				tick_col = (hour_val == 0 || hour_val == 12) ? GColorWhite : GColorDarkGray;
+			}
+			graphics_context_set_stroke_color(ctx, tick_col);
+			graphics_draw_line(ctx, GPoint(tx, lh - tick_len), GPoint(tx, lh - 1));
 		}
 	}
 
