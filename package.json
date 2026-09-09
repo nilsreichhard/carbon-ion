@@ -12,7 +12,7 @@
   "private": true,
   "pebble": {
     "displayName": "Carbon Ion",
-    "uuid": "4a34b9c0-93b3-43ff-b1ba-a19d00cbcc60",
+    "uuid": "fe986670-9763-47c0-a24b-a36a7d69d1df",
     "sdkVersion": "3",
     "enableMultiJS": true,
     "targetPlatforms": [
