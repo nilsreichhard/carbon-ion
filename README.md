@@ -27,11 +27,10 @@ Configurable on your phone via Pebble app settings (Clay):
 - **Forecast Window**: 12hr (+3h past), 18hr (+4.5h past), 24hr (+6h past), 36hr (+9h past), 48hr (+12h past).
 - **Thermal Infill Shading**: Forecast Only (default), Past Only, All, or None.
 - **Current Time Indicator Bar**: Both tracks, Top only, Bottom only, or None.
+- **Timeline Battery Markers**: 20% yellow / 10% orange / 0% red, 10% orange / 0% red (default), 0% red, or None.
 - **Color Theme**: Dark (Black) or Light (White).
 - **Temperature Unit**: Auto (locale), Celsius, or Fahrenheit.
 - **Date Format**: Multiple localization presets.
-- **Battery Display**: Icon on timeline or Percentage.
-- **Show Timezone**: Toggle (auto-yields to Bluetooth / Silent Mode status icons).
 - **Show AM/PM / 24h**: Toggle.
 - **Location & Geocoding**: Automatic GPS reverse geocoding or custom static coordinates.
 

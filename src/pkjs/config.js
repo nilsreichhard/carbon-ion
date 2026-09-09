@@ -134,23 +134,6 @@ module.exports = [
 				],
 			},
 			{
-				'type': 'select',
-				'messageKey': 'SETTING_BATTERY_DISPLAY',
-				'label': 'Battery Indicator',
-				'defaultValue': 0,
-				'options': [
-					{ 'label': 'Icon (along timeline track)', 'value': 0 },
-					{ 'label': 'Percentage', 'value': 1 },
-				],
-			},
-			{
-				'type': 'toggle',
-				'messageKey': 'SETTING_SHOW_TIMEZONE',
-				'label': 'Show Timezone',
-				'description': 'Show timezone abbreviation left of the clock (hidden when Bluetooth or Silent mode icons are active).',
-				'defaultValue': false,
-			},
-			{
 				'type': 'toggle',
 				'messageKey': 'SETTING_SHOW_AMPM',
 				'label': 'Show AM/PM / 24h Indicator',
