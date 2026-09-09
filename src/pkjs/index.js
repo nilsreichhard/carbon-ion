@@ -1,17 +1,17 @@
 /**
- * Carbon — PebbleKit JS phone-side script
+ * Carbon Ion — PebbleKit JS phone-side script
  *
  * 1. Gets device GPS location
- * 2. In parallel: fetches Open-Meteo weather + ArcGIS reverse geocode
+ * 2. In parallel: fetches Open-Meteo weather + reverse geocode
  * 3. Sends all data to the watch via AppMessage
  *
  * Uses XMLHttpRequest (fetch() is not available in PebbleKit JS).
  * Uses localStorage to cache weather between refreshes.
  *
- * @author    Cory Hughart <cory@coryhughart.com>
- * @copyright 2026 Cory Hughart
- * @license   https://www.gnu.org/licenses/gpl-3.0.html GPL-3.0-or-later
- * @link      https://cr0ybot.com/project/pebble-watchface-carbon
+ * @author    Nils Reich <https://github.com/nilsreichhard/carbon-ion>
+ * @copyright 2026 Nils Reich
+ * @license   GPL-3.0-or-later
+ * @link      https://github.com/nilsreichhard/carbon-ion
  */
 
 var {
@@ -36,11 +36,11 @@ var {
 } = require('./constants');
 
 var buildInfo = {
-	version: '1.5.0',
+	version: '2.0.0',
 	hash: 'custom',
 	branch: 'master',
 	dirty: false,
-	buildDate: '2026-09-07'
+	buildDate: '2026-09-08'
 };
 var eventLog = require('./eventlog');
 

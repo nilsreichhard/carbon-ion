@@ -1,9 +1,9 @@
 /**
  * Event log with two-generation localStorage rotation.
  *
- * @author    Cory Hughart <cory@coryhughart.com>
- * @copyright 2026 Cory Hughart
- * @license   https://www.gnu.org/licenses/gpl-3.0.html GPL-3.0-or-later
+ * @author    Nils Reich <https://github.com/nilsreichhard/carbon-ion>
+ * @copyright 2026 Nils Reich
+ * @license   GPL-3.0-or-later
  */
 
 var {

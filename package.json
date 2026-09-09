@@ -1,11 +1,11 @@
 {
   "name": "carbon-ion",
-  "description": "Weather graph watchface for Pebble Time 2 (Emery) and Round 2 (Gabbro)",
+  "description": "High-precision weather graph watchface for Pebble Time 2 (Emery) and Round 2 (Gabbro), based on Carbon by Cory Hughart.",
   "author": {
-    "name": "Cory Hughart",
-    "url": "https://coryhughart.com"
+    "name": "Nils Reich",
+    "url": "https://github.com/nilsreichhard/carbon-ion"
   },
-  "version": "1.5.0",
+  "version": "2.0.0",
   "keywords": [
     "pebble-app"
   ],

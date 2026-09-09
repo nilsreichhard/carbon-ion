@@ -8,10 +8,10 @@
  *
  * Run via: npm run gen-icons
  *
- * @author    Cory Hughart <cory@coryhughart.com>
- * @copyright 2026 Cory Hughart
+ * @author    Nils Reich <https://github.com/nilsreichhard/carbon-ion>
+ * @copyright 2026 Nils Reich
  * @license   https://www.gnu.org/licenses/gpl-3.0.html GPL-3.0-or-later
- * @link      https://cr0ybot.com/project/pebble-watchface-carbon
+ * @link      https://github.com/nilsreichhard/carbon-ion
  */
 
 const { readFileSync, writeFileSync, mkdirSync } = require("fs");

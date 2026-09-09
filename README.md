@@ -1,9 +1,11 @@
-[![Latest Release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcr0ybot%2Fcarbon%2Frefs%2Fheads%2Fmain%2Fpackage.json&query=%24.version&style=flat&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAQAAABKfvVzAAAAAmJLR0QA/4ePzL8AAAC0SURBVDjLldLLCcJAFEbhP4oIE1xYhw1pA4JWYRGCVbhxoTshWIUNaAnBgB4XBiTJ3HncbALznXAZIpnDmHnnmSqAS470p2Fn8wrfNEzS+INX++ZS+J6CRZu4lGWWEgVPT2DsfmfFwbMSjiuxcXn8H5gX6Q+S+ZtRDofT7/uXRF5RSmJEncEliS2fDC5JrCPJjVn/lwglQx5M/NxMbO5NwnyQxHknSeOSxIaac+feo0lhn30BIXaN/u4MXmAAAAAASUVORK5CYII=&label=latest)](https://github.com/cr0ybot/carbon/releases/latest/download/carbon.pbw)
-[![Pebble Store Hearts](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fappstore-api.repebble.com%2Fapi%2Fv1%2Fapps%2Fid%2F48b38a54db6d45cb85be6521&query=%24.data%5B0%5D.hearts&style=flat&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHRpdGxlPmhlYXJ0PC90aXRsZT48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTEyLDIxLjM1TDEwLjU1LDIwLjAzQzUuNCwxNS4zNiAyLDEyLjI3IDIsOC41QzIsNS40MSA0LjQyLDMgNy41LDNDOS4yNCwzIDEwLjkxLDMuODEgMTIsNS4wOEMxMy4wOSwzLjgxIDE0Ljc2LDMgMTYuNSwzQzE5LjU4LDMgMjIsNS40MSAyMiw4LjVDMjIsMTIuMjcgMTguNiwxNS4zNiAxMy40NSwyMC4wM0wxMiwyMS4zNVoiIC8%2BPC9zdmc%2B&label=pebble%20store&color=ff4700)](https://apps.repebble.com/48b38a54db6d45cb85be6521)
+[![GitHub Release](https://img.shields.io/github/v/release/nilsreichhard/carbon-ion?style=flat&label=latest)](https://github.com/nilsreichhard/carbon-ion/releases)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL_3.0-blue.svg)](LICENSE)
 
-# Carbon Ion - Pebble Weather Watchface
+# Carbon Ion — Pebble Weather Watchface
 
-A high-precision, weather-focused watchface engineered for **Pebble Time 2** (`emery`, 200×228) and **Pebble Round 2** (`gabbro`, 260×260 / `chalk`), with live weather telemetry via the free [Open-Meteo](https://open-meteo.com) API.
+**Carbon Ion** is a high-precision, weather-focused watchface engineered for **Pebble Time 2** (`emery`, 200×228) and **Pebble Round 2** (`gabbro` / `chalk`, 260×260), featuring live meteorological and astronomical telemetry powered by the free [Open-Meteo](https://open-meteo.com) API.
+
+Developed by **Nils Reich** ([@nilsreichhard](https://github.com/nilsreichhard)), based on the original open-source [Carbon watchface](https://github.com/cr0ybot/carbon) by **Cory Hughart** ([@cr0ybot](https://github.com/cr0ybot)).
 
 ## Features
 
@@ -189,16 +191,25 @@ This will update `src/c/generated/icons.h` with the icon names and codepoints, w
 
 ---
 
+## Credits & Acknowledgements
+
+- **Original Project**: **Carbon Ion** is a specialized fork and overhaul developed by **Nils Reich** ([@nilsreichhard](https://github.com/nilsreichhard)), built upon the original open-source **[Carbon watchface](https://github.com/cr0ybot/carbon)** created by **Cory Hughart** ([@cr0ybot](https://github.com/cr0ybot) / [coryhughart.com](https://coryhughart.com)).
+- **Original Author**: **Cory Hughart** — creator of the foundational Carbon watchface architecture, embedded WMO code translation, and IcoMoon Carbon icon set integration.
+- **Carbon Ion Enhancements**:
+  - Full high-resolution support and layout geometry for **Pebble Time 2** (`emery`, 200×228) and **Pebble Round 2** (`gabbro`/`chalk`, 260×260).
+  - 12h–48h configurable timeline windows with locked 1/5 past ratio.
+  - Continuous multi-day astronomical daylight & night tracking with per-midnight lunar phase algorithm.
+  - Dual temperature spline curves (bold actual curve vs parallel dashed apparent curve) with non-overflowing solid thermal infill shading and dynamic window min/max scale readouts.
+  - Configurable timeline battery milestones and hourly axis ticks.
+  - Standalone Rebble CloudPebble vendoring and dynamic AppMessage payloads.
+
 ## License
 
-[GPL-3.0](LICENSE)
+Released under [GPL-3.0-or-later](LICENSE) in accordance with the original Carbon license.
 
 ## Attribution
 
-Weather data from [Open-Meteo.com](https://open-meteo.com/)
-
-Reverse geocoding from [BigDataCloud](https://www.bigdatacloud.com/free-api/free-reverse-geocode-to-city-api)
-
-Icons from the [Carbon Design System](https://carbondesignsystem.com/elements/icons/library/) icon set by IBM
-
-Icons assembled with [IcoMoon](https://icomoon.io/)
+- Weather data from [Open-Meteo.com](https://open-meteo.com/)
+- Reverse geocoding from [BigDataCloud](https://www.bigdatacloud.com/free-api/free-reverse-geocode-to-city-api)
+- Icons from the [Carbon Design System](https://carbondesignsystem.com/elements/icons/library/) icon set by IBM
+- Icons assembled with [IcoMoon](https://icomoon.io/)

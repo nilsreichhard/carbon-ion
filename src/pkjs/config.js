@@ -1,13 +1,14 @@
 /**
  * Clay configuration for Carbon Ion
  *
- * @author    Cory Hughart & Nils Reich
- * @copyright 2026
+ * @author    Nils Reich
+ * @copyright 2026 Nils Reich
  * @license   GPL-3.0-or-later
+ * @link      https://github.com/nilsreichhard/carbon-ion
  */
 
 // Build metadata inlined for robust offline/CloudPebble builds
-var version = '1.5.0';
+var version = '2.0.0';
 var hash = 'custom';
 
 module.exports = [
@@ -17,7 +18,7 @@ module.exports = [
 	},
 	{
 		'type': 'text',
-		'defaultValue': `v${version} (Emery & Gabbro Edition)`,
+		'defaultValue': `v${version} (Emery & Gabbro Edition)\nBy Nils Reich — based on Carbon by Cory Hughart`,
 	},
 	{
 		'type': 'section',

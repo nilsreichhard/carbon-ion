@@ -1,5 +1,5 @@
 {
-    "displayName": "Carbon",
+    "displayName": "Carbon Ion",
     "uuid": "4a34b9c0-93b3-43ff-b1ba-a19d00cbcc60",
     "sdkVersion": "3",
     "enableMultiJS": true,
@@ -85,8 +85,8 @@
     "name": "carbon-ion",
     "shortName": "Carbon Ion",
     "longName": "Carbon Ion",
-    "versionLabel": "1.5.0",
-    "companyName": "Cory Hughart",
+    "versionLabel": "2.0.0",
+    "companyName": "Nils Reich",
     "appKeys": {
         "WEATHER_REQUEST": 10000,
         "WEATHER_TEMP": 10001,
@@ -117,6 +117,10 @@
         "SETTING_CLEAR_CACHE": 10026,
         "SETTING_INFILL_MODE": 10027,
         "SETTING_NEEDLE_MODE": 10028,
-        "SETTING_FORECAST_HOURS": 10029
+        "SETTING_FORECAST_HOURS": 10029,
+        "SETTING_LIGHT_THEME": 10030,
+        "SETTING_SHOW_BT_ALERT": 10031,
+        "SETTING_SHOW_SILENT_MODE": 10032,
+        "SETTING_TIMELINE_BATTERY": 10033
     }
 }
