@@ -66,6 +66,19 @@ module.exports = [
 					{ 'label': 'None (Hide Needle)', 'value': 3 },
 				],
 			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_TIMELINE_BATTERY',
+				'label': 'Timeline Battery Markers',
+				'description': 'Battery depletion milestones projected onto the timeline track.',
+				'defaultValue': 1,
+				'options': [
+					{ 'label': '20% yellow, 10% orange, 0% red', 'value': 0 },
+					{ 'label': '10% orange, 0% red (default)', 'value': 1 },
+					{ 'label': '0% red', 'value': 2 },
+					{ 'label': 'None', 'value': 3 },
+				],
+			},
 		],
 	},
 	{

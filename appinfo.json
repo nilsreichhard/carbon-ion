@@ -51,7 +51,8 @@
         "SETTING_FORECAST_HOURS": 10029,
         "SETTING_LIGHT_THEME": 10030,
         "SETTING_SHOW_BT_ALERT": 10031,
-        "SETTING_SHOW_SILENT_MODE": 10032
+        "SETTING_SHOW_SILENT_MODE": 10032,
+        "SETTING_TIMELINE_BATTERY": 10033
     },
     "resources": {
         "media": [

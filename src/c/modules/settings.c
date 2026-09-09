@@ -29,6 +29,7 @@ static const Settings s_defaults = {
     .forecast_hours = DEFAULT_FORECAST_HOURS,
     .show_bt_alert = true,
     .show_silent_mode = true,
+    .timeline_battery = TIMELINE_BATT_10_0,
 };
 
 void settings_init(void) {
@@ -155,6 +156,15 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	if (!t) t = dict_find(iter, 10032);
 	if (t) {
 		s_settings.show_silent_mode = (prv_tuple_int(t) != 0);
+	}
+
+	t = dict_find(iter, KEY_SETTING_TIMELINE_BATTERY);
+	if (!t) t = dict_find(iter, 10033);
+	if (t) {
+		int bm = prv_tuple_int(t);
+		if (bm >= 0 && bm <= 3) {
+			s_settings.timeline_battery = (TimelineBatteryMode)bm;
+		}
 	}
 
 	settings_save();

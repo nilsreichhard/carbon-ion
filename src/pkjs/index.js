@@ -1093,6 +1093,12 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		dict['SETTING_NEEDLE_MODE'] = needleMode;
 	}
 
+	var timelineBattery = extractInt(rawSettings['SETTING_TIMELINE_BATTERY']);
+	if (!isNaN(timelineBattery)) {
+		dict[10033] = timelineBattery;
+		dict['SETTING_TIMELINE_BATTERY'] = timelineBattery;
+	}
+
 	var lightTheme = extractInt(rawSettings['SETTING_LIGHT_THEME']) === 1;
 	dict[10030] = lightTheme ? 1 : 0;
 	dict['SETTING_LIGHT_THEME'] = lightTheme ? 1 : 0;

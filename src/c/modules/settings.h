@@ -30,6 +30,13 @@ typedef enum {
 } NeedleMode;
 
 typedef enum {
+	TIMELINE_BATT_20_10_0 = 0, // 20% yellow, 10% orange, 0% red
+	TIMELINE_BATT_10_0 = 1,    // 10% orange, 0% red (default)
+	TIMELINE_BATT_0 = 2,       // 0% red
+	TIMELINE_BATT_NONE = 3,    // None
+} TimelineBatteryMode;
+
+typedef enum {
 	TIMELINE_WINDOW_12H = 12, // 12h future + 3h past = 15h total
 	TIMELINE_WINDOW_18H = 18, // 18h future + 4.5h past = 22.5h total
 	TIMELINE_WINDOW_24H = 24, // 24h future + 6h past = 30h total (default)
@@ -49,6 +56,7 @@ typedef enum {
 #define KEY_SETTING_LIGHT_THEME 10030
 #define KEY_SETTING_SHOW_BT_ALERT 10031
 #define KEY_SETTING_SHOW_SILENT_MODE 10032
+#define KEY_SETTING_TIMELINE_BATTERY 10033
 
 typedef struct {
 	bool temp_unit_celsius;
@@ -64,6 +72,7 @@ typedef struct {
 	uint8_t forecast_hours; // 12, 24, 36, or 48 (default 24)
 	bool show_bt_alert;
 	bool show_silent_mode;
+	TimelineBatteryMode timeline_battery;
 } Settings;
 
 void settings_init(void);

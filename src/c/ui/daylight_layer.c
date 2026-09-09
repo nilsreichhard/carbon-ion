@@ -251,8 +251,32 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 
 	// 6. Battery life depletion markers directly on the timeline bar
-	if (!dl->battery_charging && dl->battery_percent < 100) {
-		if (dl->battery_percent > 10) {
+	TimelineBatteryMode tb_mode = settings_get()->timeline_battery;
+	if (tb_mode != TIMELINE_BATT_NONE && !dl->battery_charging && dl->battery_percent < 100) {
+		// 20% Yellow Marker (Option 1: 20% yellow, 10% orange, 0% red)
+		if (tb_mode == TIMELINE_BATT_20_10_0 && dl->battery_percent > 20) {
+			int hrs_to_20 = (int)(dl->battery_percent - 20) * 4 / 5;
+			if (hrs_to_20 >= 0 && hrs_to_20 <= forecast_hours) {
+				int col20 = past_hours + hrs_to_20;
+				int x20 = graph_x + col20 * graph_w / total_hours;
+				graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
+				graphics_fill_circle(ctx, GPoint(x20, line_y), 6);
+#if defined(PBL_COLOR)
+				graphics_context_set_stroke_color(ctx, GColorYellow);
+				graphics_context_set_fill_color(ctx, GColorYellow);
+#else
+				graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
+				graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
+#endif
+				graphics_context_set_stroke_width(ctx, 1);
+				graphics_draw_round_rect(ctx, GRect(x20 - 4, line_y - 3, 8, 6), 1);
+				graphics_fill_rect(ctx, GRect(x20 + 4, line_y - 1, 1, 3), 0, GCornerNone);
+				graphics_fill_rect(ctx, GRect(x20 - 3, line_y - 2, 4, 4), 0, GCornerNone);
+			}
+		}
+
+		// 10% Orange Marker (Option 1 and Option 2: 10% orange)
+		if ((tb_mode == TIMELINE_BATT_20_10_0 || tb_mode == TIMELINE_BATT_10_0) && dl->battery_percent > 10) {
 			int hrs_to_10 = (int)(dl->battery_percent - 10) * 4 / 5;
 			if (hrs_to_10 >= 0 && hrs_to_10 <= forecast_hours) {
 				int col10 = past_hours + hrs_to_10;
@@ -260,8 +284,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
 				graphics_fill_circle(ctx, GPoint(x10, line_y), 6);
 #if defined(PBL_COLOR)
-				graphics_context_set_stroke_color(ctx, GColorChromeYellow);
-				graphics_context_set_fill_color(ctx, GColorChromeYellow);
+				graphics_context_set_stroke_color(ctx, GColorOrange);
+				graphics_context_set_fill_color(ctx, GColorOrange);
 #else
 				graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 				graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
@@ -273,6 +297,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			}
 		}
 
+		// 0% Red Marker (Option 1, Option 2, and Option 3: 0% red)
 		int hrs_to_0 = (int)dl->battery_percent * 4 / 5;
 		if (hrs_to_0 >= 0 && hrs_to_0 <= forecast_hours) {
 			int col0 = past_hours + hrs_to_0;
