@@ -26,6 +26,7 @@ struct IconBarLayer {
 	BatteryDisplay battery_display;
 };
 
+#if GRAPH_OFFSET_X > 0
 static const char *prv_battery_icon(int pct, bool charging) {
 	if (charging)
 		return ICON_BATTERY__CHARGING;
@@ -110,8 +111,12 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		                   GTextAlignmentCenter, NULL);
 	}
 }
+#endif
 
 IconBarLayer *icon_bar_layer_create(GRect frame) {
+#if GRAPH_OFFSET_X <= 0
+	return NULL;
+#else
 	IconBarLayer *sl = malloc(sizeof(IconBarLayer));
 	if (!sl)
 		return NULL;
@@ -141,6 +146,7 @@ IconBarLayer *icon_bar_layer_create(GRect frame) {
 	*(IconBarLayer **)layer_get_data(sl->layer) = sl;
 	layer_set_update_proc(sl->layer, prv_update_proc);
 	return sl;
+#endif
 }
 
 void icon_bar_layer_destroy(IconBarLayer *layer) {

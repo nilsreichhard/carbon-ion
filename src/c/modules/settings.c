@@ -64,6 +64,7 @@ static int prv_tuple_int(Tuple *t) {
 }
 
 void settings_apply_from_message(DictionaryIterator *iter) {
+	Settings prev = s_settings;
 	Tuple *t;
 
 	t = dict_find(iter, MESSAGE_KEY_SETTING_TEMP_UNIT);
@@ -167,5 +168,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		}
 	}
 
-	settings_save();
+	if (memcmp(&prev, &s_settings, sizeof(Settings)) != 0) {
+		settings_save();
+	}
 }

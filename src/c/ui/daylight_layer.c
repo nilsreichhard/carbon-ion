@@ -25,10 +25,6 @@ struct DaylightLayer {
 	bool sunset_approx;
 };
 
-// Distance from the approximate-hour center at which the solid line stops.
-// Dots are drawn at center-2, center, center+2 (centered on the approx hour).
-#define DITHER_REACH 4
-
 // Calculate the moon phase at a specific timestamp (0=new, 1=wax crescent, 2=first quarter,
 // 3=wax gibbous, 4=full, 5=wan gibbous, 6=last quarter, 7=wan crescent).
 // Integer-only adaptation of the classic algorithm, scaled x10000 and
@@ -61,17 +57,6 @@ static int prv_moon_phase_at(time_t target_time) {
 //       waxing  1→dx>=+2  2→dx>=+1  3→dx>=-1
 //       waning  5→dx<=+1  6→dx<=-1  7→dx<=-2
 // When col==0 also draws the marker peeking from the right edge (wrap).
-// Draw a dithered fade centered at x to indicate an approximate endpoint.
-// Three white pixels at offsets -2, 0, +2 create the sparse `——∙∙∙` look.
-static void prv_draw_dither_end(GContext *ctx, int x, int line_y) {
-	bool is_light = settings_get()->light_theme;
-	graphics_context_set_stroke_color(ctx, is_light ? GColorDarkGray : GColorWhite);
-	graphics_context_set_stroke_width(ctx, 1);
-	graphics_draw_pixel(ctx, GPoint(x - 2, line_y));
-	graphics_draw_pixel(ctx, GPoint(x, line_y));
-	graphics_draw_pixel(ctx, GPoint(x + 2, line_y));
-}
-
 static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 	bool is_light = settings_get()->light_theme;
 	// Lit-side threshold indexed by phase (0 and 4 are special-cased below)

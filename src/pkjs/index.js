@@ -471,26 +471,6 @@ function getLastKnownCoordsFromCache() {
 }
 
 /**
- * Maps a WMO weather code to a short condition string (informational only).
- *
- * @param   {number} code  WMO weather interpretation code.
- * @returns {string}       Short condition label e.g. 'Clear', 'Rain', 'Snow'.
- */
-function conditionFromCode(code) {
-	if (code === 0) return 'Clear';
-	if (code <= 2) return 'Partly Cloudy';
-	if (code === 3) return 'Cloudy';
-	if (code <= 48) return 'Fog';
-	if (code <= 57) return 'Drizzle';
-	if (code <= 67) return 'Rain';
-	if (code <= 77) return 'Snow';
-	if (code <= 82) return 'Rain';
-	if (code <= 86) return 'Snow';
-	if (code <= 99) return 'Storm';
-	return 'Unknown';
-}
-
-/**
  * Pack up to hourlyCount values into a clamped uint8 array for AppMessage transport.
  *
  * @param   {number[]} values  Input values; missing entries default to 0.

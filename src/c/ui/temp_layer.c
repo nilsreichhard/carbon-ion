@@ -9,6 +9,7 @@
 
 #include "temp_layer.h"
 #include "../modules/settings.h"
+#include "../modules/weather.h"
 #include "graph_common.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -24,6 +25,14 @@ struct TempLayer {
 	uint8_t current_hour;
 	uint8_t hours_remaining;
 	bool celsius;
+
+	// Pre-allocated heap buffers to eliminate stack pressure during drawing
+	int16_t pts[MAX_GRAPH_HOURS + 1];
+	int16_t apt[MAX_GRAPH_HOURS + 1];
+	int spx[MAX_GRAPH_HOURS + 1];
+	int spy[MAX_GRAPH_HOURS + 1];
+	int apx[MAX_GRAPH_HOURS + 1];
+	int apy[MAX_GRAPH_HOURS + 1];
 };
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
@@ -57,18 +66,18 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	// Sparkline — total_hours + 1 points with current temp anchored at needle (now_col)
 	int now_col = graph_get_past_hours();
-	int16_t pts[MAX_GRAPH_HOURS + 1];
-	int16_t apt[MAX_GRAPH_HOURS + 1];
+	int16_t *pts = tl->pts;
+	int16_t *apt = tl->apt;
 	for (int i = 0; i <= total_hours; i++) {
-		if (i == now_col && tl->current != 0) {
+		if (i == now_col && tl->current != WEATHER_TEMP_INVALID) {
 			pts[i] = tl->current;
-		} else if (i > 0 && (tl->hourly[i] == 0 || i >= tl->hours_remaining)) {
+		} else if (i > 0 && i >= tl->hours_remaining) {
 			pts[i] = pts[i - 1];
 		} else {
 			pts[i] = tl->hourly[i];
 		}
 
-		if (i > 0 && (tl->apparent_hourly[i] == 0 || i >= tl->hours_remaining)) {
+		if (i > 0 && i >= tl->hours_remaining) {
 			apt[i] = apt[i - 1];
 		} else {
 			apt[i] = tl->apparent_hourly[i];
@@ -108,8 +117,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int graph_h = lh - pad * 2;
 
 	// Pre-compute pixel positions for both lines
-	int spx[MAX_GRAPH_HOURS + 1], spy[MAX_GRAPH_HOURS + 1];
-	int apx[MAX_GRAPH_HOURS + 1], apy[MAX_GRAPH_HOURS + 1];
+	int *spx = tl->spx;
+	int *spy = tl->spy;
+	int *apx = tl->apx;
+	int *apy = tl->apy;
 	for (int i = 0; i <= total_hours; i++) {
 		spx[i] = graph_x + i * graph_w / total_hours;
 		spy[i] = pad + graph_h - ((pts[i] - t_min) * graph_h / t_range);
@@ -154,16 +165,15 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			graphics_context_set_fill_color(ctx, fill_col);
 			int x0 = spx[i - 1], y0 = spy[i - 1], x1 = spx[i], y1 = spy[i];
 			int dx = x1 - x0, dy = y1 - y0;
-			int steps = (abs(dx) > abs(dy)) ? abs(dx) : abs(dy);
-			if (steps == 0)
-				steps = 1;
-			for (int s = 0; s <= steps; s++) {
-				int col_x = x0 + dx * s / steps;
+			if (dx <= 0)
+				continue;
+			int x_end = (i == end_col || i == total_hours) ? x1 : (x1 - 1);
+			for (int col_x = x0; col_x <= x_end; col_x++) {
 				if (infill == INFILL_FUTURE && col_x < x_now)
 					continue;
 				if (infill == INFILL_PAST && col_x > x_now)
 					continue;
-				int col_y = y0 + dy * s / steps + 2; // Offset down so line cleanly covers top of infill
+				int col_y = y0 + dy * (col_x - x0) / dx + 2; // Offset down so line cleanly covers top of infill
 				int col_h = line_bottom - col_y;
 				if (col_h > 0) {
 					graphics_fill_rect(ctx, GRect(col_x, col_y, 1, col_h), 0,

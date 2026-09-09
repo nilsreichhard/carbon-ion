@@ -180,12 +180,18 @@ void demo_data_load(WeatherData *weather, Settings *settings) {
 	weather->weather_code = s->weather_code;
 	weather->sunrise_hour = s->sunrise_hour;
 	weather->sunset_hour = s->sunset_hour;
-	memcpy(weather->temp_hourly, s->temp_hourly, WEATHER_HOURLY_COUNT);
-	memcpy(weather->apparent_temp_hourly, s->apparent_hourly,
-	       WEATHER_HOURLY_COUNT);
-	memcpy(weather->precip_prob, s->precip_prob, WEATHER_HOURLY_COUNT);
-	memcpy(weather->cloud_cover, s->cloud_cover, WEATHER_HOURLY_COUNT);
-	memcpy(weather->hourly_weather_code, s->hourly_code, WEATHER_HOURLY_COUNT);
+	memcpy(weather->temp_hourly, s->temp_hourly, 36);
+	memcpy(weather->apparent_temp_hourly, s->apparent_hourly, 36);
+	memcpy(weather->precip_prob, s->precip_prob, 36);
+	memcpy(weather->cloud_cover, s->cloud_cover, 36);
+	memcpy(weather->hourly_weather_code, s->hourly_code, 36);
+	for (int i = 36; i < WEATHER_HOURLY_COUNT; i++) {
+		weather->temp_hourly[i] = s->temp_hourly[i % 36];
+		weather->apparent_temp_hourly[i] = s->apparent_hourly[i % 36];
+		weather->precip_prob[i] = s->precip_prob[i % 36];
+		weather->cloud_cover[i] = s->cloud_cover[i % 36];
+		weather->hourly_weather_code[i] = s->hourly_code[i % 36];
+	}
 	strncpy(weather->city_name, s->city_name, WEATHER_CITY_MAX_LEN - 1);
 	weather->city_name[WEATHER_CITY_MAX_LEN - 1] = '\0';
 	weather->is_valid = true;

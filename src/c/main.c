@@ -14,7 +14,6 @@
 #include "ui/daylight_layer.h"
 #include "ui/event_layer.h"
 #include "ui/graph_common.h"
-#include "ui/icon_bar_layer.h"
 #include "ui/precip_layer.h"
 #include "ui/temp_layer.h"
 #include "ui/time_layer.h"
@@ -67,7 +66,6 @@ static PrecipLayer *s_precip_layer;
 static EventLayer *s_event_layer;
 static TimeLayer *s_time_layer;
 static TempLayer *s_temp_layer;
-static IconBarLayer *s_icon_bar_layer;
 
 static WeatherData s_weather;
 static uint32_t s_request_seq;
@@ -108,7 +106,9 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 	// Note: the potential for overflow is negligible: this resets on watchface
 	// launch and would take 4082 years of continuous operation to overflow.
 	s_minutes_since_launch += 1;
-	if (s_minutes_since_launch % settings_get()->fetch_interval_min == 0) {
+	uint8_t interval = settings_get()->fetch_interval_min;
+	if (interval < 15) interval = 30;
+	if (s_minutes_since_launch % interval == 0) {
 		prv_request_weather();
 	}
 #endif
@@ -130,11 +130,8 @@ static void prv_push_weather_to_layers(struct tm *now) {
 		daylight_layer_set_data(s_daylight_layer, 6, 18, current_hour, true,
 		                        true);
 		temp_layer_set_current_hour(s_temp_layer, current_hour, 0);
-		icon_bar_layer_set_condition(s_icon_bar_layer,
-		                             WEATHER_CONDITION_UNKNOWN);
 		time_layer_set_condition(s_time_layer,
 		                         WEATHER_CONDITION_UNKNOWN, true);
-		icon_bar_layer_set_disconnected(s_icon_bar_layer, true);
 		layer_mark_dirty(window_get_root_layer(s_main_window));
 		return;
 	}
@@ -192,10 +189,10 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	if (now_idx >= WEATHER_HOURLY_COUNT)
 		now_idx = WEATHER_HOURLY_COUNT - 1;
 
-	int16_t display_temp = (s_weather.current_temp != 0)
+	int16_t display_temp = (s_weather.current_temp != WEATHER_TEMP_INVALID)
 	                           ? s_weather.current_temp
 	                           : (int16_t)s_weather.temp_hourly[now_idx];
-	uint8_t display_code = (s_weather.weather_code != 0)
+	uint8_t display_code = (s_weather.weather_code != WEATHER_CODE_INVALID)
 	                           ? s_weather.weather_code
 	                           : s_weather.hourly_weather_code[now_idx];
 
@@ -206,21 +203,8 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	cloud_layer_set_data(s_cloud_layer, cloud_view, code_view, current_hour);
 	precip_layer_set_data(s_precip_layer, precip_view, code_view, current_hour);
 	event_layer_set_data(s_event_layer, code_view, hours_remaining);
-	icon_bar_layer_set_condition(s_icon_bar_layer,
-	                             weather_code_to_condition(display_code));
-	icon_bar_layer_set_daytime(s_icon_bar_layer, is_day);
 	time_layer_set_condition(s_time_layer,
 	                         weather_code_to_condition(display_code), is_day);
-	time_t now_t = time(NULL);
-	long data_age_sec = (long)(now_t - s_weather.fetch_time);
-	if (data_age_sec < 0)
-		data_age_sec = 0;
-	long stale_threshold_sec =
-	    2L * (long)settings_get()->fetch_interval_min * 60L + 5L * 60L;
-	icon_bar_layer_set_disconnected(s_icon_bar_layer,
-	                                !s_weather.is_valid ||
-	                                    data_age_sec >= stale_threshold_sec ||
-	                                    hours_remaining == 0);
 	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
 	temp_layer_set_data(s_temp_layer, display_temp, s_weather.high_temp,
 	                    s_weather.low_temp, temp_view, appar_view, current_hour,
@@ -239,26 +223,9 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 	// Check for settings changes first
 	settings_apply_from_message(iter);
 	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
-	icon_bar_layer_set_battery_display(s_icon_bar_layer,
-	                                   settings_get()->battery_display);
 	window_set_background_color(s_main_window,
 	                            settings_get()->light_theme ? GColorWhite
 	                                                        : GColorBlack);
-	// Apply settings and re-push weather immediately rather than waiting for next tick.
-	time_t now_s = time(NULL);
-	struct tm *now_stm = localtime(&now_s);
-	if (now_stm) {
-		time_layer_update(s_time_layer, now_stm, settings_get());
-		prv_push_weather_to_layers(now_stm);
-	}
-	if (s_time_layer) layer_mark_dirty(time_layer_get_layer(s_time_layer));
-	if (s_temp_layer) layer_mark_dirty(temp_layer_get_layer(s_temp_layer));
-	if (s_daylight_layer) layer_mark_dirty(daylight_layer_get_layer(s_daylight_layer));
-	if (s_cloud_layer) layer_mark_dirty(cloud_layer_get_layer(s_cloud_layer));
-	if (s_precip_layer) layer_mark_dirty(precip_layer_get_layer(s_precip_layer));
-	if (s_event_layer) layer_mark_dirty(event_layer_get_layer(s_event_layer));
-	if (s_icon_bar_layer) layer_mark_dirty(icon_bar_layer_get_layer(s_icon_bar_layer));
-	if (s_main_window) layer_mark_dirty(window_get_root_layer(s_main_window));
 
 	// Parse scalar weather fields — track whether any weather key was present
 	// so a settings-only message can't corrupt the weather state.
@@ -341,35 +308,34 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 		s_weather.city_name[sizeof(s_weather.city_name) - 1] = '\0';
 	}
 
-	// Only update weather state if this message actually contained weather
-	// data. A settings-only message must not mark the weather as valid with
-	// zeroed arrays, which would render a false "clear sky" state.
-	if (!got_weather)
-		goto done;
+	if (got_weather) {
+		t = dict_find(iter, MESSAGE_KEY_WEATHER_FETCH_TIME);
+		if (!t) t = dict_find(iter, 10012);
+		if (t) {
+			s_weather.fetch_time = (time_t)prv_tuple_int(t);
+		} else {
+			s_weather.fetch_time = time(NULL);
+		}
 
-	t = dict_find(iter, MESSAGE_KEY_WEATHER_FETCH_TIME);
-	if (!t) t = dict_find(iter, 10012);
-	if (t) {
-		s_weather.fetch_time = (time_t)prv_tuple_int(t);
-	} else {
-		s_weather.fetch_time = time(NULL);
+		s_weather.is_valid = true;
+		s_weather.valid_hours = WEATHER_HOURLY_COUNT;
+		s_last_answered_seq = s_last_sent_request_seq;
+
+		// Persist for cold-start restoration across 2 storage keys
+		persist_write_data(STORAGE_KEY_WEATHER, &s_weather, 256);
+		persist_write_data(STORAGE_KEY_WEATHER_PART2,
+		                   ((const uint8_t *)&s_weather) + 256,
+		                   sizeof(s_weather) - 256);
 	}
 
-	s_weather.is_valid = true;
-	s_weather.valid_hours = WEATHER_HOURLY_COUNT;
-	s_last_answered_seq = s_last_sent_request_seq;
+	// Apply settings and push weather to layers ONCE
+	time_t now_s = time(NULL);
+	struct tm *now_stm = localtime(&now_s);
+	if (now_stm) {
+		time_layer_update(s_time_layer, now_stm, settings_get());
+		prv_push_weather_to_layers(now_stm);
+	}
 
-	// Persist for cold-start restoration across 2 storage keys
-	persist_write_data(STORAGE_KEY_WEATHER, &s_weather, 256);
-	persist_write_data(STORAGE_KEY_WEATHER_PART2,
-	                   ((const uint8_t *)&s_weather) + 256,
-	                   sizeof(s_weather) - 256);
-
-	// Push data to layers
-	time_t now_push = time(NULL);
-	prv_push_weather_to_layers(localtime(&now_push));
-
-done:
 	prv_update_pending_state();
 }
 
@@ -406,19 +372,15 @@ static void prv_request_weather(void) {
 }
 
 static void prv_battery_handler(BatteryChargeState state) {
-	icon_bar_layer_notify_battery(s_icon_bar_layer, state);
 	daylight_layer_set_battery(s_daylight_layer, state.charge_percent,
 	                           state.is_charging);
 }
 
 static void prv_update_pending_state(void) {
-	bool connected = connection_service_peek_pebble_app_connection();
-	bool pending = connected && (s_request_seq - s_last_answered_seq) >= 2;
-	icon_bar_layer_set_pending(s_icon_bar_layer, pending);
+	// Pending state tracking without icon bar
 }
 
 static void prv_bt_handler(bool connected) {
-	icon_bar_layer_notify_bt(s_icon_bar_layer, connected);
 	if (s_time_layer) {
 		time_layer_set_status(s_time_layer, connected, quiet_time_is_active());
 	}
@@ -457,12 +419,6 @@ static void prv_window_load(Window *window) {
 	layer_add_child(root, event_layer_get_layer(s_event_layer));
 	y += EVENT_H;
 
-	// Icon bar — overlaid on top of daylight/cloud/precip, owns the left column
-	s_icon_bar_layer = icon_bar_layer_create(GRect(0, 0, w, GRAPH_LAYERS_H));
-	layer_add_child(root, icon_bar_layer_get_layer(s_icon_bar_layer));
-	icon_bar_layer_set_battery_display(s_icon_bar_layer,
-	                                   settings_get()->battery_display);
-
 	// Time block (city + time + date) — vertically centered on the screen
 	int time_y = (bounds.size.h - TL_TIME_BLOCK_H) / 2;
 	s_time_layer = time_layer_create(GRect(0, time_y, w, TL_TIME_BLOCK_H));
@@ -471,7 +427,6 @@ static void prv_window_load(Window *window) {
 	bool init_bt = connection_service_peek_pebble_app_connection();
 	bool init_quiet = quiet_time_is_active();
 	time_layer_set_status(s_time_layer, init_bt, init_quiet);
-	icon_bar_layer_notify_bt(s_icon_bar_layer, init_bt);
 
 	// Temp info + sparkline — same height as the top graph group, pinned to
 	// bottom
@@ -505,7 +460,6 @@ static void prv_window_unload(Window *window) {
 	cloud_layer_destroy(s_cloud_layer);
 	precip_layer_destroy(s_precip_layer);
 	event_layer_destroy(s_event_layer);
-	icon_bar_layer_destroy(s_icon_bar_layer);
 	time_layer_destroy(s_time_layer);
 	temp_layer_destroy(s_temp_layer);
 }
@@ -520,6 +474,8 @@ static void init(void) {
 
 	// Restore persisted weather before anything renders
 	memset(&s_weather, 0, sizeof(s_weather));
+	s_weather.current_temp = WEATHER_TEMP_INVALID;
+	s_weather.weather_code = WEATHER_CODE_INVALID;
 #if defined(DEMO_SCENARIO)
 	demo_data_load(&s_weather, settings_get());
 #else
