@@ -120,42 +120,25 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #if defined(PBL_COLOR)
 	int line_bottom = lh;
 #define TEMP_TO_F(t) (tl->celsius ? ((t) * 9 / 5 + 32) : (t))
-#define DARK_TEMP_COLOR(tf)                                                    \
+#define COLOR_DARK_THEME(tf)                                                   \
 	((tf) <= 10   ? GColorPurple                                               \
 	 : (tf) <= 32 ? GColorElectricUltramarine                                  \
-	 : (tf) <= 45 ? GColorTiffanyBlue                                          \
+	 : (tf) <= 45 ? GColorCyan                                                 \
 	 : (tf) <= 59 ? GColorCadetBlue                                            \
 	 : (tf) <= 76 ? GColorKellyGreen                                           \
 	 : (tf) <= 84 ? GColorChromeYellow                                         \
 	 : (tf) <= 96 ? GColorOrange                                               \
 	              : GColorRed)
-#define LIGHT_TEMP_COLOR(tf)                                                   \
-	((tf) <= 10   ? GColorShockingPink                                         \
-	 : (tf) <= 32 ? GColorLavenderIndigo                                       \
-	 : (tf) <= 45 ? GColorCyan                                                 \
-	 : (tf) <= 59 ? GColorMediumAquamarine                                     \
-	 : (tf) <= 76 ? GColorSpringBud                                            \
-	 : (tf) <= 84 ? GColorIcterine                                             \
-	 : (tf) <= 96 ? GColorChromeYellow                                         \
-	              : GColorRed)
-#define LIGHT_THEME_INFILL(tf)                                                 \
-	((tf) <= 10   ? GColorLavenderIndigo                                       \
-	 : (tf) <= 32 ? GColorCeleste                                              \
+#define COLOR_LIGHT_THEME(tf)                                                  \
+	((tf) <= 10   ? GColorImperialPurple                                       \
+	 : (tf) <= 32 ? GColorCobaltBlue                                           \
 	 : (tf) <= 45 ? GColorTiffanyBlue                                          \
 	 : (tf) <= 59 ? GColorMediumAquamarine                                     \
 	 : (tf) <= 76 ? GColorSpringBud                                            \
 	 : (tf) <= 84 ? GColorIcterine                                             \
-	 : (tf) <= 96 ? GColorChromeYellow                                         \
-	              : GColorMelon)
-#define LIGHT_THEME_STROKE(tf)                                                 \
-	((tf) <= 10   ? GColorImperialPurple                                       \
-	 : (tf) <= 32 ? GColorCobaltBlue                                           \
-	 : (tf) <= 45 ? GColorJaegerGreen                                          \
-	 : (tf) <= 59 ? GColorIslamicGreen                                         \
-	 : (tf) <= 76 ? GColorKellyGreen                                           \
-	 : (tf) <= 84 ? GColorOrange                                               \
-	 : (tf) <= 96 ? GColorChromeYellow                                         \
+	 : (tf) <= 96 ? GColorOrange                                               \
 	              : GColorRed)
+#define GET_TEMP_COLOR(tf) (is_light ? COLOR_LIGHT_THEME(tf) : COLOR_DARK_THEME(tf))
 
 	// Pass 1: solid infill based on infill_mode setting
 	InfillMode infill = settings_get()->infill_mode;
@@ -167,8 +150,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 		for (int i = start_col; i <= end_col && i <= total_hours; i++) {
 			int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
-			GColor fill_col = is_light ? LIGHT_THEME_INFILL(TEMP_TO_F(avg))
-			                           : DARK_TEMP_COLOR(TEMP_TO_F(avg));
+			GColor fill_col = GET_TEMP_COLOR(TEMP_TO_F(avg));
 			graphics_context_set_fill_color(ctx, fill_col);
 			int x0 = spx[i - 1], y0 = spy[i - 1], x1 = spx[i], y1 = spy[i];
 			int dx = x1 - x0, dy = y1 - y0;
@@ -191,12 +173,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// Pass 2: bold actual-temp line on top of the fill
+	// Pass 2: bold actual-temp line matching exact color of the infill
 	graphics_context_set_stroke_width(ctx, 2);
 	for (int i = 1; i <= total_hours; i++) {
 		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
-		GColor stroke_col = is_light ? LIGHT_THEME_STROKE(TEMP_TO_F(avg))
-		                             : LIGHT_TEMP_COLOR(TEMP_TO_F(avg));
+		GColor stroke_col = GET_TEMP_COLOR(TEMP_TO_F(avg));
 		graphics_context_set_stroke_color(ctx, stroke_col);
 		graphics_draw_line(ctx, GPoint(spx[i - 1], spy[i - 1]),
 		                   GPoint(spx[i], spy[i]));
@@ -209,10 +190,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		                       GPoint(apx[i], apy[i]), 3, 2);
 	}
 
-#undef DARK_TEMP_COLOR
-#undef LIGHT_TEMP_COLOR
-#undef LIGHT_THEME_INFILL
-#undef LIGHT_THEME_STROKE
+#undef COLOR_DARK_THEME
+#undef COLOR_LIGHT_THEME
+#undef GET_TEMP_COLOR
 #undef TEMP_TO_F
 #else
 	// B&W: white actual-temp line + dotted apparent-temp line.
