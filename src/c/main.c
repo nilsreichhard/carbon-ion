@@ -284,12 +284,9 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 
 	if (count > 0) {
 		persist_write_data(STORAGE_KEY_EVENTS, events, count * sizeof(TimelineEvent));
-	} else {
-		persist_delete(STORAGE_KEY_EVENTS);
-	}
-
-	if (s_daylight_layer) {
-		daylight_layer_set_events(s_daylight_layer, events, count);
+		if (s_daylight_layer) {
+			daylight_layer_set_events(s_daylight_layer, events, count);
+		}
 	}
 }
 

@@ -718,7 +718,7 @@ function extractIcsDate(block, field, tzOffsets) {
 	var isDateOnly = /VALUE=DATE/i.test(params);
 	var tzid = null;
 	var tzMatch = /TZID=([^;]+)/i.exec(params);
-	if (tzMatch) tzid = tzMatch[1].trim();
+	if (tzMatch) tzid = tzMatch[1].trim().replace(/^["']|["']$/g, '');
 	var ts = parseIcsDateTime(value, tzid, tzOffsets);
 	if (ts === null) return null;
 	return { ts: ts, isDateOnly: isDateOnly };
@@ -1126,33 +1126,85 @@ function getSampleTimelineEvents() {
 	];
 }
 
+function getTimelineEventWindow() {
+	var nowSec = Math.floor(Date.now() / 1000);
+	var forecastHours = getForecastHoursFromSettings();
+	var pastHours = forecastHours / 4;
+	return {
+		windowStart: nowSec - pastHours * 3600,
+		windowEnd: nowSec + forecastHours * 3600,
+	};
+}
+
+function readCachedTimelineEvents() {
+	try {
+		var cached = localStorage.getItem('cached_timeline_events');
+		if (cached) return JSON.parse(cached);
+	} catch (e) { }
+	return null;
+}
+
+function filterTimelineEventsInWindow(events, windowStart, windowEnd) {
+	var filtered = [];
+	for (var i = 0; i < events.length && filtered.length < 4; i++) {
+		var ev = events[i];
+		if (ev.start < windowEnd && ev.end > windowStart) {
+			filtered.push(ev);
+		}
+	}
+	return filtered;
+}
+
+function resolveTimelineEvents(timelineEvent, parsedEvents, windowStart, windowEnd) {
+	if (timelineEvent === 0) {
+		return [];
+	}
+	if (parsedEvents && parsedEvents.length > 0) {
+		try {
+			localStorage.setItem(
+				'cached_timeline_events', JSON.stringify(parsedEvents)
+			);
+		} catch (e) { }
+		eventLog.log('cal_ok', 'n=' + parsedEvents.length);
+		return parsedEvents;
+	}
+	var cached = readCachedTimelineEvents();
+	if (cached && cached.length > 0) {
+		var inWindow = filterTimelineEventsInWindow(
+			cached, windowStart, windowEnd
+		);
+		if (inWindow.length > 0) {
+			eventLog.log('cal_cache', 'n=' + inWindow.length);
+			return inWindow;
+		}
+	}
+	eventLog.log('cal_sample', 'fallback');
+	return getSampleTimelineEvents();
+}
+
 function fetchCalendarEvents(payload, callback) {
 	var settings = readClaySettings();
 	var url = getCalendarUrl(settings);
 	var timelineEvent = parseInt(
 		getStringSetting(settings, 'SETTING_TIMELINE_EVENT', '1'), 10
 	);
+	var win = getTimelineEventWindow();
+
 	if (!url) {
-		if (timelineEvent > 0) {
-			payload.timeline_events = getSampleTimelineEvents();
-			eventLog.log('cal_sample', 'n=' + payload.timeline_events.length);
-		} else {
-			payload.timeline_events = [];
-		}
+		payload.timeline_events = resolveTimelineEvents(
+			timelineEvent, null, win.windowStart, win.windowEnd
+		);
 		callback(payload);
 		return;
 	}
 
 	function parseAndFinish(text) {
-		var nowSec = Math.floor(Date.now() / 1000);
-		var forecastHours = getForecastHoursFromSettings();
-		var pastHours = forecastHours / 4;
-		var windowStart = nowSec - pastHours * 3600;
-		var windowEnd = nowSec + forecastHours * 3600;
-		payload.timeline_events = parseIcsEvents(
-			text, 4, windowStart, windowEnd
+		var parsed = parseIcsEvents(
+			text, 4, win.windowStart, win.windowEnd
 		);
-		eventLog.log('cal_ok', 'n=' + payload.timeline_events.length);
+		payload.timeline_events = resolveTimelineEvents(
+			timelineEvent, parsed, win.windowStart, win.windowEnd
+		);
 		callback(payload);
 	}
 
@@ -1175,7 +1227,9 @@ function fetchCalendarEvents(payload, callback) {
 					parseAndFinish(bText);
 				} else {
 					eventLog.log('cal_fail', err || pErr || bErr || 'empty');
-					payload.timeline_events = [];
+					payload.timeline_events = resolveTimelineEvents(
+						timelineEvent, null, win.windowStart, win.windowEnd
+					);
 					callback(payload);
 				}
 			});
