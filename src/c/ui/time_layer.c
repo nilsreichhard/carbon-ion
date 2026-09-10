@@ -20,7 +20,6 @@ struct TimeLayer {
 	TextLayer *cond_label; // weather condition icon right of city
 	TextLayer *time_label;
 	TextLayer *tz_label;   // timezone abbreviation, left of time
-	TextLayer *ampm_label; // AM/PM indicator, right of time (12h only)
 	TextLayer *date_label;
 	Layer *status_layer;   // BT disconnected & quiet mode indicators left of time
 	GFont icon_font;
@@ -34,7 +33,6 @@ struct TimeLayer {
 	char time_buf[8];
 	char tz_buf[8];
 	char tz_override[8]; // set by time_layer_set_timezone; overrides strftime
-	char ampm_buf[4];
 	char date_buf[32];
 };
 
@@ -209,7 +207,6 @@ TimeLayer *time_layer_create(GRect frame) {
 	tl->time_buf[0] = '\0';
 	tl->tz_buf[0] = '\0';
 	tl->tz_override[0] = '\0';
-	tl->ampm_buf[0] = '\0';
 	tl->date_buf[0] = '\0';
 	tl->bt_connected = true;
 	tl->quiet_mode = false;
@@ -289,15 +286,6 @@ TimeLayer *time_layer_create(GRect frame) {
 	layer_set_update_proc(tl->status_layer, prv_status_update_proc);
 	layer_add_child(tl->container, tl->status_layer);
 
-	// AM/PM — small font, right side of time row
-	tl->ampm_label = text_layer_create(GRect(w - 34, tz_ampm_y, 32, TL_TZ_H));
-	text_layer_set_background_color(tl->ampm_label, GColorClear);
-	text_layer_set_text_color(tl->ampm_label, GColorLightGray);
-	text_layer_set_font(tl->ampm_label, small_font);
-	text_layer_set_text_alignment(tl->ampm_label, GTextAlignmentRight);
-	text_layer_set_text(tl->ampm_label, tl->ampm_buf);
-	layer_add_child(tl->container, text_layer_get_layer(tl->ampm_label));
-
 	// Date — below time
 	int date_y = time_y + TL_TIME_H;
 	GFont date_font = fonts_get_system_font(TL_SMALL_FONT_KEY);
@@ -318,7 +306,6 @@ void time_layer_destroy(TimeLayer *layer) {
 	layer_destroy(layer->status_layer);
 	fonts_unload_custom_font(layer->icon_font);
 	text_layer_destroy(layer->date_label);
-	text_layer_destroy(layer->ampm_label);
 	text_layer_destroy(layer->tz_label);
 	text_layer_destroy(layer->time_label);
 	text_layer_destroy(layer->city_label);
@@ -394,15 +381,12 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	text_layer_set_text_color(layer->time_label, text_color);
 	text_layer_set_text_color(layer->date_label, text_color);
 	text_layer_set_text_color(layer->tz_label, sub_color);
-	text_layer_set_text_color(layer->ampm_label, sub_color);
 
 	bool is_24h = clock_is_24h_style();
 
 	// Time string
 	if (is_24h) {
 		strftime(layer->time_buf, sizeof(layer->time_buf), "%H:%M", tick_time);
-		strncpy(layer->ampm_buf, "24h", sizeof(layer->ampm_buf) - 1);
-		layer->ampm_buf[sizeof(layer->ampm_buf) - 1] = '\0';
 	} else {
 		// 12h: format and strip leading zero
 		char tmp[8];
@@ -410,13 +394,8 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 		const char *src = (tmp[0] == '0') ? tmp + 1 : tmp;
 		strncpy(layer->time_buf, src, sizeof(layer->time_buf) - 1);
 		layer->time_buf[sizeof(layer->time_buf) - 1] = '\0';
-		// AM/PM
-		strftime(layer->ampm_buf, sizeof(layer->ampm_buf), "%p", tick_time);
 	}
 	text_layer_set_text(layer->time_label, layer->time_buf);
-	text_layer_set_text(layer->ampm_label, layer->ampm_buf);
-	layer_set_hidden(text_layer_get_layer(layer->ampm_label),
-	                 !settings->show_ampm);
 
 	// Timezone abbreviation — use manual override if set (e.g. demo mode),
 	// otherwise derive from strftime and hide numeric offsets or empty values.

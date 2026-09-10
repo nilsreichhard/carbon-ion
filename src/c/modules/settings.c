@@ -22,7 +22,6 @@ static const Settings s_defaults = {
     .accent_color = {.argb = 0b11111111}, // GColorWhite
     .battery_display = BATTERY_DISPLAY_ICON,
     .show_timezone = false,
-    .show_ampm = true,
     .fetch_interval_min = 30,
     .infill_mode = INFILL_FUTURE,
     .needle_mode = NEEDLE_BOTH,
@@ -99,11 +98,6 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	if (!t) t = dict_find(iter, 10019);
 	if (t)
 		s_settings.show_timezone = (prv_tuple_int(t) != 0);
-
-	t = dict_find(iter, MESSAGE_KEY_SETTING_SHOW_AMPM);
-	if (!t) t = dict_find(iter, 10020);
-	if (t)
-		s_settings.show_ampm = (prv_tuple_int(t) != 0);
 
 	t = dict_find(iter, MESSAGE_KEY_SETTING_FETCH_INTERVAL);
 	if (!t) t = dict_find(iter, 10015);

@@ -65,7 +65,6 @@ typedef struct {
 	GColor accent_color;
 	BatteryDisplay battery_display;
 	bool show_timezone;
-	bool show_ampm;
 	uint8_t fetch_interval_min;
 	InfillMode infill_mode;
 	NeedleMode needle_mode;

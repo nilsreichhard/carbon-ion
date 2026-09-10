@@ -1049,12 +1049,6 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		dict['SETTING_SHOW_TIMEZONE'] = showTimezone;
 	}
 
-	var showAmpm = extractBool(rawSettings['SETTING_SHOW_AMPM']);
-	if (showAmpm !== null) {
-		dict[10020] = showAmpm;
-		dict['SETTING_SHOW_AMPM'] = showAmpm;
-	}
-
 	var forecastHours = extractInt(rawSettings['SETTING_FORECAST_HOURS']);
 	if (!isNaN(forecastHours)) {
 		dict[10029] = forecastHours;

@@ -133,13 +133,6 @@ module.exports = [
 					{ 'label': '2026-01-15', 'value': '%Y-0%m-0%d' },
 				],
 			},
-			{
-				'type': 'toggle',
-				'messageKey': 'SETTING_SHOW_AMPM',
-				'label': 'Show AM/PM / 24h Indicator',
-				'description': 'Show AM/PM or 24h indicator to the right of the clock.',
-				'defaultValue': true,
-			},
 		],
 	},
 	{
