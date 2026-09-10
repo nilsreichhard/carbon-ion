@@ -551,7 +551,7 @@ function parseIcsDateTime(str) {
 		var y = parseInt(str.substr(0, 4), 10);
 		var mo = parseInt(str.substr(4, 2), 10) - 1;
 		var d = parseInt(str.substr(6, 2), 10);
-		return Math.floor(Date.UTC(y, mo, d) / 1000);
+		return Math.floor(new Date(y, mo, d, 0, 0, 0).getTime() / 1000);
 	}
 	var m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?/.exec(str);
 	if (!m) return null;
