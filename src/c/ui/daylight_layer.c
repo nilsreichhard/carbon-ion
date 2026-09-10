@@ -112,8 +112,9 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 }
 
 static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col) {
-	graphics_context_set_fill_color(ctx, col);
-	graphics_fill_rect(ctx, GRect(x - 1, line_y - 5, 3, 11), 0, GCornerNone);
+	graphics_context_set_stroke_color(ctx, col);
+	graphics_context_set_stroke_width(ctx, 3);
+	graphics_draw_line(ctx, GPoint(x, line_y - 5), GPoint(x, line_y + 5));
 }
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
@@ -317,7 +318,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		time_t now = time(NULL);
 		int x_now = graph_x + graph_w / 5;
 #if defined(PBL_COLOR)
-		GColor event_col = is_light ? GColorCobaltBlue : GColorTiffanyBlue;
+		GColor event_col = is_light ? GColorVividCerulean : GColorCyan;
 #else
 		GColor event_col = is_light ? GColorBlack : GColorWhite;
 #endif
@@ -344,7 +345,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				int bracket_x1 = x < x_end ? x : x_end;
 				int bracket_x2 = x < x_end ? x_end : x;
 				graphics_context_set_stroke_color(ctx, event_col);
-				graphics_context_set_stroke_width(ctx, 1);
+				graphics_context_set_stroke_width(ctx, 2);
 				graphics_draw_line(ctx, GPoint(bracket_x1, line_y - 5),
 				                   GPoint(bracket_x2, line_y - 5));
 			}

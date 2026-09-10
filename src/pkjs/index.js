@@ -741,14 +741,11 @@ function localMidnightSec(sec) {
  * @param   {number} start
  * @param   {number} end
  * @param   {string} block
- * @param   {number} nowSec
  * @param   {number} windowStart
  * @param   {number} windowEnd
- * @param   {number} maxOccurrences
  * @returns {{start:number,end:number}[]}
  */
-function expandEventOccurrences(start, end, block, nowSec, windowStart, windowEnd,
-	maxOccurrences) {
+function expandEventOccurrences(start, end, block, windowStart, windowEnd) {
 	var duration = end - start;
 	var occurrences = [];
 	var rrule = parseRrule(block);
@@ -756,7 +753,6 @@ function expandEventOccurrences(start, end, block, nowSec, windowStart, windowEn
 	function addOccurrence(occStart) {
 		var occEnd = occStart + duration;
 		if (occEnd < windowStart || occStart > windowEnd) return;
-		if (occStart < nowSec && occEnd < nowSec) return;
 		occurrences.push({ start: occStart, end: occEnd });
 	}
 
@@ -775,8 +771,7 @@ function expandEventOccurrences(start, end, block, nowSec, windowStart, windowEn
 		while (cursor + timeOfDay + duration < windowStart && safety-- > 0) {
 			cursor += interval * 86400;
 		}
-		while (cursor + timeOfDay <= windowEnd && occurrences.length < maxOccurrences &&
-			safety-- > 0) {
+		while (cursor + timeOfDay <= windowEnd && safety-- > 0) {
 			addOccurrence(cursor + timeOfDay);
 			cursor += interval * 86400;
 		}
@@ -794,11 +789,9 @@ function expandEventOccurrences(start, end, block, nowSec, windowStart, windowEn
 		while (weekCursor + 6 * 86400 + weeklyTimeOfDay < windowStart && safety-- > 0) {
 			weekCursor += 7 * interval * 86400;
 		}
-		while (weekCursor <= windowEnd + 7 * 86400 && occurrences.length < maxOccurrences &&
-			safety-- > 0) {
+		while (weekCursor <= windowEnd + 7 * 86400 && safety-- > 0) {
 			for (var d = 0; d < weeklyDays.length; d++) {
 				addOccurrence(weekCursor + weeklyDays[d] * 86400 + weeklyTimeOfDay);
-				if (occurrences.length >= maxOccurrences) break;
 			}
 			weekCursor += 7 * interval * 86400;
 		}
@@ -813,7 +806,7 @@ function expandEventOccurrences(start, end, block, nowSec, windowStart, windowEn
 		var monthH = seed.getHours();
 		var monthMi = seed.getMinutes();
 		var monthS = seed.getSeconds();
-		for (var n = 0; n < 36 && occurrences.length < maxOccurrences; n++) {
+		for (var n = 0; n < 36; n++) {
 			var occStart = Math.floor(
 				new Date(monthY, monthMo, monthDay, monthH, monthMi, monthS).getTime() / 1000
 			);
@@ -835,12 +828,11 @@ function expandEventOccurrences(start, end, block, nowSec, windowStart, windowEn
  *
  * @param   {string} icsText
  * @param   {number} maxEvents
- * @param   {number} nowSec
  * @param   {number} windowStart
  * @param   {number} windowEnd
  * @returns {{start:number,end:number}[]}
  */
-function parseIcsEvents(icsText, maxEvents, nowSec, windowStart, windowEnd) {
+function parseIcsEvents(icsText, maxEvents, windowStart, windowEnd) {
 	var events = [];
 	if (!icsText) return events;
 
@@ -866,9 +858,9 @@ function parseIcsEvents(icsText, maxEvents, nowSec, windowStart, windowEnd) {
 		}
 
 		var expanded = expandEventOccurrences(
-			start, end, block, nowSec, windowStart, windowEnd, maxEvents
+			start, end, block, windowStart, windowEnd
 		);
-		for (var e = 0; e < expanded.length && events.length < maxEvents; e++) {
+		for (var e = 0; e < expanded.length; e++) {
 			events.push(expanded[e]);
 		}
 	}
@@ -1072,7 +1064,7 @@ function fetchCalendarEvents(payload, callback) {
 		var windowStart = nowSec - pastHours * 3600;
 		var windowEnd = nowSec + forecastHours * 3600;
 		payload.timeline_events = parseIcsEvents(
-			text, 4, nowSec, windowStart, windowEnd
+			text, 4, windowStart, windowEnd
 		);
 		eventLog.log('cal_ok', 'n=' + payload.timeline_events.length);
 		callback(payload);
@@ -1088,11 +1080,19 @@ function fetchCalendarEvents(payload, callback) {
 		xhrGet(proxyUrl, function (pErr, pText) {
 			if (!pErr && pText && pText.indexOf('BEGIN:VCALENDAR') >= 0) {
 				parseAndFinish(pText);
-			} else {
-				eventLog.log('cal_fail', err || pErr || 'empty');
-				payload.timeline_events = [];
-				callback(payload);
+				return;
 			}
+			var backupProxyUrl = 'https://api.allorigins.win/raw?url=' +
+				encodeURIComponent(url);
+			xhrGet(backupProxyUrl, function (bErr, bText) {
+				if (!bErr && bText && bText.indexOf('BEGIN:VCALENDAR') >= 0) {
+					parseAndFinish(bText);
+				} else {
+					eventLog.log('cal_fail', err || pErr || bErr || 'empty');
+					payload.timeline_events = [];
+					callback(payload);
+				}
+			});
 		});
 	});
 }
