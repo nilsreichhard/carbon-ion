@@ -317,7 +317,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		time_t now = time(NULL);
 		int x_now = graph_x + graph_w / 5;
 #if defined(PBL_COLOR)
-		GColor event_col = is_light ? GColorCobaltBlue : GColorElectricUltramarine;
+		GColor event_col = is_light ? GColorCobaltBlue : GColorTiffanyBlue;
 #else
 		GColor event_col = is_light ? GColorBlack : GColorWhite;
 #endif

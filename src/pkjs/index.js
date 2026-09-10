@@ -514,7 +514,7 @@ function packUint32Array(values) {
 		arr.push(v & 0xFF);
 		arr.push((v >> 8) & 0xFF);
 		arr.push((v >> 16) & 0xFF);
-		arr.push((v >> 24) & 0xFF);
+		arr.push((v >>> 24) & 0xFF);
 	}
 	return arr;
 }
@@ -568,17 +568,196 @@ function parseIcsDateTime(str) {
 }
 
 /**
+ * Normalize calendar subscription URLs for XHR fetch.
+ *
+ * @param   {string} url
+ * @returns {string}
+ */
+function normalizeCalendarUrl(url) {
+	url = String(url || '').trim();
+	if (/^webcal:\/\//i.test(url)) {
+		return 'https://' + url.substring(9);
+	}
+	if (/^http:\/\//i.test(url)) {
+		return 'https://' + url.substring(7);
+	}
+	return url;
+}
+
+/**
+ * Unfold RFC 5545 line continuations before parsing.
+ *
+ * @param   {string} icsText
+ * @returns {string}
+ */
+function unfoldIcsText(icsText) {
+	return String(icsText || '')
+		.replace(/\r\n[ \t]/g, '')
+		.replace(/\n[ \t]/g, '');
+}
+
+/**
  * Extract DTSTART/DTEND from an ICS VEVENT block.
+ * Handles DTSTART;TZID=...:YYYYMMDDTHHMMSS and DTSTART;VALUE=DATE:YYYYMMDD.
  *
  * @param   {string} block
  * @param   {string} field
  * @returns {number|null}
  */
 function extractIcsDate(block, field) {
-	var re = new RegExp(field + '[^:]*:([^\\r\\n]+)');
+	var re = new RegExp('^' + field + '(?:;[^:\r\n]*)?:([^\\r\\n]+)', 'im');
 	var match = re.exec(block);
 	if (!match) return null;
 	return parseIcsDateTime(match[1]);
+}
+
+var ICS_BYDAY = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+/**
+ * Parse RRULE properties from a VEVENT block.
+ *
+ * @param   {string} block
+ * @returns {Object|null}
+ */
+function parseRrule(block) {
+	var match = /RRULE(?:;[^:]*)?:([^\r\n]+)/i.exec(block);
+	if (!match) return null;
+	var rule = {};
+	var parts = match[1].split(';');
+	for (var i = 0; i < parts.length; i++) {
+		var eq = parts[i].indexOf('=');
+		if (eq > 0) {
+			rule[parts[i].substring(0, eq).toUpperCase()] =
+				parts[i].substring(eq + 1).toUpperCase();
+		}
+	}
+	return rule;
+}
+
+/**
+ * Parse BYDAY tokens into weekday indices (0=Sunday).
+ *
+ * @param   {string} bydayStr
+ * @returns {number[]}
+ */
+function parseBydayDays(bydayStr) {
+	if (!bydayStr) return [];
+	var names = bydayStr.split(',');
+	var days = [];
+	for (var i = 0; i < names.length; i++) {
+		var token = names[i].trim().toUpperCase();
+		var m = /(SU|MO|TU|WE|TH|FR|SA)$/.exec(token);
+		if (m && ICS_BYDAY[m[1]] !== undefined) {
+			days.push(ICS_BYDAY[m[1]]);
+		}
+	}
+	return days;
+}
+
+/**
+ * Return local midnight timestamp for a Unix second value.
+ *
+ * @param   {number} sec
+ * @returns {number}
+ */
+function localMidnightSec(sec) {
+	var d = new Date(sec * 1000);
+	return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 1000);
+}
+
+/**
+ * Expand a VEVENT (including RRULE) into occurrences within a window.
+ *
+ * @param   {number} start
+ * @param   {number} end
+ * @param   {string} block
+ * @param   {number} nowSec
+ * @param   {number} windowStart
+ * @param   {number} windowEnd
+ * @param   {number} maxOccurrences
+ * @returns {{start:number,end:number}[]}
+ */
+function expandEventOccurrences(start, end, block, nowSec, windowStart, windowEnd,
+	maxOccurrences) {
+	var duration = end - start;
+	var occurrences = [];
+	var rrule = parseRrule(block);
+
+	function addOccurrence(occStart) {
+		var occEnd = occStart + duration;
+		if (occEnd < windowStart || occStart > windowEnd) return;
+		if (occStart < nowSec && occEnd < nowSec) return;
+		occurrences.push({ start: occStart, end: occEnd });
+	}
+
+	if (!rrule || !rrule.FREQ) {
+		addOccurrence(start);
+		return occurrences;
+	}
+
+	var freq = rrule.FREQ;
+	var interval = parseInt(rrule.INTERVAL, 10) || 1;
+	var safety = 400;
+
+	if (freq === 'DAILY') {
+		var timeOfDay = start - localMidnightSec(start);
+		var cursor = localMidnightSec(start);
+		while (cursor + timeOfDay + duration < windowStart && safety-- > 0) {
+			cursor += interval * 86400;
+		}
+		while (cursor + timeOfDay <= windowEnd && occurrences.length < maxOccurrences &&
+			safety-- > 0) {
+			addOccurrence(cursor + timeOfDay);
+			cursor += interval * 86400;
+		}
+		return occurrences;
+	}
+
+	if (freq === 'WEEKLY') {
+		var weeklyDays = parseBydayDays(rrule.BYDAY);
+		if (weeklyDays.length === 0) {
+			weeklyDays = [new Date(start * 1000).getDay()];
+		}
+		var weeklyTimeOfDay = start - localMidnightSec(start);
+		var weekCursor = localMidnightSec(start);
+		weekCursor -= new Date(weekCursor * 1000).getDay() * 86400;
+		while (weekCursor + 6 * 86400 + weeklyTimeOfDay < windowStart && safety-- > 0) {
+			weekCursor += 7 * interval * 86400;
+		}
+		while (weekCursor <= windowEnd + 7 * 86400 && occurrences.length < maxOccurrences &&
+			safety-- > 0) {
+			for (var d = 0; d < weeklyDays.length; d++) {
+				addOccurrence(weekCursor + weeklyDays[d] * 86400 + weeklyTimeOfDay);
+				if (occurrences.length >= maxOccurrences) break;
+			}
+			weekCursor += 7 * interval * 86400;
+		}
+		return occurrences;
+	}
+
+	if (freq === 'MONTHLY') {
+		var seed = new Date(start * 1000);
+		var monthY = seed.getFullYear();
+		var monthMo = seed.getMonth();
+		var monthDay = seed.getDate();
+		var monthH = seed.getHours();
+		var monthMi = seed.getMinutes();
+		var monthS = seed.getSeconds();
+		for (var n = 0; n < 36 && occurrences.length < maxOccurrences; n++) {
+			var occStart = Math.floor(
+				new Date(monthY, monthMo, monthDay, monthH, monthMi, monthS).getTime() / 1000
+			);
+			if (occStart > windowEnd) break;
+			addOccurrence(occStart);
+			monthMo += interval;
+			while (monthMo > 11) {
+				monthMo -= 12;
+				monthY += 1;
+			}
+		}
+	}
+
+	return occurrences;
 }
 
 /**
@@ -595,8 +774,9 @@ function parseIcsEvents(icsText, maxEvents, nowSec, windowStart, windowEnd) {
 	var events = [];
 	if (!icsText) return events;
 
-	var parts = String(icsText).split('BEGIN:VEVENT');
-	for (var p = 1; p < parts.length && events.length < maxEvents; p++) {
+	var unfolded = unfoldIcsText(icsText);
+	var parts = unfolded.split('BEGIN:VEVENT');
+	for (var p = 1; p < parts.length; p++) {
 		var block = parts[p];
 		var endIdx = block.indexOf('END:VEVENT');
 		if (endIdx >= 0) block = block.substring(0, endIdx);
@@ -606,10 +786,12 @@ function parseIcsEvents(icsText, maxEvents, nowSec, windowStart, windowEnd) {
 		var end = extractIcsDate(block, 'DTEND');
 		if (!end) end = start + 3600;
 
-		if (end < windowStart || start > windowEnd) continue;
-		if (start < nowSec && end < nowSec) continue;
-
-		events.push({ start: start, end: end });
+		var expanded = expandEventOccurrences(
+			start, end, block, nowSec, windowStart, windowEnd, maxEvents
+		);
+		for (var e = 0; e < expanded.length && events.length < maxEvents; e++) {
+			events.push(expanded[e]);
+		}
 	}
 
 	events.sort(function (a, b) { return a.start - b.start; });
@@ -798,7 +980,7 @@ function sendToWatch(payload) {
  */
 function fetchCalendarEvents(payload, callback) {
 	var settings = readClaySettings();
-	var url = getStringSetting(settings, 'SETTING_CALENDAR_ICS_URL', '').trim();
+	var url = normalizeCalendarUrl(getStringSetting(settings, 'SETTING_CALENDAR_ICS_URL', ''));
 	if (!url) {
 		callback(payload);
 		return;
@@ -1281,8 +1463,8 @@ Pebble.addEventListener('webviewclosed', function (e) {
 	sendToWatchWithRetry(dict);
 
 	var newSettings = readClaySettings();
+
 	if (clearCacheRequested) {
-		localStorage.removeItem(CACHE_KEY);
 		localStorage.removeItem(GEONAME_CACHE_KEY);
 		eventLog.log('cache_cleared', 'via_settings');
 
@@ -1292,15 +1474,6 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		} catch (err) { }
 	}
 
-	var geocodeEnabledChanged =
-		getBoolSetting(oldSettings, 'SETTING_GEOCODE_ENABLED', true) !==
-		getBoolSetting(newSettings, 'SETTING_GEOCODE_ENABLED', true);
-	var locationOverrideChanged =
-		getStringSetting(oldSettings, 'SETTING_LOCATION_OVERRIDE', '') !==
-		getStringSetting(newSettings, 'SETTING_LOCATION_OVERRIDE', '');
-	var useStaticChanged =
-		getBoolSetting(oldSettings, 'SETTING_USE_STATIC_LOCATION', false) !==
-		getBoolSetting(newSettings, 'SETTING_USE_STATIC_LOCATION', false);
 	var staticLatChanged =
 		extractString(oldSettings['SETTING_STATIC_LAT']) !==
 		extractString(newSettings['SETTING_STATIC_LAT']);
@@ -1308,24 +1481,17 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		extractString(oldSettings['SETTING_STATIC_LON']) !==
 		extractString(newSettings['SETTING_STATIC_LON']);
 
-	if (geocodeEnabledChanged || locationOverrideChanged || useStaticChanged ||
-		staticLatChanged || staticLonChanged) {
-		localStorage.removeItem(CACHE_KEY);
-	}
 	if (staticLatChanged || staticLonChanged) {
 		localStorage.removeItem(GEONAME_CACHE_KEY);
 	}
 
-	if (clearCacheRequested) {
-		// Clear-cache should force a refresh even in dedupe windows.
-		s_lastHandledAt = 0;
-		s_fetchStartedAt = 0;
-	}
-
-	// Refresh weather in case settings changed.
-	if (getWeather() === 'dedupe_req') {
-		eventLog.aggregate('dedupe_req', 'config');
-	}
+	// Any settings save clears weather/calendar cache and refreshes immediately.
+	localStorage.removeItem(CACHE_KEY);
+	s_lastHandledAt = 0;
+	s_fetchStartedAt = 0;
+	s_lastSentAt = 0;
+	s_lastSentSignature = '';
+	getWeather();
 });
 
 Pebble.addEventListener('appmessage', function (e) {
