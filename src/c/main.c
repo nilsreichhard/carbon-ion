@@ -33,6 +33,7 @@ static inline int32_t prv_tuple_int(const Tuple *t) {
 // Storage key for persisting last-received weather across cold starts
 #define STORAGE_KEY_WEATHER 2
 #define STORAGE_KEY_WEATHER_PART2 3
+#define STORAGE_KEY_EVENTS 4
 
 // GRAPH_LAYERS_H is the combined height of daylight+cloud+precip+event — also
 // used for the icon bar overlay and the temp layer so all three match. Must be
@@ -247,7 +248,9 @@ static uint32_t prv_read_uint32_le(const uint8_t *bytes, int offset, int total_l
 
 static void prv_apply_timeline_events(DictionaryIterator *iter) {
 	Tuple *starts = dict_find(iter, KEY_TIMELINE_EVENT_STARTS);
+	if (!starts) starts = dict_find(iter, MESSAGE_KEY_TIMELINE_EVENT_STARTS);
 	Tuple *ends = dict_find(iter, KEY_TIMELINE_EVENT_ENDS);
+	if (!ends) ends = dict_find(iter, MESSAGE_KEY_TIMELINE_EVENT_ENDS);
 
 	TimelineEvent events[4];
 	uint8_t count = 0;
@@ -260,7 +263,7 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 			uint32_t start_ts =
 			    prv_read_uint32_le(starts->value->data, i * 4, starts->length);
 			events[i].start_time = start_ts;
-			events[i].end_time = start_ts;
+			events[i].end_time = start_ts + 3600;
 			count++;
 		}
 	}
@@ -272,6 +275,10 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 				    prv_read_uint32_le(ends->value->data, i * 4, ends->length);
 			}
 		}
+	}
+
+	if (count > 0) {
+		persist_write_data(STORAGE_KEY_EVENTS, events, count * sizeof(TimelineEvent));
 	}
 
 	if (s_daylight_layer) {
@@ -541,6 +548,15 @@ static void prv_window_load(Window *window) {
 		demo_events[0].start_time = (uint32_t)demo_now_t + 9000; // now + 2.5h
 		demo_events[0].end_time = demo_events[0].start_time + 45 * 60;
 		daylight_layer_set_events(s_daylight_layer, demo_events, 1);
+	}
+#else
+	if (persist_exists(STORAGE_KEY_EVENTS)) {
+		TimelineEvent stored_events[4];
+		int read_bytes = persist_read_data(STORAGE_KEY_EVENTS, stored_events, sizeof(stored_events));
+		if (read_bytes > 0) {
+			uint8_t cnt = read_bytes / sizeof(TimelineEvent);
+			daylight_layer_set_events(s_daylight_layer, stored_events, cnt);
+		}
 	}
 #endif
 }

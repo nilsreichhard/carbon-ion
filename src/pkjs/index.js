@@ -982,25 +982,39 @@ function fetchCalendarEvents(payload, callback) {
 	var settings = readClaySettings();
 	var url = normalizeCalendarUrl(getStringSetting(settings, 'SETTING_CALENDAR_ICS_URL', ''));
 	if (!url) {
+		payload.timeline_events = [];
 		callback(payload);
 		return;
 	}
 
-	xhrGet(url, function (err, responseText) {
-		if (!err && responseText) {
-			var nowSec = Math.floor(Date.now() / 1000);
-			var forecastHours = getForecastHoursFromSettings();
-			var pastHours = forecastHours / 4;
-			var windowStart = nowSec - pastHours * 3600;
-			var windowEnd = nowSec + forecastHours * 3600;
-			payload.timeline_events = parseIcsEvents(
-				responseText, 4, nowSec, windowStart, windowEnd
-			);
-			eventLog.log('cal_ok', 'n=' + payload.timeline_events.length);
-		} else {
-			eventLog.log('cal_fail', err || 'empty');
-		}
+	function parseAndFinish(text) {
+		var nowSec = Math.floor(Date.now() / 1000);
+		var forecastHours = getForecastHoursFromSettings();
+		var pastHours = forecastHours / 4;
+		var windowStart = nowSec - pastHours * 3600;
+		var windowEnd = nowSec + forecastHours * 3600;
+		payload.timeline_events = parseIcsEvents(
+			text, 4, nowSec, windowStart, windowEnd
+		);
+		eventLog.log('cal_ok', 'n=' + payload.timeline_events.length);
 		callback(payload);
+	}
+
+	xhrGet(url, function (err, responseText) {
+		if (!err && responseText && responseText.indexOf('BEGIN:VCALENDAR') >= 0) {
+			parseAndFinish(responseText);
+			return;
+		}
+		// Fallback via CORS proxy if direct fetch was blocked by phone WebKit
+		var proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+		xhrGet(proxyUrl, function (pErr, pText) {
+			if (!pErr && pText && pText.indexOf('BEGIN:VCALENDAR') >= 0) {
+				parseAndFinish(pText);
+			} else {
+				eventLog.log('cal_fail', err || pErr || 'empty');
+				callback(payload);
+			}
+		});
 	});
 }
 
