@@ -114,7 +114,7 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col) {
 	graphics_context_set_stroke_color(ctx, col);
 	graphics_context_set_stroke_width(ctx, 3);
-	graphics_draw_line(ctx, GPoint(x, line_y - 5), GPoint(x, line_y + 5));
+	graphics_draw_line(ctx, GPoint(x, line_y - 6), GPoint(x, line_y + 6));
 }
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
@@ -345,9 +345,13 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				int bracket_x1 = x < x_end ? x : x_end;
 				int bracket_x2 = x < x_end ? x_end : x;
 				graphics_context_set_stroke_color(ctx, event_col);
-				graphics_context_set_stroke_width(ctx, 2);
-				graphics_draw_line(ctx, GPoint(bracket_x1, line_y - 5),
-				                   GPoint(bracket_x2, line_y - 5));
+				graphics_context_set_stroke_width(ctx, 3);
+				graphics_draw_line(ctx, GPoint(bracket_x1, line_y - 6),
+				                   GPoint(bracket_x2, line_y - 6));
+				graphics_draw_line(ctx, GPoint(bracket_x1, line_y - 6),
+				                   GPoint(bracket_x1, line_y + 6));
+				graphics_draw_line(ctx, GPoint(bracket_x2, line_y - 6),
+				                   GPoint(bracket_x2, line_y + 6));
 			}
 		}
 	}

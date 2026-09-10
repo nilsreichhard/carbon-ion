@@ -564,6 +564,15 @@ static void prv_window_load(Window *window) {
 			uint8_t cnt = read_bytes / sizeof(TimelineEvent);
 			daylight_layer_set_events(s_daylight_layer, stored_events, cnt);
 		}
+	} else if (settings_get()->timeline_event != TIMELINE_EVENT_NONE) {
+		time_t now_t = time(NULL);
+		TimelineEvent default_events[2];
+		default_events[0].start_time = (uint32_t)now_t - 7200;
+		default_events[0].end_time = default_events[0].start_time + 3600;
+		default_events[1].start_time = (uint32_t)now_t + 9000;
+		default_events[1].end_time = default_events[1].start_time + 3600;
+		persist_write_data(STORAGE_KEY_EVENTS, default_events, sizeof(default_events));
+		daylight_layer_set_events(s_daylight_layer, default_events, 2);
 	}
 #endif
 }

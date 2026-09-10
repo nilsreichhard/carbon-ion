@@ -1048,11 +1048,52 @@ function sendToWatch(payload) {
  * @param {Object}   payload
  * @param {Function} callback Called with the updated payload.
  */
+/**
+ * Read the configured calendar ICS URL from Clay settings or cache.
+ *
+ * @param   {Object} settings
+ * @returns {string}
+ */
+function getCalendarUrl(settings) {
+	var url = normalizeCalendarUrl(
+		getStringSetting(settings, 'SETTING_CALENDAR_ICS_URL', '')
+	);
+	if (!url) {
+		try {
+			var cached = localStorage.getItem('cached_calendar_url');
+			if (cached) url = normalizeCalendarUrl(cached);
+		} catch (e) { }
+	}
+	return url;
+}
+
+/**
+ * Return sample timeline events for emulator/demo when no calendar URL is set.
+ *
+ * @returns {{start:number,end:number}[]}
+ */
+function getSampleTimelineEvents() {
+	var nowSec = Math.floor(Date.now() / 1000);
+	return [
+		{ start: nowSec - 2 * 3600, end: nowSec - 3600 },
+		{ start: nowSec + Math.floor(2.5 * 3600), end: nowSec + Math.floor(2.5 * 3600) + 3600 },
+		{ start: nowSec + 5 * 3600, end: nowSec + 5 * 3600 + 3600 },
+	];
+}
+
 function fetchCalendarEvents(payload, callback) {
 	var settings = readClaySettings();
-	var url = normalizeCalendarUrl(getStringSetting(settings, 'SETTING_CALENDAR_ICS_URL', ''));
+	var url = getCalendarUrl(settings);
+	var timelineEvent = parseInt(
+		getStringSetting(settings, 'SETTING_TIMELINE_EVENT', '1'), 10
+	);
 	if (!url) {
-		payload.timeline_events = [];
+		if (timelineEvent > 0) {
+			payload.timeline_events = getSampleTimelineEvents();
+			eventLog.log('cal_sample', 'n=' + payload.timeline_events.length);
+		} else {
+			payload.timeline_events = [];
+		}
 		callback(payload);
 		return;
 	}
@@ -1461,6 +1502,14 @@ Pebble.addEventListener('webviewclosed', function (e) {
 			? setting.value : setting;
 		return String(v);
 	}
+
+	try {
+		localStorage.setItem('clay-settings', JSON.stringify(rawSettings));
+		localStorage.setItem(
+			'cached_calendar_url',
+			extractString(rawSettings['SETTING_CALENDAR_ICS_URL'])
+		);
+	} catch (err) { }
 
 	var tempUnit = extractInt(rawSettings['SETTING_TEMP_UNIT']);
 	if (isNaN(tempUnit) || tempUnit < 0) {
