@@ -29,6 +29,7 @@ static const Settings s_defaults = {
     .show_bt_alert = true,
     .show_silent_mode = true,
     .timeline_battery = TIMELINE_BATT_10_0,
+    .show_step_count = true,
 };
 
 void settings_init(void) {
@@ -160,6 +161,12 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		if (bm >= 0 && bm <= 3) {
 			s_settings.timeline_battery = (TimelineBatteryMode)bm;
 		}
+	}
+
+	t = dict_find(iter, KEY_SETTING_SHOW_STEP_COUNT);
+	if (!t) t = dict_find(iter, 10034);
+	if (t) {
+		s_settings.show_step_count = (prv_tuple_int(t) != 0);
 	}
 
 	if (memcmp(&prev, &s_settings, sizeof(Settings)) != 0) {

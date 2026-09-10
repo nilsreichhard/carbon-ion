@@ -1095,6 +1095,12 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		dict['SETTING_SHOW_SILENT_MODE'] = showSilentMode;
 	}
 
+	var showStepCount = extractBool(rawSettings['SETTING_SHOW_STEP_COUNT']);
+	if (showStepCount !== null) {
+		dict[10034] = showStepCount;
+		dict['SETTING_SHOW_STEP_COUNT'] = showStepCount;
+	}
+
 	var clearCacheRequested = extractBool(rawSettings['SETTING_CLEAR_CACHE']) === 1;
 
 	sendToWatchWithRetry(dict);

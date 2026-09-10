@@ -57,6 +57,7 @@ typedef enum {
 #define KEY_SETTING_SHOW_BT_ALERT 10031
 #define KEY_SETTING_SHOW_SILENT_MODE 10032
 #define KEY_SETTING_TIMELINE_BATTERY 10033
+#define KEY_SETTING_SHOW_STEP_COUNT 10034
 
 typedef struct {
 	bool temp_unit_celsius;
@@ -72,6 +73,7 @@ typedef struct {
 	bool show_bt_alert;
 	bool show_silent_mode;
 	TimelineBatteryMode timeline_battery;
+	bool show_step_count;
 } Settings;
 
 void settings_init(void);

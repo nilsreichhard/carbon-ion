@@ -85,6 +85,15 @@ static uint32_t s_minutes_since_launch;
 static void prv_request_weather(void);
 static void prv_push_weather_to_layers(struct tm *now);
 static void prv_update_pending_state(void);
+static void prv_update_steps(void);
+
+#if defined(PBL_HEALTH)
+static void prv_health_event_handler(HealthEventType event, void *context) {
+	if (event == HealthEventMovementUpdate) {
+		prv_update_steps();
+	}
+}
+#endif
 
 /**
  * Ticks every minute; advances graph layers and requests fresh weather each
@@ -100,6 +109,7 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 	(void)units_changed;
 #else
 	time_layer_update(s_time_layer, tick_time, settings_get());
+	prv_update_steps();
 	bool bt_conn = connection_service_peek_pebble_app_connection();
 	bool quiet = quiet_time_is_active();
 	time_layer_set_status(s_time_layer, bt_conn, quiet);
@@ -388,6 +398,19 @@ static void prv_update_pending_state(void) {
 	// Pending state tracking without icon bar
 }
 
+static void prv_update_steps(void) {
+	if (!s_time_layer)
+		return;
+#if defined(DEMO_SCENARIO)
+	time_layer_set_steps(s_time_layer, 8420);
+#elif defined(PBL_HEALTH)
+	time_layer_set_steps(s_time_layer,
+	                     (int)health_service_sum_today(HealthMetricStepCount));
+#else
+	time_layer_set_steps(s_time_layer, 0);
+#endif
+}
+
 static void prv_bt_handler(bool connected) {
 	if (s_time_layer) {
 		time_layer_set_status(s_time_layer, connected, quiet_time_is_active());
@@ -453,6 +476,7 @@ static void prv_window_load(Window *window) {
 #endif
 	if (now) {
 		time_layer_update(s_time_layer, now, settings_get());
+		prv_update_steps();
 		daylight_layer_set_current_time(s_daylight_layer, now->tm_hour, now->tm_min);
 	}
 
@@ -510,6 +534,10 @@ static void init(void) {
 	    .pebble_app_connection_handler = prv_bt_handler,
 	});
 
+#if defined(PBL_HEALTH)
+	health_service_events_subscribe(prv_health_event_handler, NULL);
+#endif
+
 	// AppMessage: register callbacks BEFORE opening
 #if !defined(DEMO_SCENARIO)
 	app_message_register_inbox_received(prv_inbox_received);
@@ -528,6 +556,9 @@ static void deinit(void) {
 	tick_timer_service_unsubscribe();
 	battery_state_service_unsubscribe();
 	connection_service_unsubscribe();
+#if defined(PBL_HEALTH)
+	health_service_events_unsubscribe();
+#endif
 	window_destroy(s_main_window);
 }
 

@@ -48,3 +48,4 @@ void time_layer_set_status(TimeLayer *layer, bool bt_connected, bool quiet_time)
 // settings is used for date_format only; 24h is read from clock_is_24h_style()
 void time_layer_update(TimeLayer *layer, struct tm *tick_time,
                        const Settings *settings);
+void time_layer_set_steps(TimeLayer *layer, int steps);

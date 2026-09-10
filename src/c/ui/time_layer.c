@@ -19,6 +19,7 @@ struct TimeLayer {
 	TextLayer *city_label;
 	TextLayer *cond_label; // weather condition icon right of city
 	TextLayer *time_label;
+	TextLayer *step_label;
 	TextLayer *date_label;
 	Layer *status_layer;   // BT disconnected & quiet mode indicators left of time
 	GFont icon_font;
@@ -30,6 +31,7 @@ struct TimeLayer {
 	char city_buf[24];
 	char cond_glyph[8];
 	char time_buf[8];
+	char step_buf[12];
 	char date_buf[32];
 };
 
@@ -202,6 +204,7 @@ TimeLayer *time_layer_create(GRect frame) {
 	tl->city_buf[0] = '\0';
 	tl->cond_glyph[0] = '\0';
 	tl->time_buf[0] = '\0';
+	tl->step_buf[0] = '\0';
 	tl->date_buf[0] = '\0';
 	tl->bt_connected = true;
 	tl->quiet_mode = false;
@@ -255,6 +258,18 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text(tl->time_label, tl->time_buf);
 	layer_add_child(tl->container, text_layer_get_layer(tl->time_label));
 
+	// Step count — right of time row, vertically centered in the time band
+	int tz_ampm_y = time_y + TL_TIME_PAD + (TL_TIME_H - TL_TIME_PAD - 18) / 2;
+	GFont step_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+	tl->step_label = text_layer_create(GRect(w - 38, tz_ampm_y, 34, 18));
+	text_layer_set_background_color(tl->step_label, GColorClear);
+	text_layer_set_text_color(tl->step_label, GColorLightGray);
+	text_layer_set_font(tl->step_label, step_font);
+	text_layer_set_text_alignment(tl->step_label, GTextAlignmentRight);
+	text_layer_set_text(tl->step_label, tl->step_buf);
+	layer_set_hidden(text_layer_get_layer(tl->step_label), true);
+	layer_add_child(tl->container, text_layer_get_layer(tl->step_label));
+
 	// Status indicators (BT disconnected & Quiet mode) left of time
 #if PBL_PLATFORM_GABBRO || defined(PBL_ROUND)
 	int status_x = 16;
@@ -287,6 +302,7 @@ void time_layer_destroy(TimeLayer *layer) {
 	layer_destroy(layer->status_layer);
 	fonts_unload_custom_font(layer->icon_font);
 	text_layer_destroy(layer->date_label);
+	text_layer_destroy(layer->step_label);
 	text_layer_destroy(layer->time_label);
 	text_layer_destroy(layer->city_label);
 	text_layer_destroy(layer->cond_label);
@@ -339,6 +355,7 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 		return;
 
 	GColor text_color = settings->light_theme ? GColorBlack : GColorWhite;
+	GColor sub_color = settings->light_theme ? GColorDarkGray : GColorLightGray;
 	layer->light_theme = settings->light_theme;
 	layer->show_bt_alert = settings->show_bt_alert;
 	layer->show_silent_mode = settings->show_silent_mode;
@@ -346,6 +363,9 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	prv_update_location_row(layer);
 	text_layer_set_text_color(layer->time_label, text_color);
 	text_layer_set_text_color(layer->date_label, text_color);
+	text_layer_set_text_color(layer->step_label, sub_color);
+	layer_set_hidden(text_layer_get_layer(layer->step_label),
+	                 !settings->show_step_count);
 
 	bool is_24h = clock_is_24h_style();
 
@@ -367,4 +387,13 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	prv_format_date(layer->date_buf, sizeof(layer->date_buf), settings->date_format,
 	                tick_time);
 	text_layer_set_text(layer->date_label, layer->date_buf);
+}
+
+void time_layer_set_steps(TimeLayer *layer, int steps) {
+	if (!layer)
+		return;
+	if (steps < 0)
+		steps = 0;
+	snprintf(layer->step_buf, sizeof(layer->step_buf), "%dk", steps / 1000);
+	text_layer_set_text(layer->step_label, layer->step_buf);
 }

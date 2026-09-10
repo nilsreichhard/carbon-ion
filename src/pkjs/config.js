@@ -115,6 +115,17 @@ module.exports = [
 				'defaultValue': true,
 			},
 			{
+				'type': 'heading',
+				'defaultValue': 'Time & Date',
+			},
+			{
+				'type': 'toggle',
+				'messageKey': 'SETTING_SHOW_STEP_COUNT',
+				'label': 'Show Step Counter',
+				'description': 'Show daily step count (1k, 2k, 10k) to the right of the clock.',
+				'defaultValue': true,
+			},
+			{
 				'type': 'text',
 				'defaultValue': 'Time format (12h/24h) is determined by the watch system settings.',
 			},
