@@ -59,6 +59,12 @@ static inline int32_t prv_tuple_int(const Tuple *t) {
 #endif
 #define GRAPH_LAYERS_H (DAYLIGHT_H + CLOUD_H + PRECIP_H + EVENT_H)
 
+#if defined(PBL_PLATFORM_EMERY)
+#define TEMP_H 56
+#else
+#define TEMP_H 48
+#endif
+
 static Window *s_main_window;
 static DaylightLayer *s_daylight_layer;
 static CloudLayer *s_cloud_layer;
@@ -421,8 +427,9 @@ static void prv_window_load(Window *window) {
 	layer_add_child(root, event_layer_get_layer(s_event_layer));
 	y += EVENT_H;
 
-	// Time block (city + time + date) — vertically centered on the screen
-	int time_y = (bounds.size.h - TL_TIME_BLOCK_H) / 2;
+	// Time block — centered between top graphs and bottom meteogram
+	int avail_h = (bounds.size.h - TEMP_H) - GRAPH_LAYERS_H;
+	int time_y = GRAPH_LAYERS_H + (avail_h - TL_TIME_BLOCK_H) / 2;
 	s_time_layer = time_layer_create(GRect(0, time_y, w, TL_TIME_BLOCK_H));
 	layer_add_child(root, time_layer_get_layer(s_time_layer));
 
@@ -430,10 +437,9 @@ static void prv_window_load(Window *window) {
 	bool init_quiet = quiet_time_is_active();
 	time_layer_set_status(s_time_layer, init_bt, init_quiet);
 
-	// Temp info + sparkline — same height as the top graph group, pinned to
-	// bottom
-	int temp_y = bounds.size.h - GRAPH_LAYERS_H;
-	s_temp_layer = temp_layer_create(GRect(0, temp_y, w, GRAPH_LAYERS_H));
+	// Temp info + sparkline — pinned to bottom
+	int temp_y = bounds.size.h - TEMP_H;
+	s_temp_layer = temp_layer_create(GRect(0, temp_y, w, TEMP_H));
 	layer_add_child(root, temp_layer_get_layer(s_temp_layer));
 
 	// Seed time display immediately

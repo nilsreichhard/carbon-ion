@@ -55,11 +55,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	graphics_context_set_text_color(ctx, is_light ? GColorBlack : GColorWhite);
 
 #if PBL_DISPLAY_HEIGHT >= 228
-	int sm_h = 20;   // GOTHIC_18 rect height
-	int md_h = 28;   // GOTHIC_24_BOLD rect height
+	int sm_h = 16;
+	int md_h = 22;
 #else
-	int sm_h = 15;   // GOTHIC_14 rect height
-	int md_h = 20;   // GOTHIC_18_BOLD rect height
+	int sm_h = 14;
+	int md_h = 18;
 #endif
 	int zone_h =
 	    (lh - 2) / 3; // 2px bottom padding keeps low label off the edge
@@ -260,10 +260,13 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	graphics_context_set_text_color(ctx, text_color);
 	int y_high = (zone_h - sm_h) / 2;
 	if (y_high < 1) y_high = 1;
+	if (y_high + sm_h > zone_h) y_high = zone_h - sm_h;
 	int y_curr = zone_h + (zone_h - md_h) / 2;
 	if (y_curr < y_high + sm_h - 2) y_curr = y_high + sm_h - 2;
+	if (y_curr + md_h > 2 * zone_h) y_curr = 2 * zone_h - md_h;
 	int y_low = 2 * zone_h + (zone_h - sm_h) / 2;
 	if (y_low < y_curr + md_h - 2) y_low = y_curr + md_h - 2;
+	if (y_low + sm_h > lh - 1) y_low = lh - 1 - sm_h;
 
 	graphics_draw_text(ctx, high_buf, font_sm,
 	                   GRect(2, y_high, label_x, sm_h),
