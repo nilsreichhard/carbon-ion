@@ -16,34 +16,42 @@ Developed by **Nils Reich** ([@nilsreichhard](https://github.com/nilsreichhard))
 - **Continuous Astronomical Daylight Track**: Full-width 3px baseline track, multi-day daylight spans with sunrise/sunset delimiter brackets, and per-midnight astronomical lunar phases.
 - **Hourly Timeline Axis Scale**: Bottom ticks marking hourly intervals (3px) and solar noon/midnight milestones (5px).
 - **Dead-Center Time & Zero-Overlap Status Icons**: Large bold digital clock with date below, city and condition icon above, and dedicated left margin for Bluetooth alert and Quiet Time bell runes.
+- **Daily Step Counter**: Clean, compact step count (`1k`, `2k`, `10k`) right-aligned on the right side of the clock row.
+- **Timeline Calendar Events**: Projects approaching events directly onto the timeline track as a crisp 2px vertical blue bar or full meeting duration bracket (`|────|`), powered by iCal/ICS calendar feeds.
 - **Precipitation & Cloud Density Tracks**: Inverted rain histogram and vector cloud lobes.
 - **Theme Parity**: Full Dark Theme and Light Theme support.
 
 ## Settings
 
 Configurable on your phone via Pebble app settings (Clay):
-- **Forecast Window**: 12hr (+3h past), 18hr (+4.5h past), 24hr (+6h past), 36hr (+9h past), 48hr (+12h past).
-- **Thermal Infill Shading**: Forecast Only (default), Past Only, All, or None.
-- **Current Time Indicator Bar**: Both tracks, Top only, Bottom only, or None.
-- **Timeline Battery Markers**: 20% yellow / 10% orange / 0% red, 10% orange / 0% red (default), 0% red, or None.
+- **Forecast Horizon**: 12h forecast (+3h past), 18h forecast (+4.5h past), 24h forecast (+6h past), 36h forecast (+9h past), 48h forecast (+12h past).
+- **Thermal Infill**: Future forecast only, Past hours only, Full timeline, or None (lines only).
+- **Current Time Needle**: Top track & meteogram, Top track only, Bottom meteogram only, or Hidden.
+- **Timeline Battery Markers**: 20% yellow / 10% orange / 0% red, 10% orange / 0% red, 0% red, or None.
+- **Calendar Events**: Blue bar at start time, Duration span, or Off.
+- **Calendar ICS URL**: Paste private iCal/ICS link from Google Calendar, Apple iCloud, or Outlook.
 - **Color Theme**: Dark (Black) or Light (White).
-- **Temperature Unit**: Auto (locale), Celsius, or Fahrenheit.
+- **Bluetooth Disconnect Alert**: Show red alert icon when disconnected.
+- **Silent Mode Indicator**: Show muted bell icon when Quiet Time is active.
+- **Show Step Counter**: Display daily step count to the right of the time.
 - **Date Format**: Multiple localization presets.
-- **Show AM/PM / 24h**: Toggle.
-- **Location & Geocoding**: Automatic GPS reverse geocoding or custom static coordinates.
+- **Temperature Unit**: Auto (locale), Celsius, or Fahrenheit.
+- **Location & Geocoding**: Automatic GPS reverse geocoding or custom fixed coordinates.
 
 ## To do
 
 - [x] Settings page for customizations
 - [x] Customize date format
 - [ ] Custom date format string
-- [x] Customize battery indicator (e.g. show percentage instead of icon)
+- [x] Customize battery indicator (depletion markers on timeline)
 - [x] Customize temperature unit
-- [ ] Customize color scheme (e.g. light mode, accent colors)
+- [x] Customize color scheme (Dark & Light themes)
 - [x] Localization (system locale)
 - [ ] Custom locale support
-- [ ] Bluetooth disconnect vibration
-- [ ] Quiet time indicator
+- [x] Bluetooth disconnect vibration
+- [x] Quiet time indicator
+- [x] Daily step counter
+- [x] Calendar event indicators on timeline
 - [ ] Support round watches (e.g. Pebble Round 2)
 
 ---
