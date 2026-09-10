@@ -299,6 +299,46 @@ function readClaySettings() {
 }
 
 /**
+ * Flatten Clay settings that may contain nested {value: ...} wrappers.
+ *
+ * @param   {Object} rawSettings
+ * @returns {Object}
+ */
+function flattenClaySettings(rawSettings) {
+	var flatSettings = {};
+	Object.keys(rawSettings || {}).forEach(function (k) {
+		var v = rawSettings[k];
+		flatSettings[k] = (v !== null && typeof v === 'object' && 'value' in v)
+			? v.value : v;
+	});
+	return flatSettings;
+}
+
+/**
+ * Repair corrupted clay-settings in localStorage (e.g. '[object Object]' URLs).
+ */
+function sanitizeClaySettingsStorage() {
+	try {
+		var raw = localStorage.getItem('clay-settings');
+		if (!raw) return;
+		var settings = JSON.parse(raw);
+		if (!settings || typeof settings !== 'object') return;
+
+		var flatSettings = flattenClaySettings(settings);
+		var calUrl = flatSettings['SETTING_CALENDAR_ICS_URL'];
+		if (calUrl === '[object Object]' ||
+			(calUrl !== null && typeof calUrl === 'object')) {
+			flatSettings['SETTING_CALENDAR_ICS_URL'] =
+				localStorage.getItem('cached_calendar_url') || '';
+		}
+
+		if (JSON.stringify(flatSettings) !== raw) {
+			localStorage.setItem('clay-settings', JSON.stringify(flatSettings));
+		}
+	} catch (e) { }
+}
+
+/**
  * Unwrap a raw value that may be stored as {value: ...}.
  *
  * @param   {*} value
@@ -338,8 +378,11 @@ function getBoolSetting(settings, key, defaultValue) {
 function getStringSetting(settings, key, defaultValue) {
 	if (!settings || !(key in settings)) return defaultValue;
 	var value = unwrapSettingValue(settings[key]);
-	if (value === null || value === undefined) return defaultValue;
-	return String(value);
+	if (value === null || value === undefined || value === '[object Object]') {
+		return defaultValue;
+	}
+	var str = String(value);
+	return str === '[object Object]' ? defaultValue : str;
 }
 
 /**
@@ -1058,13 +1101,15 @@ function getCalendarUrl(settings) {
 	var url = normalizeCalendarUrl(
 		getStringSetting(settings, 'SETTING_CALENDAR_ICS_URL', '')
 	);
-	if (!url) {
+	if (!url || url === '[object Object]') {
 		try {
 			var cached = localStorage.getItem('cached_calendar_url');
-			if (cached) url = normalizeCalendarUrl(cached);
+			if (cached && cached !== '[object Object]') {
+				url = normalizeCalendarUrl(cached);
+			}
 		} catch (e) { }
 	}
-	return url;
+	return (url && url !== '[object Object]') ? url : '';
 }
 
 /**
@@ -1426,6 +1471,7 @@ function formatDebugInfo() {
 
 Pebble.addEventListener('ready', function () {
 	console.log('Carbon: PebbleKit JS ready');
+	sanitizeClaySettingsStorage();
 	eventLog.log('ready', 'pkjs_ready');
 	if (getWeather() === 'dedupe_req') {
 		eventLog.aggregate('dedupe_req', 'ready');
@@ -1433,6 +1479,7 @@ Pebble.addEventListener('ready', function () {
 });
 
 Pebble.addEventListener('showConfiguration', function () {
+	sanitizeClaySettingsStorage();
 	var userData = clay.meta.userData || {};
 	var lastKnown = getLastKnownCoordsFromCache();
 
@@ -1497,18 +1544,24 @@ Pebble.addEventListener('webviewclosed', function (e) {
 	 * @returns {string}
 	 */
 	function extractString(setting) {
-		if (setting === null || setting === undefined) return '';
-		var v = (typeof setting === 'object' && 'value' in setting)
+		var v = (typeof setting === 'object' && setting !== null && 'value' in setting)
 			? setting.value : setting;
+		if (v === null || v === undefined || v === '[object Object]') return '';
 		return String(v);
 	}
 
 	try {
-		localStorage.setItem('clay-settings', JSON.stringify(rawSettings));
-		localStorage.setItem(
-			'cached_calendar_url',
-			extractString(rawSettings['SETTING_CALENDAR_ICS_URL'])
-		);
+		var flatSettings = flattenClaySettings(rawSettings);
+		if (flatSettings['SETTING_CALENDAR_ICS_URL'] === '[object Object]' ||
+			typeof flatSettings['SETTING_CALENDAR_ICS_URL'] === 'object') {
+			flatSettings['SETTING_CALENDAR_ICS_URL'] =
+				localStorage.getItem('cached_calendar_url') || '';
+		}
+		localStorage.setItem('clay-settings', JSON.stringify(flatSettings));
+		var cleanUrl = extractString(rawSettings['SETTING_CALENDAR_ICS_URL']).trim();
+		if (cleanUrl && cleanUrl !== '[object Object]') {
+			localStorage.setItem('cached_calendar_url', cleanUrl);
+		}
 	} catch (err) { }
 
 	var tempUnit = extractInt(rawSettings['SETTING_TEMP_UNIT']);
