@@ -86,6 +86,7 @@ static void prv_request_weather(void);
 static void prv_push_weather_to_layers(struct tm *now);
 static void prv_update_pending_state(void);
 static void prv_update_steps(void);
+static void prv_apply_timeline_events(DictionaryIterator *iter);
 
 #if defined(PBL_HEALTH)
 static void prv_health_event_handler(HealthEventType event, void *context) {
@@ -231,6 +232,54 @@ static void prv_push_weather_to_layers(struct tm *now) {
 }
 
 /**
+ * Parse timeline event start/end timestamp arrays from AppMessage.
+ */
+#define KEY_TIMELINE_EVENT_STARTS 10037
+#define KEY_TIMELINE_EVENT_ENDS 10038
+
+static uint32_t prv_read_uint32_le(const uint8_t *bytes, int offset, int total_len) {
+	if (!bytes || offset < 0 || offset + 4 > total_len)
+		return 0;
+	return (uint32_t)bytes[offset] | ((uint32_t)bytes[offset + 1] << 8) |
+	       ((uint32_t)bytes[offset + 2] << 16) |
+	       ((uint32_t)bytes[offset + 3] << 24);
+}
+
+static void prv_apply_timeline_events(DictionaryIterator *iter) {
+	Tuple *starts = dict_find(iter, KEY_TIMELINE_EVENT_STARTS);
+	Tuple *ends = dict_find(iter, KEY_TIMELINE_EVENT_ENDS);
+
+	TimelineEvent events[4];
+	uint8_t count = 0;
+
+	if (starts && starts->type == TUPLE_BYTE_ARRAY && starts->length >= 4) {
+		int num = starts->length / 4;
+		if (num > 4)
+			num = 4;
+		for (int i = 0; i < num; i++) {
+			uint32_t start_ts =
+			    prv_read_uint32_le(starts->value->data, i * 4, starts->length);
+			events[i].start_time = start_ts;
+			events[i].end_time = start_ts;
+			count++;
+		}
+	}
+
+	if (ends && ends->type == TUPLE_BYTE_ARRAY && count > 0) {
+		for (uint8_t i = 0; i < count; i++) {
+			if (ends->length >= (i + 1) * 4) {
+				events[i].end_time =
+				    prv_read_uint32_le(ends->value->data, i * 4, ends->length);
+			}
+		}
+	}
+
+	if (s_daylight_layer) {
+		daylight_layer_set_events(s_daylight_layer, events, count);
+	}
+}
+
+/**
  * Handle incoming AppMessage; parse weather fields and push to layers if
  * complete.
  *
@@ -325,6 +374,8 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 		        sizeof(s_weather.city_name) - 1);
 		s_weather.city_name[sizeof(s_weather.city_name) - 1] = '\0';
 	}
+
+	prv_apply_timeline_events(iter);
 
 	if (got_weather) {
 		t = dict_find(iter, MESSAGE_KEY_WEATHER_FETCH_TIME);
@@ -482,6 +533,16 @@ static void prv_window_load(Window *window) {
 
 	// Restore cached weather if available
 	prv_push_weather_to_layers(now);
+
+#if defined(DEMO_SCENARIO)
+	{
+		time_t demo_now_t = time(NULL);
+		TimelineEvent demo_events[1];
+		demo_events[0].start_time = (uint32_t)demo_now_t + 9000; // now + 2.5h
+		demo_events[0].end_time = demo_events[0].start_time + 45 * 60;
+		daylight_layer_set_events(s_daylight_layer, demo_events, 1);
+	}
+#endif
 }
 
 static void prv_window_unload(Window *window) {

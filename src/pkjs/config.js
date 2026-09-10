@@ -76,6 +76,28 @@ module.exports = [
 					{ 'label': 'None', 'value': 3 },
 				],
 			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_TIMELINE_EVENT',
+				'label': 'Calendar Events',
+				'description': 'Upcoming calendar events on the timeline.',
+				'defaultValue': 1,
+				'options': [
+					{ 'label': 'Blue bar at start time', 'value': 1 },
+					{ 'label': 'Duration span', 'value': 2 },
+					{ 'label': 'Off', 'value': 0 },
+				],
+			},
+			{
+				'type': 'input',
+				'messageKey': 'SETTING_CALENDAR_ICS_URL',
+				'label': 'Calendar ICS URL',
+				'description': 'iCal/ICS feed URL for upcoming events.',
+				'defaultValue': '',
+				'attributes': {
+					'placeholder': 'https://calendar.google.com/calendar/ical/...',
+				},
+			},
 		],
 	},
 	{

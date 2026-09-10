@@ -12,6 +12,11 @@
 
 typedef struct DaylightLayer DaylightLayer;
 
+typedef struct {
+	uint32_t start_time; // unix timestamp
+	uint32_t end_time;   // unix timestamp
+} TimelineEvent;
+
 DaylightLayer *daylight_layer_create(GRect frame);
 void daylight_layer_destroy(DaylightLayer *layer);
 Layer *daylight_layer_get_layer(DaylightLayer *layer);
@@ -29,3 +34,7 @@ void daylight_layer_set_current_time(DaylightLayer *layer, uint8_t hour, uint8_t
 
 // Set battery state for timeline depletion indicators (yellow at 10%, red when expected to die)
 void daylight_layer_set_battery(DaylightLayer *layer, uint8_t percent, bool charging);
+
+// Upcoming calendar events (up to 4) shown on the daylight timeline
+void daylight_layer_set_events(DaylightLayer *layer, const TimelineEvent *events,
+                               uint8_t count);

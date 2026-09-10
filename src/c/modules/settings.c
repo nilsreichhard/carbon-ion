@@ -30,6 +30,7 @@ static const Settings s_defaults = {
     .show_silent_mode = true,
     .timeline_battery = TIMELINE_BATT_10_0,
     .show_step_count = true,
+    .timeline_event = TIMELINE_EVENT_BAR,
 };
 
 void settings_init(void) {
@@ -167,6 +168,15 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	if (!t) t = dict_find(iter, 10034);
 	if (t) {
 		s_settings.show_step_count = (prv_tuple_int(t) != 0);
+	}
+
+	t = dict_find(iter, KEY_SETTING_TIMELINE_EVENT);
+	if (!t) t = dict_find(iter, 10035);
+	if (t) {
+		int em = prv_tuple_int(t);
+		if (em >= 0 && em <= 2) {
+			s_settings.timeline_event = (TimelineEventMode)em;
+		}
 	}
 
 	if (memcmp(&prev, &s_settings, sizeof(Settings)) != 0) {

@@ -13,6 +13,8 @@
 #include "graph_common.h"
 #include <stddef.h>
 
+#define MAX_TIMELINE_EVENTS 4
+
 struct DaylightLayer {
 	Layer *layer;
 	uint8_t sunrise_hour;
@@ -23,6 +25,8 @@ struct DaylightLayer {
 	bool battery_charging;
 	bool sunrise_approx;
 	bool sunset_approx;
+	TimelineEvent events[MAX_TIMELINE_EVENTS];
+	uint8_t event_count;
 };
 
 // Calculate the moon phase at a specific timestamp (0=new, 1=wax crescent, 2=first quarter,
@@ -105,6 +109,11 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 		graphics_draw_line(ctx, GPoint(pt.x + x_lo, pt.y + dy),
 		                   GPoint(pt.x + x_hi, pt.y + dy));
 	}
+}
+
+static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col) {
+	graphics_context_set_fill_color(ctx, col);
+	graphics_fill_rect(ctx, GRect(x - 1, line_y - 5, 2, 11), 0, GCornerNone);
 }
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
@@ -301,6 +310,46 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			graphics_fill_rect(ctx, GRect(x0 + 4, line_y - 1, 1, 3), 0, GCornerNone);
 		}
 	}
+
+	// 7. Upcoming calendar event indicators
+	TimelineEventMode event_mode = settings_get()->timeline_event;
+	if (event_mode != TIMELINE_EVENT_NONE && dl->event_count > 0) {
+		time_t now = time(NULL);
+		int x_now = graph_x + graph_w / 5;
+#if defined(PBL_COLOR)
+		GColor event_col = is_light ? GColorCobaltBlue : GColorElectricUltramarine;
+#else
+		GColor event_col = is_light ? GColorBlack : GColorWhite;
+#endif
+		long window_start = (long)now - (long)past_hours * 3600L;
+		long window_end = (long)now + (long)forecast_hours * 3600L;
+
+		for (uint8_t i = 0; i < dl->event_count; i++) {
+			long start_sec = (long)dl->events[i].start_time;
+			long end_sec = (long)dl->events[i].end_time;
+			if (start_sec > window_end || end_sec < window_start)
+				continue;
+
+			long diff_sec = start_sec - (long)now;
+			int x = x_now + (int)((float)diff_sec / 3600.0f * (float)graph_w /
+			                      (float)total_hours);
+			prv_draw_event_bar(ctx, x, line_y, event_col);
+
+			if (event_mode == TIMELINE_EVENT_SPAN && end_sec > start_sec) {
+				long end_diff_sec = end_sec - (long)now;
+				int x_end = x_now + (int)((float)end_diff_sec / 3600.0f *
+				                          (float)graph_w / (float)total_hours);
+				prv_draw_event_bar(ctx, x_end, line_y, event_col);
+
+				int bracket_x1 = x < x_end ? x : x_end;
+				int bracket_x2 = x < x_end ? x_end : x;
+				graphics_context_set_stroke_color(ctx, event_col);
+				graphics_context_set_stroke_width(ctx, 1);
+				graphics_draw_line(ctx, GPoint(bracket_x1, line_y - 5),
+				                   GPoint(bracket_x2, line_y - 5));
+			}
+		}
+	}
 }
 
 DaylightLayer *daylight_layer_create(GRect frame) {
@@ -315,6 +364,7 @@ DaylightLayer *daylight_layer_create(GRect frame) {
 	dl->battery_charging = false;
 	dl->sunrise_approx = true;
 	dl->sunset_approx = true;
+	dl->event_count = 0;
 
 	dl->layer = layer_create_with_data(frame, sizeof(DaylightLayer *));
 	*(DaylightLayer **)layer_get_data(dl->layer) = dl;
@@ -359,5 +409,18 @@ void daylight_layer_set_data(DaylightLayer *layer, uint8_t sunrise_hour,
 	layer->current_hour = current_hour;
 	layer->sunrise_approx = sunrise_approx;
 	layer->sunset_approx = sunset_approx;
+	layer_mark_dirty(layer->layer);
+}
+
+void daylight_layer_set_events(DaylightLayer *layer, const TimelineEvent *events,
+                               uint8_t count) {
+	if (!layer)
+		return;
+	if (count > MAX_TIMELINE_EVENTS)
+		count = MAX_TIMELINE_EVENTS;
+	layer->event_count = count;
+	for (uint8_t i = 0; i < count; i++) {
+		layer->events[i] = events[i];
+	}
 	layer_mark_dirty(layer->layer);
 }

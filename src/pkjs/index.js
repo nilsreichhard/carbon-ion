@@ -502,6 +502,121 @@ function packInt8Array(values, hourlyCount) {
 }
 
 /**
+ * Pack uint32 values into a little-endian byte array for AppMessage transport.
+ *
+ * @param   {number[]} values
+ * @returns {number[]}
+ */
+function packUint32Array(values) {
+	var arr = [];
+	for (var i = 0; i < values.length; i++) {
+		var v = Math.floor(values[i] || 0);
+		arr.push(v & 0xFF);
+		arr.push((v >> 8) & 0xFF);
+		arr.push((v >> 16) & 0xFF);
+		arr.push((v >> 24) & 0xFF);
+	}
+	return arr;
+}
+
+/**
+ * Returns the configured forecast horizon in hours from Clay settings.
+ *
+ * @returns {number}
+ */
+function getForecastHoursFromSettings() {
+	try {
+		var raw = localStorage.getItem('clay-settings');
+		if (raw) {
+			var s = JSON.parse(raw);
+			var fh = parseInt(s.SETTING_FORECAST_HOURS, 10);
+			if (fh === 12 || fh === 18 || fh === 24 || fh === 36 || fh === 48) {
+				return fh;
+			}
+		}
+	} catch (e) { }
+	return 24;
+}
+
+/**
+ * Parse an ICS date-time string into a Unix timestamp (seconds).
+ *
+ * @param   {string} str
+ * @returns {number|null}
+ */
+function parseIcsDateTime(str) {
+	if (!str) return null;
+	str = String(str).trim();
+	if (/^\d{8}$/.test(str)) {
+		var y = parseInt(str.substr(0, 4), 10);
+		var mo = parseInt(str.substr(4, 2), 10) - 1;
+		var d = parseInt(str.substr(6, 2), 10);
+		return Math.floor(Date.UTC(y, mo, d) / 1000);
+	}
+	var m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?/.exec(str);
+	if (!m) return null;
+	var y = parseInt(m[1], 10);
+	var mo = parseInt(m[2], 10) - 1;
+	var d = parseInt(m[3], 10);
+	var h = parseInt(m[4], 10);
+	var mi = parseInt(m[5], 10);
+	var s = parseInt(m[6], 10);
+	if (m[7] === 'Z') {
+		return Math.floor(Date.UTC(y, mo, d, h, mi, s) / 1000);
+	}
+	return Math.floor(new Date(y, mo, d, h, mi, s).getTime() / 1000);
+}
+
+/**
+ * Extract DTSTART/DTEND from an ICS VEVENT block.
+ *
+ * @param   {string} block
+ * @param   {string} field
+ * @returns {number|null}
+ */
+function extractIcsDate(block, field) {
+	var re = new RegExp(field + '[^:]*:([^\\r\\n]+)');
+	var match = re.exec(block);
+	if (!match) return null;
+	return parseIcsDateTime(match[1]);
+}
+
+/**
+ * Parse upcoming ICS events within the visible timeline window.
+ *
+ * @param   {string} icsText
+ * @param   {number} maxEvents
+ * @param   {number} nowSec
+ * @param   {number} windowStart
+ * @param   {number} windowEnd
+ * @returns {{start:number,end:number}[]}
+ */
+function parseIcsEvents(icsText, maxEvents, nowSec, windowStart, windowEnd) {
+	var events = [];
+	if (!icsText) return events;
+
+	var parts = String(icsText).split('BEGIN:VEVENT');
+	for (var p = 1; p < parts.length && events.length < maxEvents; p++) {
+		var block = parts[p];
+		var endIdx = block.indexOf('END:VEVENT');
+		if (endIdx >= 0) block = block.substring(0, endIdx);
+
+		var start = extractIcsDate(block, 'DTSTART');
+		if (!start) continue;
+		var end = extractIcsDate(block, 'DTEND');
+		if (!end) end = start + 3600;
+
+		if (end < windowStart || start > windowEnd) continue;
+		if (start < nowSec && end < nowSec) continue;
+
+		events.push({ start: start, end: end });
+	}
+
+	events.sort(function (a, b) { return a.start - b.start; });
+	return events.slice(0, maxEvents);
+}
+
+/**
  * Extract the local hour from a Unix timestamp.
  * With timeformat=unixtime, daily.sunrise/sunset are Unix timestamps (seconds).
  *
@@ -643,6 +758,19 @@ function sendToWatch(payload) {
 		dict[10012] = fTime;
 	}
 
+	if (payload.timeline_events && payload.timeline_events.length > 0) {
+		var starts = [];
+		var ends = [];
+		for (var ei = 0; ei < payload.timeline_events.length && ei < 4; ei++) {
+			starts.push(payload.timeline_events[ei].start);
+			ends.push(payload.timeline_events[ei].end);
+		}
+		dict['TIMELINE_EVENT_STARTS'] = packUint32Array(starts);
+		dict[10037] = packUint32Array(starts);
+		dict['TIMELINE_EVENT_ENDS'] = packUint32Array(ends);
+		dict[10038] = packUint32Array(ends);
+	}
+
 	var nowMs = Date.now();
 	var signature = JSON.stringify(dict);
 	if (s_lastSentAt > 0 && nowMs - s_lastSentAt < SEND_DEDUPE_WINDOW_MS &&
@@ -662,9 +790,42 @@ function sendToWatch(payload) {
  * @param {number} lat  Device latitude in decimal degrees.
  * @param {number} lon  Device longitude in decimal degrees.
  */
+/**
+ * Fetch calendar ICS events when configured and merge into payload.
+ *
+ * @param {Object}   payload
+ * @param {Function} callback Called with the updated payload.
+ */
+function fetchCalendarEvents(payload, callback) {
+	var settings = readClaySettings();
+	var url = getStringSetting(settings, 'SETTING_CALENDAR_ICS_URL', '').trim();
+	if (!url) {
+		callback(payload);
+		return;
+	}
+
+	xhrGet(url, function (err, responseText) {
+		if (!err && responseText) {
+			var nowSec = Math.floor(Date.now() / 1000);
+			var forecastHours = getForecastHoursFromSettings();
+			var pastHours = forecastHours / 4;
+			var windowStart = nowSec - pastHours * 3600;
+			var windowEnd = nowSec + forecastHours * 3600;
+			payload.timeline_events = parseIcsEvents(
+				responseText, 4, nowSec, windowStart, windowEnd
+			);
+			eventLog.log('cal_ok', 'n=' + payload.timeline_events.length);
+		} else {
+			eventLog.log('cal_fail', err || 'empty');
+		}
+		callback(payload);
+	});
+}
+
 function fetchAndSend(lat, lon, isStaticLocation) {
 	var weatherDone = false;
 	var cityDone = false;
+	var calendarDone = false;
 	var weatherOk = false;
 	var payload = {};
 	var settings = readClaySettings();
@@ -678,7 +839,7 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 	payload.lon = lon;
 
 	function tryFinish() {
-		if (!weatherDone || !cityDone) return;
+		if (!weatherDone || !cityDone || !calendarDone) return;
 
 		if (!weatherOk) {
 			// Weather fetch/parse failed; fall back to stale cache so the watch
@@ -700,6 +861,12 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 		writeCache(payload);
 		sendToWatch(payload);
 	}
+
+	fetchCalendarEvents(payload, function (updatedPayload) {
+		payload = updatedPayload;
+		calendarDone = true;
+		tryFinish();
+	});
 
 	// Open-Meteo weather — 12 past hours and 60 forecast hours for a rolling continuous window
 	var weatherUrl = WEATHER_BASE_URL +
@@ -841,7 +1008,9 @@ function getWeather() {
 		// Re-evaluate unit in case locale changed; re-fetch if unit differs
 		var cachedUnit = cache.payload && cache.payload.temp_unit;
 		if (cachedUnit && cachedUnit === getTempUnit()) {
-			sendToWatch(cache.payload);
+			fetchCalendarEvents(cache.payload, function (payload) {
+				sendToWatch(payload);
+			});
 			return;
 		}
 		console.log('Carbon: temp unit changed, refreshing weather');
@@ -1099,6 +1268,12 @@ Pebble.addEventListener('webviewclosed', function (e) {
 	if (showStepCount !== null) {
 		dict[10034] = showStepCount;
 		dict['SETTING_SHOW_STEP_COUNT'] = showStepCount;
+	}
+
+	var timelineEvent = extractInt(rawSettings['SETTING_TIMELINE_EVENT']);
+	if (!isNaN(timelineEvent) && timelineEvent >= 0 && timelineEvent <= 2) {
+		dict[10035] = timelineEvent;
+		dict['SETTING_TIMELINE_EVENT'] = timelineEvent;
 	}
 
 	var clearCacheRequested = extractBool(rawSettings['SETTING_CLEAR_CACHE']) === 1;
