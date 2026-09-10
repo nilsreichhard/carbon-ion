@@ -19,7 +19,6 @@ struct TimeLayer {
 	TextLayer *city_label;
 	TextLayer *cond_label; // weather condition icon right of city
 	TextLayer *time_label;
-	TextLayer *tz_label;   // timezone abbreviation, left of time
 	TextLayer *date_label;
 	Layer *status_layer;   // BT disconnected & quiet mode indicators left of time
 	GFont icon_font;
@@ -31,8 +30,6 @@ struct TimeLayer {
 	char city_buf[24];
 	char cond_glyph[8];
 	char time_buf[8];
-	char tz_buf[8];
-	char tz_override[8]; // set by time_layer_set_timezone; overrides strftime
 	char date_buf[32];
 };
 
@@ -205,8 +202,6 @@ TimeLayer *time_layer_create(GRect frame) {
 	tl->city_buf[0] = '\0';
 	tl->cond_glyph[0] = '\0';
 	tl->time_buf[0] = '\0';
-	tl->tz_buf[0] = '\0';
-	tl->tz_override[0] = '\0';
 	tl->date_buf[0] = '\0';
 	tl->bt_connected = true;
 	tl->quiet_mode = false;
@@ -260,20 +255,6 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text(tl->time_label, tl->time_buf);
 	layer_add_child(tl->container, text_layer_get_layer(tl->time_label));
 
-	// Timezone — small font, left side of time row
-	GFont small_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
-	// Center TZ/AMPM label within the visible digit area, skipping internal
-	// font padding
-	int tz_ampm_y =
-	    time_y + TL_TIME_PAD + (TL_TIME_H - TL_TIME_PAD - TL_TZ_H) / 2;
-	tl->tz_label = text_layer_create(GRect(2, tz_ampm_y, 32, TL_TZ_H));
-	text_layer_set_background_color(tl->tz_label, GColorClear);
-	text_layer_set_text_color(tl->tz_label, GColorLightGray);
-	text_layer_set_font(tl->tz_label, small_font);
-	text_layer_set_text_alignment(tl->tz_label, GTextAlignmentLeft);
-	text_layer_set_text(tl->tz_label, tl->tz_buf);
-	layer_add_child(tl->container, text_layer_get_layer(tl->tz_label));
-
 	// Status indicators (BT disconnected & Quiet mode) left of time
 #if PBL_PLATFORM_GABBRO || defined(PBL_ROUND)
 	int status_x = 16;
@@ -306,7 +287,6 @@ void time_layer_destroy(TimeLayer *layer) {
 	layer_destroy(layer->status_layer);
 	fonts_unload_custom_font(layer->icon_font);
 	text_layer_destroy(layer->date_label);
-	text_layer_destroy(layer->tz_label);
 	text_layer_destroy(layer->time_label);
 	text_layer_destroy(layer->city_label);
 	text_layer_destroy(layer->cond_label);
@@ -324,21 +304,8 @@ void time_layer_set_status(TimeLayer *layer, bool bt_connected, bool quiet_time)
 	if (layer->bt_connected != bt_connected || layer->quiet_mode != quiet_time) {
 		layer->bt_connected = bt_connected;
 		layer->quiet_mode = quiet_time;
-		bool show_indicators = (!bt_connected || quiet_time);
-		layer_set_hidden(text_layer_get_layer(layer->tz_label), show_indicators);
 		layer_mark_dirty(layer->status_layer);
 	}
-}
-
-void time_layer_set_timezone(TimeLayer *layer, const char *tz) {
-	if (!layer || !tz)
-		return;
-	strncpy(layer->tz_override, tz, sizeof(layer->tz_override) - 1);
-	layer->tz_override[sizeof(layer->tz_override) - 1] = '\0';
-	// Immediately update the label so it shows even before the next tick
-	text_layer_set_text(layer->tz_label, layer->tz_override[0]
-	                                         ? layer->tz_override
-	                                         : layer->tz_buf);
 }
 
 void time_layer_set_city(TimeLayer *layer, const char *city) {
@@ -372,7 +339,6 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 		return;
 
 	GColor text_color = settings->light_theme ? GColorBlack : GColorWhite;
-	GColor sub_color = settings->light_theme ? GColorDarkGray : GColorLightGray;
 	layer->light_theme = settings->light_theme;
 	layer->show_bt_alert = settings->show_bt_alert;
 	layer->show_silent_mode = settings->show_silent_mode;
@@ -380,7 +346,6 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	prv_update_location_row(layer);
 	text_layer_set_text_color(layer->time_label, text_color);
 	text_layer_set_text_color(layer->date_label, text_color);
-	text_layer_set_text_color(layer->tz_label, sub_color);
 
 	bool is_24h = clock_is_24h_style();
 
@@ -396,18 +361,6 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 		layer->time_buf[sizeof(layer->time_buf) - 1] = '\0';
 	}
 	text_layer_set_text(layer->time_label, layer->time_buf);
-
-	// Timezone abbreviation — use manual override if set (e.g. demo mode),
-	// otherwise derive from strftime and hide numeric offsets or empty values.
-	if (layer->tz_override[0]) {
-		text_layer_set_text(layer->tz_label, layer->tz_override);
-	} else {
-		strftime(layer->tz_buf, sizeof(layer->tz_buf), "%Z", tick_time);
-		bool tz_valid = (layer->tz_buf[0] >= 'A' && layer->tz_buf[0] <= 'Z') &&
-		                (layer->tz_buf[1] >= 'A' && layer->tz_buf[1] <= 'Z');
-		text_layer_set_text(layer->tz_label, tz_valid ? layer->tz_buf : "");
-	}
-	layer_set_hidden(text_layer_get_layer(layer->tz_label), true);
 
 	// Date — format string stored in settings; leading zeros stripped
 	// automatically. Full weekday name expanded if %A is used.

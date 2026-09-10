@@ -505,13 +505,16 @@ function packInt8Array(values, hourlyCount) {
  * Extract the local hour from a Unix timestamp.
  * With timeformat=unixtime, daily.sunrise/sunset are Unix timestamps (seconds).
  *
- * @param   {number} timestamp  Unix timestamp in seconds.
- * @returns {number}            Local hour (0–23).
+ * @param   {number} timestamp    Unix timestamp in seconds.
+ * @param   {number} utcOffsetSec  Location UTC offset from Open-Meteo (seconds).
+ * @returns {number}              Local hour (0–23).
  */
-function extractHourFromUnix(timestamp) {
-	// timestamp is seconds since epoch; multiply by 1000 for JS Date
-	var d = new Date(timestamp * 1000);
-	return d.getHours();
+function extractHourFromUnix(timestamp, utcOffsetSec) {
+	if (typeof utcOffsetSec === 'number') {
+		var localSec = ((timestamp + utcOffsetSec) % 86400 + 86400) % 86400;
+		return Math.floor(localSec / 3600);
+	}
+	return new Date(timestamp * 1000).getHours();
 }
 
 /**
@@ -733,8 +736,11 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 				payload.low_temp = dly && dly.temperature_2m_min ? dly.temperature_2m_min[0] : cur.temperature_2m;
 
 				// Sunrise/sunset are Unix timestamps with timeformat=unixtime
-				payload.sunrise_hour = dly && dly.sunrise ? extractHourFromUnix(dly.sunrise[0]) : 6;
-				payload.sunset_hour = dly && dly.sunset ? extractHourFromUnix(dly.sunset[0]) : 20;
+				var utcOffsetSec = json.utc_offset_seconds;
+				payload.sunrise_hour = dly && dly.sunrise
+					? extractHourFromUnix(dly.sunrise[0], utcOffsetSec) : 6;
+				payload.sunset_hour = dly && dly.sunset
+					? extractHourFromUnix(dly.sunset[0], utcOffsetSec) : 20;
 
 				// forecast_hours=FORECAST_HOURS returns entries starting from now
 				if (hrly) {

@@ -130,7 +130,7 @@ module.exports = [
 					{ 'label': '1/15/2026', 'value': '%m/%d/%Y' },
 					{ 'label': '15/1/2026', 'value': '%d/%m/%Y' },
 					{ 'label': '15 Jan 2026', 'value': '%d %b %Y' },
-					{ 'label': '2026-01-15', 'value': '%Y-0%m-0%d' },
+					{ 'label': '2026-01-15', 'value': '%Y-%m-%d' },
 				],
 			},
 		],

@@ -71,7 +71,9 @@ static WeatherData s_weather;
 static uint32_t s_request_seq;
 static uint32_t s_last_sent_request_seq;
 static uint32_t s_last_answered_seq;
+#if !defined(DEMO_SCENARIO)
 static uint32_t s_minutes_since_launch;
+#endif
 
 // Forward declarations
 static void prv_request_weather(void);
@@ -450,9 +452,6 @@ static void prv_window_load(Window *window) {
 
 	// Restore cached weather if available
 	prv_push_weather_to_layers(now);
-#if defined(DEMO_SCENARIO)
-	time_layer_set_timezone(s_time_layer, demo_get_timezone());
-#endif
 }
 
 static void prv_window_unload(Window *window) {

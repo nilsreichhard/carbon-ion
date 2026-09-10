@@ -33,8 +33,6 @@
 #define TL_TIME_H 40
 #define TL_TIME_PAD 4
 #endif
-// Height of the TZ / AM-PM labels (GOTHIC_14, constant across platforms)
-#define TL_TZ_H 18
 // Total visible block height used by main.c to size the layer frame.
 // Derived automatically so it can never fall out of sync with the values above.
 #define TL_TIME_BLOCK_H ((TL_SMALL_H - TL_TIME_PAD) + TL_TIME_H + TL_SMALL_H)
@@ -47,9 +45,6 @@ Layer *time_layer_get_layer(TimeLayer *layer);
 void time_layer_set_city(TimeLayer *layer, const char *city);
 void time_layer_set_condition(TimeLayer *layer, WeatherCondition cond, bool is_day);
 void time_layer_set_status(TimeLayer *layer, bool bt_connected, bool quiet_time);
-// Override the timezone abbreviation shown left of the clock. Pass an empty
-// string to revert to the system-derived value from strftime.
-void time_layer_set_timezone(TimeLayer *layer, const char *tz);
 // settings is used for date_format only; 24h is read from clock_is_24h_style()
 void time_layer_update(TimeLayer *layer, struct tm *tick_time,
                        const Settings *settings);
