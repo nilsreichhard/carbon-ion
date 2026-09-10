@@ -111,10 +111,10 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 	}
 }
 
-static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col) {
+static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col, uint8_t stroke_width) {
 	graphics_context_set_stroke_color(ctx, col);
-	graphics_context_set_stroke_width(ctx, 3);
-	graphics_draw_line(ctx, GPoint(x, line_y - 6), GPoint(x, line_y + 6));
+	graphics_context_set_stroke_width(ctx, stroke_width);
+	graphics_draw_line(ctx, GPoint(x, line_y - 5), GPoint(x, line_y + 5));
 }
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
@@ -334,18 +334,19 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			long diff_sec = start_sec - (long)now;
 			int x = x_now + (int)((diff_sec * (long)graph_w) /
 			                      (3600L * (long)total_hours));
-			prv_draw_event_bar(ctx, x, line_y, event_col);
+			uint8_t stroke_width = (event_mode == TIMELINE_EVENT_BAR) ? 1 : 2;
+			prv_draw_event_bar(ctx, x, line_y, event_col, stroke_width);
 
 			if (event_mode == TIMELINE_EVENT_SPAN && end_sec > start_sec) {
 				long end_diff_sec = end_sec - (long)now;
 				int x_end = x_now + (int)((end_diff_sec * (long)graph_w) /
 				                          (3600L * (long)total_hours));
-				prv_draw_event_bar(ctx, x_end, line_y, event_col);
+				prv_draw_event_bar(ctx, x_end, line_y, event_col, 2);
 
 				int bracket_x1 = x < x_end ? x : x_end;
 				int bracket_x2 = x < x_end ? x_end : x;
 				graphics_context_set_stroke_color(ctx, event_col);
-				graphics_context_set_stroke_width(ctx, 3);
+				graphics_context_set_stroke_width(ctx, 2);
 				graphics_draw_line(ctx, GPoint(bracket_x1, line_y - 6),
 				                   GPoint(bracket_x2, line_y - 6));
 				graphics_draw_line(ctx, GPoint(bracket_x1, line_y - 6),
