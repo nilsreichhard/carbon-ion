@@ -7,10 +7,6 @@
  * @link      https://github.com/nilsreichhard/carbon-ion
  */
 
-// Build metadata inlined for robust offline/CloudPebble builds
-var version = '2.0.0';
-var hash = 'custom';
-
 module.exports = [
 	{
 		'type': 'heading',
@@ -18,7 +14,7 @@ module.exports = [
 	},
 	{
 		'type': 'text',
-		'defaultValue': `v${version} (Emery & Gabbro Edition)\nBy Nils Reich — based on Carbon by Cory Hughart`,
+		'defaultValue': 'By Nils Reich',
 	},
 	{
 		'type': 'section',
@@ -30,52 +26,52 @@ module.exports = [
 			{
 				'type': 'select',
 				'messageKey': 'SETTING_FORECAST_HOURS',
-				'label': 'Forecast Window',
-				'description': 'Select timeline horizon ahead with matching 1/5 past ratio.',
+				'label': 'Forecast Horizon',
+				'description': 'Upcoming weather horizon displayed on timeline.',
 				'defaultValue': 24,
 				'options': [
-					{ 'label': '12hr future (+3h past = 15h)', 'value': 12 },
-					{ 'label': '18hr future (+4.5h past = 22.5h)', 'value': 18 },
-					{ 'label': '24hr future (+6h past = 30h)', 'value': 24 },
-					{ 'label': '36hr future (+9h past = 45h)', 'value': 36 },
-					{ 'label': '48hr future (+12h past = 60h)', 'value': 48 },
+					{ 'label': '12h forecast (+3h past)', 'value': 12 },
+					{ 'label': '18h forecast (+4.5h past)', 'value': 18 },
+					{ 'label': '24h forecast (+6h past)', 'value': 24 },
+					{ 'label': '36h forecast (+9h past)', 'value': 36 },
+					{ 'label': '48h forecast (+12h past)', 'value': 48 },
 				],
 			},
 			{
 				'type': 'select',
 				'messageKey': 'SETTING_INFILL_MODE',
-				'label': 'Thermal Infill Shading',
-				'description': 'Shading area under temperature curve on meteogram.',
+				'label': 'Thermal Infill',
+				'description': 'Colored infill area under temperature curve.',
 				'defaultValue': 0,
 				'options': [
-					{ 'label': 'Forecast Only (After Now)', 'value': 0 },
-					{ 'label': 'Past Only (Before Now)', 'value': 1 },
-					{ 'label': 'All (Full Horizon)', 'value': 2 },
-					{ 'label': 'None (Curves Only)', 'value': 3 },
+					{ 'label': 'Future forecast only', 'value': 0 },
+					{ 'label': 'Past hours only', 'value': 1 },
+					{ 'label': 'Full timeline', 'value': 2 },
+					{ 'label': 'None (lines only)', 'value': 3 },
 				],
 			},
 			{
 				'type': 'select',
 				'messageKey': 'SETTING_NEEDLE_MODE',
-				'label': 'Current Time Indicator Bar',
-				'description': 'Position of the vertical needle marking current hour.',
+				'label': 'Current Time Needle',
+				'description': 'Red vertical needle marking current hour.',
 				'defaultValue': 0,
 				'options': [
-					{ 'label': 'Both (Top Track & Meteogram)', 'value': 0 },
-					{ 'label': 'Top Track Only (Daylight & Sky)', 'value': 1 },
-					{ 'label': 'Bottom Only (Meteogram)', 'value': 2 },
-					{ 'label': 'None (Hide Needle)', 'value': 3 },
+					{ 'label': 'Top track & meteogram', 'value': 0 },
+					{ 'label': 'Top track only', 'value': 1 },
+					{ 'label': 'Bottom meteogram only', 'value': 2 },
+					{ 'label': 'Hidden', 'value': 3 },
 				],
 			},
 			{
 				'type': 'select',
 				'messageKey': 'SETTING_TIMELINE_BATTERY',
 				'label': 'Timeline Battery Markers',
-				'description': 'Battery depletion milestones projected onto the timeline track.',
+				'description': 'Battery depletion milestones projected onto timeline.',
 				'defaultValue': 1,
 				'options': [
 					{ 'label': '20% yellow, 10% orange, 0% red', 'value': 0 },
-					{ 'label': '10% orange, 0% red (default)', 'value': 1 },
+					{ 'label': '10% orange, 0% red', 'value': 1 },
 					{ 'label': '0% red', 'value': 2 },
 					{ 'label': 'None', 'value': 3 },
 				],
@@ -87,24 +83,24 @@ module.exports = [
 		'items': [
 			{
 				'type': 'heading',
-				'defaultValue': 'Theme & Display',
+				'defaultValue': 'Display & Indicators',
 			},
 			{
 				'type': 'select',
 				'messageKey': 'SETTING_LIGHT_THEME',
 				'label': 'Color Theme',
-				'description': 'Background and contrast appearance.',
+				'description': 'Background appearance.',
 				'defaultValue': 0,
 				'options': [
-					{ 'label': 'Dark Theme (Black)', 'value': 0 },
-					{ 'label': 'Light Theme (White)', 'value': 1 },
+					{ 'label': 'Dark', 'value': 0 },
+					{ 'label': 'Light', 'value': 1 },
 				],
 			},
 			{
 				'type': 'toggle',
 				'messageKey': 'SETTING_SHOW_BT_ALERT',
 				'label': 'Bluetooth Disconnect Alert',
-				'description': 'Show red alert icon left of the time when disconnected from phone.',
+				'description': 'Show red alert icon left of the time when disconnected.',
 				'defaultValue': true,
 			},
 			{
@@ -115,19 +111,11 @@ module.exports = [
 				'defaultValue': true,
 			},
 			{
-				'type': 'heading',
-				'defaultValue': 'Time & Date',
-			},
-			{
 				'type': 'toggle',
 				'messageKey': 'SETTING_SHOW_STEP_COUNT',
 				'label': 'Show Step Counter',
-				'description': 'Show daily step count (1k, 2k, 10k) to the right of the clock.',
+				'description': 'Display daily step count to the right of the time.',
 				'defaultValue': true,
-			},
-			{
-				'type': 'text',
-				'defaultValue': 'Time format (12h/24h) is determined by the watch system settings.',
 			},
 			{
 				'type': 'select',
@@ -157,10 +145,10 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_TEMP_UNIT',
 				'label': 'Temperature Unit',
-				'description': '"Auto" detects your locale (US = °F, everywhere else = °C).',
+				'description': 'Auto detects unit from your phone locale.',
 				'defaultValue': -1,
 				'options': [
-					{ 'label': 'Auto (locale)', 'value': -1 },
+					{ 'label': 'Auto (Locale)', 'value': -1 },
 					{ 'label': 'Celsius (°C)', 'value': 0 },
 					{ 'label': 'Fahrenheit (°F)', 'value': 1 },
 				],
@@ -168,7 +156,7 @@ module.exports = [
 			{
 				'type': 'select',
 				'messageKey': 'SETTING_FETCH_INTERVAL',
-				'label': 'Weather Refresh Interval',
+				'label': 'Refresh Interval',
 				'defaultValue': 30,
 				'options': [
 					{ 'label': 'Every 15 minutes', 'value': 15 },
@@ -188,15 +176,15 @@ module.exports = [
 			{
 				'type': 'toggle',
 				'messageKey': 'SETTING_GEOCODE_ENABLED',
-				'label': 'Detect Location Name',
-				'description': 'Look up city name from GPS (reverse geocoding). When off, custom text below is shown.',
+				'label': 'Detect City Name',
+				'description': 'Look up city name from GPS. When off, custom text below is shown.',
 				'defaultValue': true,
 			},
 			{
 				'type': 'input',
 				'messageKey': 'SETTING_LOCATION_OVERRIDE',
-				'label': 'Custom Location Text',
-				'description': 'Shown when location detection is off. Leave blank to hide.',
+				'label': 'Custom City Text',
+				'description': 'Shown when city detection is off. Leave blank to hide.',
 				'defaultValue': '',
 				'attributes': {
 					'placeholder': 'e.g. Home',
@@ -206,15 +194,15 @@ module.exports = [
 			{
 				'type': 'toggle',
 				'messageKey': 'SETTING_USE_STATIC_LOCATION',
-				'label': 'Use Static Location',
-				'description': 'Skip GPS and use fixed coordinates for weather and location name.',
+				'label': 'Use Fixed Coordinates',
+				'description': 'Skip GPS and use fixed coordinates for weather and city name.',
 				'defaultValue': false,
 			},
 			{
 				'type': 'input',
 				'messageKey': 'SETTING_STATIC_LAT',
-				'label': 'Static Latitude',
-				'description': 'Used only when static location is enabled.',
+				'label': 'Latitude',
+				'description': 'Used only when fixed coordinates are enabled.',
 				'defaultValue': '',
 				'attributes': {
 					'type': 'number',
@@ -225,8 +213,8 @@ module.exports = [
 			{
 				'type': 'input',
 				'messageKey': 'SETTING_STATIC_LON',
-				'label': 'Static Longitude',
-				'description': 'Used only when static location is enabled.',
+				'label': 'Longitude',
+				'description': 'Used only when fixed coordinates are enabled.',
 				'defaultValue': '',
 				'attributes': {
 					'type': 'number',
@@ -250,14 +238,14 @@ module.exports = [
 			{
 				'type': 'toggle',
 				'messageKey': 'SETTING_SHOW_ADVANCED_OPTIONS',
-				'label': 'Show advanced options',
-				'description': 'Advanced options for diagnostics and troubleshooting.',
+				'label': 'Show Advanced Options',
+				'description': 'Diagnostics and troubleshooting.',
 				'defaultValue': false,
 			},
 			{
 				'type': 'toggle',
 				'messageKey': 'SETTING_CLEAR_CACHE',
-				'label': 'Clear cached data on save',
+				'label': 'Clear Cached Weather on Save',
 				'description': 'Wipes cached weather and refetches immediately.',
 				'defaultValue': false,
 			},
