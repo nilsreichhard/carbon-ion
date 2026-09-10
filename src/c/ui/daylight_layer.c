@@ -113,7 +113,7 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 
 static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col) {
 	graphics_context_set_fill_color(ctx, col);
-	graphics_fill_rect(ctx, GRect(x - 1, line_y - 5, 2, 11), 0, GCornerNone);
+	graphics_fill_rect(ctx, GRect(x - 1, line_y - 5, 3, 11), 0, GCornerNone);
 }
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
@@ -331,14 +331,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				continue;
 
 			long diff_sec = start_sec - (long)now;
-			int x = x_now + (int)((float)diff_sec / 3600.0f * (float)graph_w /
-			                      (float)total_hours);
+			int x = x_now + (int)((diff_sec * (long)graph_w) /
+			                      (3600L * (long)total_hours));
 			prv_draw_event_bar(ctx, x, line_y, event_col);
 
 			if (event_mode == TIMELINE_EVENT_SPAN && end_sec > start_sec) {
 				long end_diff_sec = end_sec - (long)now;
-				int x_end = x_now + (int)((float)end_diff_sec / 3600.0f *
-				                          (float)graph_w / (float)total_hours);
+				int x_end = x_now + (int)((end_diff_sec * (long)graph_w) /
+				                          (3600L * (long)total_hours));
 				prv_draw_event_bar(ctx, x_end, line_y, event_col);
 
 				int bracket_x1 = x < x_end ? x : x_end;

@@ -539,12 +539,58 @@ function getForecastHoursFromSettings() {
 }
 
 /**
- * Parse an ICS date-time string into a Unix timestamp (seconds).
+ * Parse an ICS UTC offset token (+HHMM / -HHMM) into minutes east of UTC.
  *
  * @param   {string} str
  * @returns {number|null}
  */
-function parseIcsDateTime(str) {
+function parseIcsUtcOffsetMinutes(str) {
+	var m = /^([+-])(\d{2})(\d{2})$/.exec(String(str || '').trim());
+	if (!m) return null;
+	var sign = m[1] === '+' ? 1 : -1;
+	return sign * (parseInt(m[2], 10) * 60 + parseInt(m[3], 10));
+}
+
+/**
+ * Build a TZID -> UTC offset (minutes east) map from VTIMEZONE blocks.
+ *
+ * @param   {string} icsText
+ * @returns {Object.<string, number>}
+ */
+function parseIcsTimezoneOffsets(icsText) {
+	var offsets = {};
+	if (!icsText) return offsets;
+
+	var unfolded = unfoldIcsText(icsText);
+	var parts = unfolded.split('BEGIN:VTIMEZONE');
+	for (var p = 1; p < parts.length; p++) {
+		var block = parts[p];
+		var endIdx = block.indexOf('END:VTIMEZONE');
+		if (endIdx >= 0) block = block.substring(0, endIdx);
+
+		var tzidMatch = /^[^\r\n]*\r?\nTZID:([^\r\n]+)/im.exec(block);
+		if (!tzidMatch) tzidMatch = /TZID:([^\r\n]+)/i.exec(block);
+		if (!tzidMatch) continue;
+		var tzid = tzidMatch[1].trim();
+
+		var offsetMatch =
+			/(?:STANDARD|DAYLIGHT)[\s\S]*?TZOFFSETTO:([+-]\d{4})/i.exec(block);
+		if (!offsetMatch) continue;
+		var offMin = parseIcsUtcOffsetMinutes(offsetMatch[1]);
+		if (offMin !== null) offsets[tzid] = offMin;
+	}
+	return offsets;
+}
+
+/**
+ * Parse an ICS date-time string into a Unix timestamp (seconds).
+ *
+ * @param   {string}      str
+ * @param   {string=}     tzid
+ * @param   {Object=}     tzOffsets  TZID -> offset minutes east of UTC
+ * @returns {number|null}
+ */
+function parseIcsDateTime(str, tzid, tzOffsets) {
 	if (!str) return null;
 	str = String(str).trim();
 	if (/^\d{8}$/.test(str)) {
@@ -553,7 +599,8 @@ function parseIcsDateTime(str) {
 		var d = parseInt(str.substr(6, 2), 10);
 		return Math.floor(new Date(y, mo, d, 0, 0, 0).getTime() / 1000);
 	}
-	var m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?/.exec(str);
+	var m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z|([+-])(\d{2})(\d{2}))?$/
+		.exec(str);
 	if (!m) return null;
 	var y = parseInt(m[1], 10);
 	var mo = parseInt(m[2], 10) - 1;
@@ -563,6 +610,20 @@ function parseIcsDateTime(str) {
 	var s = parseInt(m[6], 10);
 	if (m[7] === 'Z') {
 		return Math.floor(Date.UTC(y, mo, d, h, mi, s) / 1000);
+	}
+	if (m[8]) {
+		var offMin = parseIcsUtcOffsetMinutes(m[8] + m[9] + m[10]);
+		if (offMin !== null) {
+			return Math.floor(
+				(Date.UTC(y, mo, d, h, mi, s) - offMin * 60000) / 1000
+			);
+		}
+	}
+	if (tzid && tzOffsets && tzOffsets[tzid] !== undefined) {
+		var tzOffMin = tzOffsets[tzid];
+		return Math.floor(
+			(Date.UTC(y, mo, d, h, mi, s) - tzOffMin * 60000) / 1000
+		);
 	}
 	return Math.floor(new Date(y, mo, d, h, mi, s).getTime() / 1000);
 }
@@ -598,17 +659,26 @@ function unfoldIcsText(icsText) {
 
 /**
  * Extract DTSTART/DTEND from an ICS VEVENT block.
- * Handles DTSTART;TZID=...:YYYYMMDDTHHMMSS and DTSTART;VALUE=DATE:YYYYMMDD.
+ * Handles TZID, VALUE=DATE, UTC (Z), and numeric UTC offsets.
  *
  * @param   {string} block
  * @param   {string} field
- * @returns {number|null}
+ * @param   {Object.<string, number>} tzOffsets
+ * @returns {{ts:number,isDateOnly:boolean}|null}
  */
-function extractIcsDate(block, field) {
-	var re = new RegExp('^' + field + '(?:;[^:\r\n]*)?:([^\\r\\n]+)', 'im');
+function extractIcsDate(block, field, tzOffsets) {
+	var re = new RegExp('^' + field + '(?:;([^:\\r\\n]*))?:([^\\r\\n]+)', 'im');
 	var match = re.exec(block);
 	if (!match) return null;
-	return parseIcsDateTime(match[1]);
+	var params = match[1] || '';
+	var value = match[2].trim();
+	var isDateOnly = /VALUE=DATE/i.test(params);
+	var tzid = null;
+	var tzMatch = /TZID=([^;]+)/i.exec(params);
+	if (tzMatch) tzid = tzMatch[1].trim();
+	var ts = parseIcsDateTime(value, tzid, tzOffsets);
+	if (ts === null) return null;
+	return { ts: ts, isDateOnly: isDateOnly };
 }
 
 var ICS_BYDAY = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
@@ -774,6 +844,7 @@ function parseIcsEvents(icsText, maxEvents, nowSec, windowStart, windowEnd) {
 	var events = [];
 	if (!icsText) return events;
 
+	var tzOffsets = parseIcsTimezoneOffsets(icsText);
 	var unfolded = unfoldIcsText(icsText);
 	var parts = unfolded.split('BEGIN:VEVENT');
 	for (var p = 1; p < parts.length; p++) {
@@ -781,10 +852,18 @@ function parseIcsEvents(icsText, maxEvents, nowSec, windowStart, windowEnd) {
 		var endIdx = block.indexOf('END:VEVENT');
 		if (endIdx >= 0) block = block.substring(0, endIdx);
 
-		var start = extractIcsDate(block, 'DTSTART');
-		if (!start) continue;
-		var end = extractIcsDate(block, 'DTEND');
-		if (!end) end = start + 3600;
+		var startInfo = extractIcsDate(block, 'DTSTART', tzOffsets);
+		if (!startInfo) continue;
+		var start = startInfo.ts;
+		var endInfo = extractIcsDate(block, 'DTEND', tzOffsets);
+		var end;
+		if (endInfo) {
+			end = endInfo.ts;
+		} else if (startInfo.isDateOnly) {
+			end = start + 86400;
+		} else {
+			end = start + 3600;
+		}
 
 		var expanded = expandEventOccurrences(
 			start, end, block, nowSec, windowStart, windowEnd, maxEvents
@@ -940,18 +1019,17 @@ function sendToWatch(payload) {
 		dict[10012] = fTime;
 	}
 
-	if (payload.timeline_events && payload.timeline_events.length > 0) {
-		var starts = [];
-		var ends = [];
-		for (var ei = 0; ei < payload.timeline_events.length && ei < 4; ei++) {
-			starts.push(payload.timeline_events[ei].start);
-			ends.push(payload.timeline_events[ei].end);
-		}
-		dict['TIMELINE_EVENT_STARTS'] = packUint32Array(starts);
-		dict[10037] = packUint32Array(starts);
-		dict['TIMELINE_EVENT_ENDS'] = packUint32Array(ends);
-		dict[10038] = packUint32Array(ends);
+	var timelineEvents = payload.timeline_events || [];
+	var starts = [];
+	var ends = [];
+	for (var ei = 0; ei < timelineEvents.length && ei < 4; ei++) {
+		starts.push(timelineEvents[ei].start);
+		ends.push(timelineEvents[ei].end);
 	}
+	dict['TIMELINE_EVENT_STARTS'] = packUint32Array(starts);
+	dict[10037] = packUint32Array(starts);
+	dict['TIMELINE_EVENT_ENDS'] = packUint32Array(ends);
+	dict[10038] = packUint32Array(ends);
 
 	var nowMs = Date.now();
 	var signature = JSON.stringify(dict);
@@ -1012,6 +1090,7 @@ function fetchCalendarEvents(payload, callback) {
 				parseAndFinish(pText);
 			} else {
 				eventLog.log('cal_fail', err || pErr || 'empty');
+				payload.timeline_events = [];
 				callback(payload);
 			}
 		});

@@ -255,17 +255,22 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 	TimelineEvent events[4];
 	uint8_t count = 0;
 
-	if (starts && starts->type == TUPLE_BYTE_ARRAY && starts->length >= 4) {
-		int num = starts->length / 4;
-		if (num > 4)
-			num = 4;
-		for (int i = 0; i < num; i++) {
-			uint32_t start_ts =
-			    prv_read_uint32_le(starts->value->data, i * 4, starts->length);
-			events[i].start_time = start_ts;
-			events[i].end_time = start_ts + 3600;
-			count++;
+	if (starts && starts->type == TUPLE_BYTE_ARRAY) {
+		if (starts->length >= 4) {
+			int num = starts->length / 4;
+			if (num > 4)
+				num = 4;
+			for (int i = 0; i < num; i++) {
+				uint32_t start_ts =
+				    prv_read_uint32_le(starts->value->data, i * 4, starts->length);
+				events[i].start_time = start_ts;
+				events[i].end_time = start_ts + 3600;
+				count++;
+			}
 		}
+	} else {
+		// Settings-only messages omit timeline keys; keep cached events.
+		return;
 	}
 
 	if (ends && ends->type == TUPLE_BYTE_ARRAY && count > 0) {
@@ -279,6 +284,8 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 
 	if (count > 0) {
 		persist_write_data(STORAGE_KEY_EVENTS, events, count * sizeof(TimelineEvent));
+	} else {
+		persist_delete(STORAGE_KEY_EVENTS);
 	}
 
 	if (s_daylight_layer) {
