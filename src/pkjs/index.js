@@ -523,6 +523,9 @@ function getLastKnownCoordsFromCache() {
  * @returns {number[]}         hourlyCount-element array with values clamped to [0, 255].
  */
 function packUint8Array(values, hourlyCount) {
+	if (hourlyCount == null) {
+		hourlyCount = values ? values.length : 0;
+	}
 	var arr = [];
 	for (var i = 0; i < hourlyCount; i++) {
 		arr.push(Math.min(255, Math.max(0, Math.round(values[i] || 0))));
@@ -1142,8 +1145,8 @@ function sendToWatch(payload) {
 	dict[10037] = packUint32Array(starts);
 	dict['TIMELINE_EVENT_ENDS'] = packUint32Array(ends);
 	dict[10038] = packUint32Array(ends);
-	dict['TIMELINE_EVENT_COLORS'] = packUint8Array(colors);
-	dict[10044] = packUint8Array(colors);
+	dict['TIMELINE_EVENT_COLORS'] = packUint8Array(colors, colors.length);
+	dict[10044] = packUint8Array(colors, colors.length);
 
 	var nowMs = Date.now();
 	var signature = JSON.stringify(dict);
