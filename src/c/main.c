@@ -85,7 +85,6 @@ static uint32_t s_minutes_since_launch;
 // Forward declarations
 static void prv_request_weather(void);
 static void prv_push_weather_to_layers(struct tm *now);
-static void prv_update_pending_state(void);
 static void prv_update_steps(void);
 static void prv_apply_timeline_events(DictionaryIterator *iter);
 
@@ -246,6 +245,13 @@ static uint32_t prv_read_uint32_le(const uint8_t *bytes, int offset, int total_l
 	       ((uint32_t)bytes[offset + 3] << 24);
 }
 
+static void prv_clear_timeline_events(void) {
+	persist_delete(STORAGE_KEY_EVENTS);
+	if (s_daylight_layer) {
+		daylight_layer_set_events(s_daylight_layer, NULL, 0);
+	}
+}
+
 static void prv_apply_timeline_events(DictionaryIterator *iter) {
 	Tuple *starts = dict_find(iter, KEY_TIMELINE_EVENT_STARTS);
 	if (!starts) starts = dict_find(iter, MESSAGE_KEY_TIMELINE_EVENT_STARTS);
@@ -268,6 +274,8 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 				count++;
 			}
 		}
+		// Empty byte array is an intentional clear (calendar off / URL cleared /
+		// successful empty fetch). Do not treat as "omit keys".
 	} else {
 		// Settings-only messages omit timeline keys; keep cached events.
 		return;
@@ -287,6 +295,8 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 		if (s_daylight_layer) {
 			daylight_layer_set_events(s_daylight_layer, events, count);
 		}
+	} else {
+		prv_clear_timeline_events();
 	}
 }
 
@@ -416,7 +426,6 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 		prv_push_weather_to_layers(now_stm);
 	}
 
-	prv_update_pending_state();
 }
 
 static void prv_inbox_dropped(AppMessageResult reason, void *context) {
@@ -448,16 +457,11 @@ static void prv_request_weather(void) {
 		APP_LOG(APP_LOG_LEVEL_WARNING, "Outbox begin failed: reason=%d seq=%lu",
 		        (int)result, (unsigned long)seq);
 	}
-	prv_update_pending_state();
 }
 
 static void prv_battery_handler(BatteryChargeState state) {
 	daylight_layer_set_battery(s_daylight_layer, state.charge_percent,
 	                           state.is_charging);
-}
-
-static void prv_update_pending_state(void) {
-	// Pending state tracking without icon bar
 }
 
 static void prv_update_steps(void) {
@@ -477,7 +481,6 @@ static void prv_bt_handler(bool connected) {
 	if (s_time_layer) {
 		time_layer_set_status(s_time_layer, connected, quiet_time_is_active());
 	}
-	prv_update_pending_state();
 }
 
 static void prv_window_load(Window *window) {
@@ -507,7 +510,7 @@ static void prv_window_load(Window *window) {
 	layer_add_child(root, precip_layer_get_layer(s_precip_layer));
 	y += PRECIP_H;
 
-	// Event layer — positioned below precip, includes grouping visualization
+	// Event layer — WMO weather condition icons (not calendar ICS events)
 	s_event_layer = event_layer_create(GRect(0, y, w, EVENT_H));
 	layer_add_child(root, event_layer_get_layer(s_event_layer));
 	y += EVENT_H;
@@ -561,15 +564,6 @@ static void prv_window_load(Window *window) {
 			uint8_t cnt = read_bytes / sizeof(TimelineEvent);
 			daylight_layer_set_events(s_daylight_layer, stored_events, cnt);
 		}
-	} else if (settings_get()->timeline_event != TIMELINE_EVENT_NONE) {
-		time_t now_t = time(NULL);
-		TimelineEvent default_events[2];
-		default_events[0].start_time = (uint32_t)now_t - 7200;
-		default_events[0].end_time = default_events[0].start_time + 3600;
-		default_events[1].start_time = (uint32_t)now_t + 9000;
-		default_events[1].end_time = default_events[1].start_time + 3600;
-		persist_write_data(STORAGE_KEY_EVENTS, default_events, sizeof(default_events));
-		daylight_layer_set_events(s_daylight_layer, default_events, 2);
 	}
 #endif
 }

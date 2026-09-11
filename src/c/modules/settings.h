@@ -11,11 +11,6 @@
 #include <pebble.h>
 
 typedef enum {
-	BATTERY_DISPLAY_ICON = 0,
-	BATTERY_DISPLAY_PERCENT,
-} BatteryDisplay;
-
-typedef enum {
 	INFILL_FUTURE = 0, // Infill after current time bar (default)
 	INFILL_PAST,       // Infill before current time bar
 	INFILL_ALL,        // Infill across full 30h timeline
@@ -70,9 +65,6 @@ typedef struct {
 	bool temp_unit_celsius;
 	bool light_theme;
 	char date_format[32];
-	GColor accent_color;
-	BatteryDisplay battery_display;
-	bool show_timezone;
 	uint8_t fetch_interval_min;
 	InfillMode infill_mode;
 	NeedleMode needle_mode;

@@ -80,7 +80,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_TIMELINE_EVENT',
 				'label': 'Calendar Events',
-				'description': 'Upcoming calendar events on the timeline.',
+				'description': 'Show ICS events on the daylight timeline. Requires a valid Calendar ICS URL above.',
 				'defaultValue': 1,
 				'options': [
 					{ 'label': 'Blue bar at start time', 'value': 1 },
@@ -92,10 +92,10 @@ module.exports = [
 				'type': 'input',
 				'messageKey': 'SETTING_CALENDAR_ICS_URL',
 				'label': 'Calendar ICS URL',
-				'description': 'iCal/ICS feed URL for upcoming events.',
+				'description': 'Paste a private ICS/iCal subscription URL, then set Calendar Events to Bar or Duration.\n\nHow to get a URL:\n• Google Calendar: Settings → your calendar → Integrate calendar → Secret address in iCal format\n• Outlook / Office 365: Calendar → Share → Publish calendar → ICS link\n• Apple Calendar (iCloud): Calendar sharing → Public Calendar → copy the webcal/ICS link (webcal:// is fine)\n\nLeave blank and/or set Calendar Events to Off to hide events.',
 				'defaultValue': '',
 				'attributes': {
-					'placeholder': 'https://calendar.google.com/calendar/ical/...',
+					'placeholder': 'https://calendar.google.com/calendar/ical/.../basic.ics',
 				},
 			},
 		],

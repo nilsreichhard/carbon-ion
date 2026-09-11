@@ -68,7 +68,9 @@ def build(ctx):
 		if demo_scenario:
 			ctx.env.append_value('CFLAGS', ['-DDEMO_SCENARIO=' + demo_scenario])
 		app_elf = '{}/pebble-app.elf'.format(ctx.env.BUILD_DIR)
-		ctx.pbl_build(source=ctx.path.ant_glob('src/c/**/*.c'), target=app_elf, bin_type='app')
+		c_sources = [n for n in ctx.path.ant_glob('src/c/**/*.c')
+		             if 'icon_bar_layer.c' not in n.abspath()]
+		ctx.pbl_build(source=c_sources, target=app_elf, bin_type='app')
 
 		if build_worker:
 			worker_elf = '{}/pebble-worker.elf'.format(ctx.env.BUILD_DIR)

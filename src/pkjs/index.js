@@ -600,9 +600,41 @@ function parseIcsUtcOffsetMinutes(str) {
  * @param   {string} icsText
  * @returns {Object.<string, number>}
  */
-function parseIcsTimezoneOffsets(icsText) {
+function extractIcsComponentOffset(block, component) {
+	var re = new RegExp('BEGIN:' + component + '([\\s\\S]*?)END:' + component, 'i');
+	var match = re.exec(block);
+	if (!match) return null;
+	var body = match[1];
+	var offMatch = /TZOFFSETTO:([+-]\d{4})/i.exec(body);
+	if (!offMatch) return null;
+	var offMin = parseIcsUtcOffsetMinutes(offMatch[1]);
+	if (offMin === null) return null;
+	var months = [];
+	var byMonth = /BYMONTH=([0-9,]+)/i.exec(body);
+	if (byMonth) {
+		var parts = byMonth[1].split(',');
+		for (var i = 0; i < parts.length; i++) {
+			var m = parseInt(parts[i], 10);
+			if (m >= 1 && m <= 12) months.push(m);
+		}
+	}
+	return { offset: offMin, months: months };
+}
+
+/**
+ * Build a TZID -> UTC offset (minutes east) map from VTIMEZONE blocks.
+ * Prefers STANDARD vs DAYLIGHT using BYMONTH when present, else a
+ * simple northern-hemisphere DST heuristic for the reference instant.
+ *
+ * @param   {string} icsText
+ * @param   {number=} atSec  Unix seconds for DST selection (default: now)
+ * @returns {Object.<string, number>}
+ */
+function parseIcsTimezoneOffsets(icsText, atSec) {
 	var offsets = {};
 	if (!icsText) return offsets;
+	var refSec = (typeof atSec === 'number') ? atSec : Math.floor(Date.now() / 1000);
+	var refMonth = new Date(refSec * 1000).getUTCMonth() + 1;
 
 	var unfolded = unfoldIcsText(icsText);
 	var parts = unfolded.split('BEGIN:VTIMEZONE');
@@ -616,11 +648,24 @@ function parseIcsTimezoneOffsets(icsText) {
 		if (!tzidMatch) continue;
 		var tzid = tzidMatch[1].trim();
 
-		var offsetMatch =
-			/(?:STANDARD|DAYLIGHT)[\s\S]*?TZOFFSETTO:([+-]\d{4})/i.exec(block);
-		if (!offsetMatch) continue;
-		var offMin = parseIcsUtcOffsetMinutes(offsetMatch[1]);
-		if (offMin !== null) offsets[tzid] = offMin;
+		var standard = extractIcsComponentOffset(block, 'STANDARD');
+		var daylight = extractIcsComponentOffset(block, 'DAYLIGHT');
+		var chosen = null;
+		if (standard && daylight) {
+			if (daylight.months.indexOf(refMonth) >= 0) chosen = daylight.offset;
+			else if (standard.months.indexOf(refMonth) >= 0) chosen = standard.offset;
+			else if (refMonth >= 3 && refMonth <= 10) chosen = daylight.offset;
+			else chosen = standard.offset;
+		} else if (daylight) {
+			chosen = daylight.offset;
+		} else if (standard) {
+			chosen = standard.offset;
+		} else {
+			var offsetMatch =
+				/(?:STANDARD|DAYLIGHT)[\s\S]*?TZOFFSETTO:([+-]\d{4})/i.exec(block);
+			if (offsetMatch) chosen = parseIcsUtcOffsetMinutes(offsetMatch[1]);
+		}
+		if (chosen !== null) offsets[tzid] = chosen;
 	}
 	return offsets;
 }
@@ -792,15 +837,33 @@ function expandEventOccurrences(start, end, block, windowStart, windowEnd) {
 	var duration = end - start;
 	var occurrences = [];
 	var rrule = parseRrule(block);
+	var untilSec = null;
+	var maxCount = null;
+	var emitted = 0;
 
-	function addOccurrence(occStart) {
+	if (rrule) {
+		if (rrule.UNTIL) {
+			untilSec = parseIcsDateTime(rrule.UNTIL);
+		}
+		if (rrule.COUNT) {
+			var parsedCount = parseInt(rrule.COUNT, 10);
+			if (!isNaN(parsedCount) && parsedCount > 0) maxCount = parsedCount;
+		}
+	}
+
+	function pushOccurrence(occStart) {
+		if (untilSec !== null && occStart > untilSec) return false;
+		if (maxCount !== null && emitted >= maxCount) return false;
+		emitted++;
 		var occEnd = occStart + duration;
-		if (occEnd < windowStart || occStart > windowEnd) return;
-		occurrences.push({ start: occStart, end: occEnd });
+		if (occEnd >= windowStart && occStart <= windowEnd) {
+			occurrences.push({ start: occStart, end: occEnd });
+		}
+		return maxCount === null || emitted < maxCount;
 	}
 
 	if (!rrule || !rrule.FREQ) {
-		addOccurrence(start);
+		pushOccurrence(start);
 		return occurrences;
 	}
 
@@ -811,11 +874,15 @@ function expandEventOccurrences(start, end, block, windowStart, windowEnd) {
 	if (freq === 'DAILY') {
 		var timeOfDay = start - localMidnightSec(start);
 		var cursor = localMidnightSec(start);
-		while (cursor + timeOfDay + duration < windowStart && safety-- > 0) {
-			cursor += interval * 86400;
-		}
-		while (cursor + timeOfDay <= windowEnd && safety-- > 0) {
-			addOccurrence(cursor + timeOfDay);
+		while (safety-- > 0) {
+			var dailyStart = cursor + timeOfDay;
+			if (dailyStart < start) {
+				cursor += interval * 86400;
+				continue;
+			}
+			if (untilSec !== null && dailyStart > untilSec) break;
+			if (dailyStart > windowEnd && maxCount === null) break;
+			if (!pushOccurrence(dailyStart)) break;
 			cursor += interval * 86400;
 		}
 		return occurrences;
@@ -829,14 +896,19 @@ function expandEventOccurrences(start, end, block, windowStart, windowEnd) {
 		var weeklyTimeOfDay = start - localMidnightSec(start);
 		var weekCursor = localMidnightSec(start);
 		weekCursor -= new Date(weekCursor * 1000).getDay() * 86400;
-		while (weekCursor + 6 * 86400 + weeklyTimeOfDay < windowStart && safety-- > 0) {
-			weekCursor += 7 * interval * 86400;
-		}
-		while (weekCursor <= windowEnd + 7 * 86400 && safety-- > 0) {
+		while (safety-- > 0) {
+			var weekPastWindow = true;
 			for (var d = 0; d < weeklyDays.length; d++) {
-				addOccurrence(weekCursor + weeklyDays[d] * 86400 + weeklyTimeOfDay);
+				var wStart = weekCursor + weeklyDays[d] * 86400 + weeklyTimeOfDay;
+				if (wStart < start) continue;
+				if (untilSec !== null && wStart > untilSec) return occurrences;
+				if (wStart <= windowEnd) weekPastWindow = false;
+				if (wStart > windowEnd && maxCount === null) continue;
+				if (!pushOccurrence(wStart)) return occurrences;
 			}
 			weekCursor += 7 * interval * 86400;
+			if (weekPastWindow && weekCursor > windowEnd && maxCount === null) break;
+			if (maxCount !== null && emitted >= maxCount) break;
 		}
 		return occurrences;
 	}
@@ -849,12 +921,18 @@ function expandEventOccurrences(start, end, block, windowStart, windowEnd) {
 		var monthH = seed.getHours();
 		var monthMi = seed.getMinutes();
 		var monthS = seed.getSeconds();
-		for (var n = 0; n < 36; n++) {
+		for (var n = 0; n < 48; n++) {
 			var occStart = Math.floor(
 				new Date(monthY, monthMo, monthDay, monthH, monthMi, monthS).getTime() / 1000
 			);
-			if (occStart > windowEnd) break;
-			addOccurrence(occStart);
+			if (occStart < start) {
+				monthMo += interval;
+				while (monthMo > 11) { monthMo -= 12; monthY += 1; }
+				continue;
+			}
+			if (untilSec !== null && occStart > untilSec) break;
+			if (occStart > windowEnd && maxCount === null) break;
+			if (!pushOccurrence(occStart)) break;
 			monthMo += interval;
 			while (monthMo > 11) {
 				monthMo -= 12;
@@ -866,20 +944,14 @@ function expandEventOccurrences(start, end, block, windowStart, windowEnd) {
 	return occurrences;
 }
 
-/**
- * Parse upcoming ICS events within the visible timeline window.
- *
- * @param   {string} icsText
- * @param   {number} maxEvents
- * @param   {number} windowStart
- * @param   {number} windowEnd
- * @returns {{start:number,end:number}[]}
- */
 function parseIcsEvents(icsText, maxEvents, windowStart, windowEnd) {
 	var events = [];
 	if (!icsText) return events;
 
-	var tzOffsets = parseIcsTimezoneOffsets(icsText);
+	var tzOffsets = parseIcsTimezoneOffsets(
+		icsText,
+		Math.floor((windowStart + windowEnd) / 2)
+	);
 	var unfolded = unfoldIcsText(icsText);
 	var parts = unfolded.split('BEGIN:VEVENT');
 	for (var p = 1; p < parts.length; p++) {
@@ -1098,10 +1170,17 @@ function sendToWatch(payload) {
  * @returns {string}
  */
 function getCalendarUrl(settings) {
-	var url = normalizeCalendarUrl(
-		getStringSetting(settings, 'SETTING_CALENDAR_ICS_URL', '')
-	);
-	if (!url || url === '[object Object]') {
+	var raw = getStringSetting(settings, 'SETTING_CALENDAR_ICS_URL', '');
+	var url = normalizeCalendarUrl(raw);
+	if (url && url !== '[object Object]') return url;
+
+	// Recover only from Clay corruption ([object Object]), never from an
+	// intentional empty URL (user cleared the field).
+	var rawSetting = settings ? settings['SETTING_CALENDAR_ICS_URL'] : null;
+	var corrupt = (raw === '[object Object]') ||
+		(rawSetting !== null && rawSetting !== undefined &&
+			typeof rawSetting === 'object');
+	if (corrupt) {
 		try {
 			var cached = localStorage.getItem('cached_calendar_url');
 			if (cached && cached !== '[object Object]') {
@@ -1110,6 +1189,10 @@ function getCalendarUrl(settings) {
 		} catch (e) { }
 	}
 	return (url && url !== '[object Object]') ? url : '';
+}
+
+function clearCachedTimelineEvents() {
+	try { localStorage.removeItem('cached_timeline_events'); } catch (e) { }
 }
 
 /**
@@ -1155,10 +1238,28 @@ function filterTimelineEventsInWindow(events, windowStart, windowEnd) {
 	return filtered;
 }
 
-function resolveTimelineEvents(timelineEvent, parsedEvents, windowStart, windowEnd) {
+/**
+ * Resolve timeline events for the watch.
+ *
+ * @param {number} timelineEvent  Clay mode (0=off, 1=bar, 2=span)
+ * @param {Array|null} parsedEvents  Parsed ICS events, [] on success empty,
+ *                                   null when no successful parse this cycle
+ * @param {number} windowStart
+ * @param {number} windowEnd
+ * @param {{hasUrl:boolean, fetchFailed:boolean}=} opts
+ * @returns {{start:number,end:number}[]}
+ */
+function resolveTimelineEvents(timelineEvent, parsedEvents, windowStart, windowEnd, opts) {
+	opts = opts || {};
+	var hasUrl = !!opts.hasUrl;
+	var fetchFailed = !!opts.fetchFailed;
+
 	if (timelineEvent === 0) {
+		clearCachedTimelineEvents();
+		eventLog.log('cal_off', 'clear');
 		return [];
 	}
+
 	if (parsedEvents && parsedEvents.length > 0) {
 		try {
 			localStorage.setItem(
@@ -1168,6 +1269,36 @@ function resolveTimelineEvents(timelineEvent, parsedEvents, windowStart, windowE
 		eventLog.log('cal_ok', 'n=' + parsedEvents.length);
 		return parsedEvents;
 	}
+
+	// Successful fetch/parse with zero events in window: show nothing.
+	if (parsedEvents && parsedEvents.length === 0 && hasUrl && !fetchFailed) {
+		eventLog.log('cal_empty', 'ok');
+		return [];
+	}
+
+	// No URL configured: never seed fake meetings for normal users.
+	if (!hasUrl) {
+		clearCachedTimelineEvents();
+		eventLog.log('cal_nourl', 'clear');
+		return [];
+	}
+
+	// Transient network/parse failure: keep last good cache to avoid flicker.
+	if (fetchFailed) {
+		var cachedFail = readCachedTimelineEvents();
+		if (cachedFail && cachedFail.length > 0) {
+			var kept = filterTimelineEventsInWindow(
+				cachedFail, windowStart, windowEnd
+			);
+			if (kept.length > 0) {
+				eventLog.log('cal_cache', 'n=' + kept.length);
+				return kept;
+			}
+		}
+		eventLog.log('cal_fail_keep', 'empty');
+		return [];
+	}
+
 	var cached = readCachedTimelineEvents();
 	if (cached && cached.length > 0) {
 		var inWindow = filterTimelineEventsInWindow(
@@ -1178,8 +1309,7 @@ function resolveTimelineEvents(timelineEvent, parsedEvents, windowStart, windowE
 			return inWindow;
 		}
 	}
-	eventLog.log('cal_sample', 'fallback');
-	return getSampleTimelineEvents();
+	return [];
 }
 
 function fetchCalendarEvents(payload, callback) {
@@ -1189,10 +1319,19 @@ function fetchCalendarEvents(payload, callback) {
 		getStringSetting(settings, 'SETTING_TIMELINE_EVENT', '1'), 10
 	);
 	var win = getTimelineEventWindow();
+	var resolveOpts = { hasUrl: !!url, fetchFailed: false };
+
+	if (timelineEvent === 0) {
+		payload.timeline_events = resolveTimelineEvents(
+			timelineEvent, [], win.windowStart, win.windowEnd, resolveOpts
+		);
+		callback(payload);
+		return;
+	}
 
 	if (!url) {
 		payload.timeline_events = resolveTimelineEvents(
-			timelineEvent, null, win.windowStart, win.windowEnd
+			timelineEvent, null, win.windowStart, win.windowEnd, resolveOpts
 		);
 		callback(payload);
 		return;
@@ -1203,7 +1342,8 @@ function fetchCalendarEvents(payload, callback) {
 			text, 4, win.windowStart, win.windowEnd
 		);
 		payload.timeline_events = resolveTimelineEvents(
-			timelineEvent, parsed, win.windowStart, win.windowEnd
+			timelineEvent, parsed, win.windowStart, win.windowEnd,
+			{ hasUrl: true, fetchFailed: false }
 		);
 		callback(payload);
 	}
@@ -1228,7 +1368,8 @@ function fetchCalendarEvents(payload, callback) {
 				} else {
 					eventLog.log('cal_fail', err || pErr || bErr || 'empty');
 					payload.timeline_events = resolveTimelineEvents(
-						timelineEvent, null, win.windowStart, win.windowEnd
+						timelineEvent, null, win.windowStart, win.windowEnd,
+						{ hasUrl: true, fetchFailed: true }
 					);
 					callback(payload);
 				}
@@ -1615,6 +1756,11 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		var cleanUrl = extractString(rawSettings['SETTING_CALENDAR_ICS_URL']).trim();
 		if (cleanUrl && cleanUrl !== '[object Object]') {
 			localStorage.setItem('cached_calendar_url', cleanUrl);
+		} else {
+			try {
+				localStorage.removeItem('cached_calendar_url');
+				localStorage.removeItem('cached_timeline_events');
+			} catch (clearErr) { }
 		}
 	} catch (err) { }
 
@@ -1637,22 +1783,10 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		dict['SETTING_DATE_FORMAT'] = dateFormat;
 	}
 
-	var batteryDisplay = extractInt(rawSettings['SETTING_BATTERY_DISPLAY']);
-	if (!isNaN(batteryDisplay)) {
-		dict[10018] = batteryDisplay;
-		dict['SETTING_BATTERY_DISPLAY'] = batteryDisplay;
-	}
-
 	var fetchInterval = extractInt(rawSettings['SETTING_FETCH_INTERVAL']);
 	if (fetchInterval === 15 || fetchInterval === 30 || fetchInterval === 60) {
 		dict[10015] = fetchInterval;
 		dict['SETTING_FETCH_INTERVAL'] = fetchInterval;
-	}
-
-	var showTimezone = extractBool(rawSettings['SETTING_SHOW_TIMEZONE']);
-	if (showTimezone !== null) {
-		dict[10019] = showTimezone;
-		dict['SETTING_SHOW_TIMEZONE'] = showTimezone;
 	}
 
 	var forecastHours = extractInt(rawSettings['SETTING_FORECAST_HOURS']);

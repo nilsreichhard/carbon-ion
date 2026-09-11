@@ -260,7 +260,7 @@ TimeLayer *time_layer_create(GRect frame) {
 
 	// Step count — right of time row, vertically centered in the time band
 	int tz_ampm_y = time_y + TL_TIME_PAD + (TL_TIME_H - TL_TIME_PAD - 18) / 2;
-	GFont step_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+	GFont step_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
 	tl->step_label = text_layer_create(GRect(w - 38, tz_ampm_y, 34, 18));
 	text_layer_set_background_color(tl->step_label, GColorClear);
 	text_layer_set_text_color(tl->step_label, GColorLightGray);

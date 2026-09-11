@@ -19,9 +19,6 @@ static const Settings s_defaults = {
     .temp_unit_celsius = true,
     .light_theme = false,
     .date_format = "%A, %m/%d",
-    .accent_color = {.argb = 0b11111111}, // GColorWhite
-    .battery_display = BATTERY_DISPLAY_ICON,
-    .show_timezone = false,
     .fetch_interval_min = 30,
     .infill_mode = INFILL_FUTURE,
     .needle_mode = NEEDLE_BOTH,
@@ -80,26 +77,6 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		        sizeof(s_settings.date_format) - 1);
 		s_settings.date_format[sizeof(s_settings.date_format) - 1] = '\0';
 	}
-
-	t = dict_find(iter, MESSAGE_KEY_SETTING_ACCENT_COLOR);
-	if (!t) t = dict_find(iter, 10016);
-	if (t) {
-		s_settings.accent_color = GColorFromHEX(t->value->int32);
-	}
-
-	t = dict_find(iter, MESSAGE_KEY_SETTING_BATTERY_DISPLAY);
-	if (!t) t = dict_find(iter, 10018);
-	if (t) {
-		int bd = prv_tuple_int(t);
-		if (bd >= 0 && bd < 2) {
-			s_settings.battery_display = (BatteryDisplay)bd;
-		}
-	}
-
-	t = dict_find(iter, MESSAGE_KEY_SETTING_SHOW_TIMEZONE);
-	if (!t) t = dict_find(iter, 10019);
-	if (t)
-		s_settings.show_timezone = (prv_tuple_int(t) != 0);
 
 	t = dict_find(iter, MESSAGE_KEY_SETTING_FETCH_INTERVAL);
 	if (!t) t = dict_find(iter, 10015);

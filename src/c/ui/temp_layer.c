@@ -258,15 +258,18 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int label_x = 32;
 	GColor text_color = is_light ? GColorBlack : GColorWhite;
 	graphics_context_set_text_color(ctx, text_color);
-	int y_high = (zone_h - sm_h) / 2;
-	if (y_high < 1) y_high = 1;
+	/* Nudge all three labels slightly upward so min temp clears the bottom edge. */
+	const int label_lift = 3;
+	int y_high = (zone_h - sm_h) / 2 - label_lift;
+	if (y_high < 0) y_high = 0;
 	if (y_high + sm_h > zone_h) y_high = zone_h - sm_h;
-	int y_curr = zone_h + (zone_h - md_h) / 2;
+	int y_curr = zone_h + (zone_h - md_h) / 2 - label_lift;
 	if (y_curr < y_high + sm_h - 2) y_curr = y_high + sm_h - 2;
 	if (y_curr + md_h > 2 * zone_h) y_curr = 2 * zone_h - md_h;
-	int y_low = 2 * zone_h + (zone_h - sm_h) / 2;
+	int y_low = 2 * zone_h + (zone_h - sm_h) / 2 - label_lift;
 	if (y_low < y_curr + md_h - 2) y_low = y_curr + md_h - 2;
-	if (y_low + sm_h > lh - 1) y_low = lh - 1 - sm_h;
+	if (y_low + sm_h > lh - 2) y_low = lh - 2 - sm_h;
+	if (y_low < 0) y_low = 0;
 
 	graphics_draw_text(ctx, high_buf, font_sm,
 	                   GRect(2, y_high, label_x, sm_h),

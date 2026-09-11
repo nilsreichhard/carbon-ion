@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
-  "hash": "b9f251e",
-  "branch": "master",
-  "dirty": true,
-  "buildDate": "2026-09-10T15:11:33.068327+00:00"
+  "hash": "ad824ac",
+  "branch": "feature/calendar-events-and-audit-fixes",
+  "dirty": false,
+  "buildDate": "2026-09-11T06:51:01.017028+00:00"
 }
