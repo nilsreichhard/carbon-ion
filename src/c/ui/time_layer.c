@@ -258,14 +258,14 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text(tl->time_label, tl->time_buf);
 	layer_add_child(tl->container, text_layer_get_layer(tl->time_label));
 
-	// Step count — right of time row, vertically centered in the time band
+	// Step count — right of time row, horizontally centered in its slot
 	int tz_ampm_y = time_y + TL_TIME_PAD + (TL_TIME_H - TL_TIME_PAD - 18) / 2;
 	GFont step_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
-	tl->step_label = text_layer_create(GRect(w - 38, tz_ampm_y, 34, 18));
+	tl->step_label = text_layer_create(GRect(w - 40, tz_ampm_y, 36, 18));
 	text_layer_set_background_color(tl->step_label, GColorClear);
 	text_layer_set_text_color(tl->step_label, GColorLightGray);
 	text_layer_set_font(tl->step_label, step_font);
-	text_layer_set_text_alignment(tl->step_label, GTextAlignmentRight);
+	text_layer_set_text_alignment(tl->step_label, GTextAlignmentCenter);
 	text_layer_set_text(tl->step_label, tl->step_buf);
 	layer_set_hidden(text_layer_get_layer(tl->step_label), true);
 	layer_add_child(tl->container, text_layer_get_layer(tl->step_label));
@@ -394,8 +394,13 @@ void time_layer_set_steps(TimeLayer *layer, int steps) {
 		return;
 	if (steps < 0)
 		steps = 0;
-	snprintf(layer->step_buf, sizeof(layer->step_buf), "%d", steps / 1000);
+	int thousands = steps / 1000;
+	bool show = settings_get()->show_step_count && thousands >= 1;
+	if (show) {
+		snprintf(layer->step_buf, sizeof(layer->step_buf), "%d", thousands);
+	} else {
+		layer->step_buf[0] = '\0';
+	}
 	text_layer_set_text(layer->step_label, layer->step_buf);
-	layer_set_hidden(text_layer_get_layer(layer->step_label),
-	                 !settings_get()->show_step_count);
+	layer_set_hidden(text_layer_get_layer(layer->step_label), !show);
 }

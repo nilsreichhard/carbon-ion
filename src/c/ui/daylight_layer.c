@@ -13,7 +13,7 @@
 #include "graph_common.h"
 #include <stddef.h>
 
-#define MAX_TIMELINE_EVENTS 4
+#define MAX_TIMELINE_EVENTS 6
 
 struct DaylightLayer {
 	Layer *layer;
@@ -111,13 +111,13 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 	}
 }
 
-// Start-only events: short vertical bar (~3px wide, reduced height).
+// Start-only events: short vertical bar (~3px wide, compact height).
 static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col) {
 	graphics_context_set_fill_color(ctx, col);
-	graphics_fill_rect(ctx, GRect(x - 1, line_y - 3, 3, 7), 0, GCornerNone);
+	graphics_fill_rect(ctx, GRect(x - 1, line_y - 2, 3, 5), 0, GCornerNone);
 }
 
-// Duration events: solid block spanning [x0,x1] with reduced height.
+// Duration events: solid block spanning [x0,x1] with compact height.
 static void prv_draw_event_span(GContext *ctx, int x0, int x1, int line_y, GColor col) {
 	int left = x0 < x1 ? x0 : x1;
 	int right = x0 < x1 ? x1 : x0;
@@ -125,8 +125,30 @@ static void prv_draw_event_span(GContext *ctx, int x0, int x1, int line_y, GColo
 	if (width < 3)
 		width = 3;
 	graphics_context_set_fill_color(ctx, col);
-	graphics_fill_rect(ctx, GRect(left, line_y - 3, width, 7), 0, GCornerNone);
+	graphics_fill_rect(ctx, GRect(left, line_y - 2, width, 5), 0, GCornerNone);
 }
+
+#if defined(PBL_COLOR)
+static GColor prv_event_color(uint8_t id, bool is_light) {
+	switch (id) {
+	case 1: return GColorBlue;
+	case 2: return GColorGreen;
+	case 3: return GColorRed;
+	case 4: return GColorOrange;
+	case 5: return GColorPurple;
+	case 6: return GColorYellow;
+	case 7: return GColorMagenta;
+	case 0:
+	default:
+		return is_light ? GColorVividCerulean : GColorCyan;
+	}
+}
+#else
+static GColor prv_event_color(uint8_t id, bool is_light) {
+	(void)id;
+	return is_light ? GColorBlack : GColorWhite;
+}
+#endif
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
 	DaylightLayer *dl = *(DaylightLayer **)layer_get_data(layer);
@@ -323,16 +345,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// 7. Upcoming calendar event indicators
+	// 7. Upcoming calendar event indicators (per-calendar color)
 	TimelineEventMode event_mode = settings_get()->timeline_event;
 	if (event_mode != TIMELINE_EVENT_NONE && dl->event_count > 0) {
 		time_t now = time(NULL);
 		int x_now = graph_x + graph_w / 5;
-#if defined(PBL_COLOR)
-		GColor event_col = is_light ? GColorVividCerulean : GColorCyan;
-#else
-		GColor event_col = is_light ? GColorBlack : GColorWhite;
-#endif
 		long window_start = (long)now - (long)past_hours * 3600L;
 		long window_end = (long)now + (long)forecast_hours * 3600L;
 
@@ -342,6 +359,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			if (start_sec > window_end || end_sec < window_start)
 				continue;
 
+			GColor event_col = prv_event_color(dl->events[i].color, is_light);
 			long diff_sec = start_sec - (long)now;
 			int x = x_now + (int)((diff_sec * (long)graph_w) /
 			                      (3600L * (long)total_hours));

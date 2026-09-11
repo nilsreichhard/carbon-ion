@@ -325,12 +325,15 @@ function sanitizeClaySettingsStorage() {
 		if (!settings || typeof settings !== 'object') return;
 
 		var flatSettings = flattenClaySettings(settings);
-		var calUrl = flatSettings['SETTING_CALENDAR_ICS_URL'];
-		if (calUrl === '[object Object]' ||
-			(calUrl !== null && typeof calUrl === 'object')) {
-			flatSettings['SETTING_CALENDAR_ICS_URL'] =
-				localStorage.getItem('cached_calendar_url') || '';
+		function bootRepairCal(key, cacheKey) {
+			var v = flatSettings[key];
+			if (v === '[object Object]' || typeof v === 'object') {
+				flatSettings[key] = localStorage.getItem(cacheKey) || '';
+			}
 		}
+		bootRepairCal('SETTING_CALENDAR_ICS_URL', 'cached_calendar_url');
+		bootRepairCal('SETTING_CALENDAR_ICS_URL_2', 'cached_calendar_url_2');
+		bootRepairCal('SETTING_CALENDAR_ICS_URL_3', 'cached_calendar_url_3');
 
 		if (JSON.stringify(flatSettings) !== raw) {
 			localStorage.setItem('clay-settings', JSON.stringify(flatSettings));
@@ -1129,14 +1132,18 @@ function sendToWatch(payload) {
 	var timelineEvents = payload.timeline_events || [];
 	var starts = [];
 	var ends = [];
-	for (var ei = 0; ei < timelineEvents.length && ei < 4; ei++) {
+	var colors = [];
+	for (var ei = 0; ei < timelineEvents.length && ei < 6; ei++) {
 		starts.push(timelineEvents[ei].start);
 		ends.push(timelineEvents[ei].end);
+		colors.push((timelineEvents[ei].color | 0) & 0x07);
 	}
 	dict['TIMELINE_EVENT_STARTS'] = packUint32Array(starts);
 	dict[10037] = packUint32Array(starts);
 	dict['TIMELINE_EVENT_ENDS'] = packUint32Array(ends);
 	dict[10038] = packUint32Array(ends);
+	dict['TIMELINE_EVENT_COLORS'] = packUint8Array(colors);
+	dict[10044] = packUint8Array(colors);
 
 	var nowMs = Date.now();
 	var signature = JSON.stringify(dict);
@@ -1169,26 +1176,62 @@ function sendToWatch(payload) {
  * @param   {Object} settings
  * @returns {string}
  */
-function getCalendarUrl(settings) {
-	var raw = getStringSetting(settings, 'SETTING_CALENDAR_ICS_URL', '');
+function sanitizeCalendarUrlSetting(settings, key, cacheKey) {
+	var raw = getStringSetting(settings, key, '');
 	var url = normalizeCalendarUrl(raw);
 	if (url && url !== '[object Object]') return url;
 
-	// Recover only from Clay corruption ([object Object]), never from an
-	// intentional empty URL (user cleared the field).
-	var rawSetting = settings ? settings['SETTING_CALENDAR_ICS_URL'] : null;
+	var rawSetting = settings ? settings[key] : null;
 	var corrupt = (raw === '[object Object]') ||
 		(rawSetting !== null && rawSetting !== undefined &&
 			typeof rawSetting === 'object');
 	if (corrupt) {
 		try {
-			var cached = localStorage.getItem('cached_calendar_url');
+			var cached = localStorage.getItem(cacheKey);
 			if (cached && cached !== '[object Object]') {
 				url = normalizeCalendarUrl(cached);
 			}
 		} catch (e) { }
 	}
 	return (url && url !== '[object Object]') ? url : '';
+}
+
+function getCalendarColorSetting(settings, key, fallback) {
+	var n = parseInt(getStringSetting(settings, key, String(fallback)), 10);
+	if (isNaN(n) || n < 0 || n > 7) return fallback;
+	return n;
+}
+
+/** @returns {{url:string,color:number,cacheKey:string}[]} */
+function getConfiguredCalendars(settings) {
+	return [
+		{
+			url: sanitizeCalendarUrlSetting(
+				settings, 'SETTING_CALENDAR_ICS_URL', 'cached_calendar_url'
+			),
+			color: getCalendarColorSetting(settings, 'SETTING_CALENDAR_COLOR_1', 0),
+			cacheKey: 'cached_calendar_url',
+		},
+		{
+			url: sanitizeCalendarUrlSetting(
+				settings, 'SETTING_CALENDAR_ICS_URL_2', 'cached_calendar_url_2'
+			),
+			color: getCalendarColorSetting(settings, 'SETTING_CALENDAR_COLOR_2', 2),
+			cacheKey: 'cached_calendar_url_2',
+		},
+		{
+			url: sanitizeCalendarUrlSetting(
+				settings, 'SETTING_CALENDAR_ICS_URL_3', 'cached_calendar_url_3'
+			),
+			color: getCalendarColorSetting(settings, 'SETTING_CALENDAR_COLOR_3', 4),
+			cacheKey: 'cached_calendar_url_3',
+		},
+	].filter(function (c) { return !!c.url; });
+}
+
+function getCalendarUrl(settings) {
+	var cals = getConfiguredCalendars(settings);
+	return cals.length ? cals[0].url : '';
 }
 
 function clearCachedTimelineEvents() {
@@ -1229,7 +1272,7 @@ function readCachedTimelineEvents() {
 
 function filterTimelineEventsInWindow(events, windowStart, windowEnd) {
 	var filtered = [];
-	for (var i = 0; i < events.length && filtered.length < 4; i++) {
+	for (var i = 0; i < events.length && filtered.length < 6; i++) {
 		var ev = events[i];
 		if (ev.start < windowEnd && ev.end > windowStart) {
 			filtered.push(ev);
@@ -1314,12 +1357,13 @@ function resolveTimelineEvents(timelineEvent, parsedEvents, windowStart, windowE
 
 function fetchCalendarEvents(payload, callback) {
 	var settings = readClaySettings();
-	var url = getCalendarUrl(settings);
+	var calendars = getConfiguredCalendars(settings);
 	var timelineEvent = parseInt(
 		getStringSetting(settings, 'SETTING_TIMELINE_EVENT', '1'), 10
 	);
 	var win = getTimelineEventWindow();
-	var resolveOpts = { hasUrl: !!url, fetchFailed: false };
+	var hasUrl = calendars.length > 0;
+	var resolveOpts = { hasUrl: hasUrl, fetchFailed: false };
 
 	if (timelineEvent === 0) {
 		payload.timeline_events = resolveTimelineEvents(
@@ -1329,7 +1373,7 @@ function fetchCalendarEvents(payload, callback) {
 		return;
 	}
 
-	if (!url) {
+	if (!hasUrl) {
 		payload.timeline_events = resolveTimelineEvents(
 			timelineEvent, null, win.windowStart, win.windowEnd, resolveOpts
 		);
@@ -1337,45 +1381,67 @@ function fetchCalendarEvents(payload, callback) {
 		return;
 	}
 
-	function parseAndFinish(text) {
-		var parsed = parseIcsEvents(
-			text, 4, win.windowStart, win.windowEnd
-		);
+	var pending = calendars.length;
+	var merged = [];
+	var anyOk = false;
+	var anyFail = false;
+
+	function finishOne() {
+		pending--;
+		if (pending > 0) return;
+		merged.sort(function (a, b) { return a.start - b.start; });
+		var parsed = anyOk ? merged.slice(0, 6) : null;
 		payload.timeline_events = resolveTimelineEvents(
 			timelineEvent, parsed, win.windowStart, win.windowEnd,
-			{ hasUrl: true, fetchFailed: false }
+			{ hasUrl: true, fetchFailed: !anyOk && anyFail }
 		);
 		callback(payload);
 	}
 
-	xhrGet(url, function (err, responseText) {
-		if (!err && responseText && responseText.indexOf('BEGIN:VCALENDAR') >= 0) {
-			parseAndFinish(responseText);
-			return;
+	function fetchOne(cal) {
+		function accept(text) {
+			var parsed = parseIcsEvents(
+				text, 6, win.windowStart, win.windowEnd
+			);
+			for (var i = 0; i < parsed.length; i++) {
+				merged.push({
+					start: parsed[i].start,
+					end: parsed[i].end,
+					color: cal.color,
+				});
+			}
+			anyOk = true;
+			finishOne();
 		}
-		// Fallback via CORS proxy if direct fetch was blocked by phone WebKit
-		var proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
-		xhrGet(proxyUrl, function (pErr, pText) {
-			if (!pErr && pText && pText.indexOf('BEGIN:VCALENDAR') >= 0) {
-				parseAndFinish(pText);
+		xhrGet(cal.url, function (err, responseText) {
+			if (!err && responseText && responseText.indexOf('BEGIN:VCALENDAR') >= 0) {
+				accept(responseText);
 				return;
 			}
-			var backupProxyUrl = 'https://api.allorigins.win/raw?url=' +
-				encodeURIComponent(url);
-			xhrGet(backupProxyUrl, function (bErr, bText) {
-				if (!bErr && bText && bText.indexOf('BEGIN:VCALENDAR') >= 0) {
-					parseAndFinish(bText);
-				} else {
-					eventLog.log('cal_fail', err || pErr || bErr || 'empty');
-					payload.timeline_events = resolveTimelineEvents(
-						timelineEvent, null, win.windowStart, win.windowEnd,
-						{ hasUrl: true, fetchFailed: true }
-					);
-					callback(payload);
+			var proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(cal.url);
+			xhrGet(proxyUrl, function (pErr, pText) {
+				if (!pErr && pText && pText.indexOf('BEGIN:VCALENDAR') >= 0) {
+					accept(pText);
+					return;
 				}
+				var backupProxyUrl = 'https://api.allorigins.win/raw?url=' +
+					encodeURIComponent(cal.url);
+				xhrGet(backupProxyUrl, function (bErr, bText) {
+					if (!bErr && bText && bText.indexOf('BEGIN:VCALENDAR') >= 0) {
+						accept(bText);
+					} else {
+						eventLog.log('cal_fail', err || pErr || bErr || 'empty');
+						anyFail = true;
+						finishOne();
+					}
+				});
 			});
 		});
-	});
+	}
+
+	for (var ci = 0; ci < calendars.length; ci++) {
+		fetchOne(calendars[ci]);
+	}
 }
 
 function fetchAndSend(lat, lon, isStaticLocation) {
@@ -1747,20 +1813,32 @@ Pebble.addEventListener('webviewclosed', function (e) {
 
 	try {
 		var flatSettings = flattenClaySettings(rawSettings);
-		if (flatSettings['SETTING_CALENDAR_ICS_URL'] === '[object Object]' ||
-			typeof flatSettings['SETTING_CALENDAR_ICS_URL'] === 'object') {
-			flatSettings['SETTING_CALENDAR_ICS_URL'] =
-				localStorage.getItem('cached_calendar_url') || '';
+		function repairCalUrl(key, cacheKey) {
+			if (flatSettings[key] === '[object Object]' ||
+				typeof flatSettings[key] === 'object') {
+				flatSettings[key] = localStorage.getItem(cacheKey) || '';
+			}
 		}
+		repairCalUrl('SETTING_CALENDAR_ICS_URL', 'cached_calendar_url');
+		repairCalUrl('SETTING_CALENDAR_ICS_URL_2', 'cached_calendar_url_2');
+		repairCalUrl('SETTING_CALENDAR_ICS_URL_3', 'cached_calendar_url_3');
 		localStorage.setItem('clay-settings', JSON.stringify(flatSettings));
-		var cleanUrl = extractString(rawSettings['SETTING_CALENDAR_ICS_URL']).trim();
-		if (cleanUrl && cleanUrl !== '[object Object]') {
-			localStorage.setItem('cached_calendar_url', cleanUrl);
-		} else {
-			try {
-				localStorage.removeItem('cached_calendar_url');
-				localStorage.removeItem('cached_timeline_events');
-			} catch (clearErr) { }
+
+		function cacheCalUrl(rawKey, cacheKey) {
+			var cleanUrl = extractString(rawSettings[rawKey]).trim();
+			if (cleanUrl && cleanUrl !== '[object Object]') {
+				localStorage.setItem(cacheKey, cleanUrl);
+				return true;
+			}
+			try { localStorage.removeItem(cacheKey); } catch (e) { }
+			return false;
+		}
+		var anyUrl = false;
+		anyUrl = cacheCalUrl('SETTING_CALENDAR_ICS_URL', 'cached_calendar_url') || anyUrl;
+		anyUrl = cacheCalUrl('SETTING_CALENDAR_ICS_URL_2', 'cached_calendar_url_2') || anyUrl;
+		anyUrl = cacheCalUrl('SETTING_CALENDAR_ICS_URL_3', 'cached_calendar_url_3') || anyUrl;
+		if (!anyUrl) {
+			try { localStorage.removeItem('cached_timeline_events'); } catch (clearErr) { }
 		}
 	} catch (err) { }
 

@@ -16,8 +16,8 @@ Developed by **Nils Reich** ([@nilsreichhard](https://github.com/nilsreichhard))
 - **Continuous Astronomical Daylight Track**: Full-width 3px baseline track, multi-day daylight spans with sunrise/sunset delimiter brackets, and per-midnight astronomical lunar phases.
 - **Hourly Timeline Axis Scale**: Bottom ticks marking hourly intervals (3px) and solar noon/midnight milestones (5px).
 - **Dead-Center Time & Zero-Overlap Status Icons**: Large bold digital clock with date below, city and condition icon above, and dedicated left margin for Bluetooth alert and Quiet Time bell runes.
-- **Daily Step Counter**: Clean, compact step count in thousands (`1`, `2`, `10`) right-aligned on the right side of the clock row.
-- **Timeline Calendar Events**: Projects approaching events onto the **daylight** timeline track as a short vertical blue bar (start-only) or a solid blue duration block, powered by iCal/ICS calendar feeds. (WMO weather icons live on `event_layer`, not calendar events.)
+- **Daily Step Counter**: Compact thousands count (`1`, `2`, `10`) centered on the right of the clock row; hidden under 1k steps.
+- **Timeline Calendar Events**: Up to **3 ICS calendars**, each with its own color. Events draw on the **daylight** track as a short bar (start-only) or solid duration block. (WMO weather icons live on `event_layer`, not calendar events.)
 - **Precipitation & Cloud Density Tracks**: Inverted rain histogram and vector cloud lobes.
 - **Theme Parity**: Full Dark Theme and Light Theme support.
 
@@ -29,7 +29,7 @@ Configurable on your phone via Pebble app settings (Clay):
 - **Current Time Needle**: Top track & meteogram, Top track only, Bottom meteogram only, or Hidden.
 - **Timeline Battery Markers**: 20% yellow / 10% orange / 0% red, 10% orange / 0% red, 0% red, or None.
 - **Calendar Events**: Blue bar at start time, Duration span, or Off.
-- **Calendar ICS URL**: Paste a private iCal/ICS link from Google Calendar, Apple iCloud, or Outlook (see settings page how-to). Leave blank / set Calendar Events Off to clear.
+- **Calendars (×3)**: Paste private ICS URLs and choose a color per calendar. Leave blank / set Calendar Events Off to clear.
 - **Color Theme**: Dark (Black) or Light (White).
 - **Bluetooth Disconnect Alert**: Show red alert icon when disconnected.
 - **Silent Mode Indicator**: Show muted bell icon when Quiet Time is active.
