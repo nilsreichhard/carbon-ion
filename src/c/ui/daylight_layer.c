@@ -155,9 +155,13 @@ static GColor prv_event_color(uint8_t id, bool is_light) {
 #endif
 
 
-// Pixel x for a time offset from "now" (needle at 1/5), minute-accurate.
+// Pixel x for a time offset from "now" (needle at 1/5). Round to nearest px.
 static int prv_x_from_now_diff(long diff_sec, int x_now, int graph_w, int total_hours) {
-	return x_now + (int)((diff_sec * (long)graph_w) / (3600L * (long)total_hours));
+	long denom = 3600L * (long)total_hours;
+	long num = diff_sec * (long)graph_w;
+	if (num >= 0)
+		return x_now + (int)((num + denom / 2) / denom);
+	return x_now + (int)((num - denom / 2) / denom);
 }
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
@@ -179,30 +183,33 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	GColor day_col = is_light ? GColorLightGray : GColorWhite;
 	GColor bracket_col = is_light ? GColorBlack : GColorWhite;
 
+	// One live clock for markers + events (avoids stale current_minute drift)
 	time_t now_sec = time(NULL);
+	struct tm *tm_now = localtime(&now_sec);
+	int cur_h = tm_now ? tm_now->tm_hour : (int)dl->current_hour;
+	int cur_m = tm_now ? tm_now->tm_min : (int)dl->current_minute;
+	int cur_s = tm_now ? tm_now->tm_sec : 0;
 	int x_now_mark = graph_x + graph_w / 5;
-	int cur_h = (int)dl->current_hour;
-	int cur_m = (int)dl->current_minute;
 	int rise_h = (int)dl->sunrise_hour;
 	int rise_m = (int)dl->sunrise_minute;
 	int set_h = (int)dl->sunset_hour;
 	int set_m = (int)dl->sunset_minute;
 
-	// Seconds from now to today's sunrise/sunset/noon/midnight (minute-accurate)
-	long rise_from_now = ((rise_h - cur_h) * 60 + (rise_m - cur_m)) * 60L;
-	long set_from_now = ((set_h - cur_h) * 60 + (set_m - cur_m)) * 60L;
+	// Seconds from now to today's sunrise/sunset/noon/midnight
+	long rise_from_now =
+	    ((rise_h - cur_h) * 60 + (rise_m - cur_m)) * 60L - cur_s;
+	long set_from_now =
+	    ((set_h - cur_h) * 60 + (set_m - cur_m)) * 60L - cur_s;
 	if (set_from_now <= rise_from_now)
 		set_from_now += 86400L;
-	long noon_from_now = ((12 - cur_h) * 60 - cur_m) * 60L;
-	long midn_from_now = ((24 - cur_h) * 60 - cur_m) * 60L;
+	long noon_from_now = ((12 - cur_h) * 60 - cur_m) * 60L - cur_s;
+	long midn_from_now = ((24 - cur_h) * 60 - cur_m) * 60L - cur_s;
 
-	// 1. Night track full width
-	graphics_context_set_stroke_width(ctx, 3);
-	graphics_context_set_stroke_color(ctx, night_col);
-	graphics_draw_line(ctx, GPoint(graph_x, line_y), GPoint(graph_x + graph_w, line_y));
+	// 1. Night track full width — filled so it is a solid bar, not a hairline
+	graphics_context_set_fill_color(ctx, night_col);
+	graphics_fill_rect(ctx, GRect(graph_x, line_y - 1, graph_w, 3), 0, GCornerNone);
 
-	// 2. Daylight spans + sunrise/sunset brackets (minute-accurate)
-	graphics_context_set_stroke_color(ctx, day_col);
+	// 2. Daylight spans as opaque fill (covers night; grey "infill" look)
 	for (int day = -3; day <= 3; day++) {
 		long rd = rise_from_now + (long)day * 86400L;
 		long sd = set_from_now + (long)day * 86400L;
@@ -211,12 +218,20 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		int x1 = xr < graph_x ? graph_x : xr;
 		int x2 = xs > graph_x + graph_w ? graph_x + graph_w : xs;
 		if (x2 > x1) {
-			graphics_context_set_stroke_width(ctx, 3);
-			graphics_context_set_stroke_color(ctx, day_col);
-			graphics_draw_line(ctx, GPoint(x1, line_y), GPoint(x2, line_y));
+			graphics_context_set_fill_color(ctx, day_col);
+			graphics_fill_rect(ctx, GRect(x1, line_y - 1, x2 - x1, 3), 0,
+			                   GCornerNone);
 		}
-		graphics_context_set_stroke_color(ctx, bracket_col);
-		graphics_context_set_stroke_width(ctx, 1);
+	}
+
+	// Sunrise/sunset brackets on top of the track (not crossed by a stroke)
+	graphics_context_set_stroke_color(ctx, bracket_col);
+	graphics_context_set_stroke_width(ctx, 1);
+	for (int day = -3; day <= 3; day++) {
+		long rd = rise_from_now + (long)day * 86400L;
+		long sd = set_from_now + (long)day * 86400L;
+		int xr = prv_x_from_now_diff(rd, x_now_mark, graph_w, total_hours);
+		int xs = prv_x_from_now_diff(sd, x_now_mark, graph_w, total_hours);
 		if (xr >= graph_x && xr <= graph_x + graph_w) {
 			graphics_draw_line(ctx, GPoint(xr, line_y - 4), GPoint(xr, line_y + 4));
 		}
@@ -225,7 +240,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// 3–4. Solar noon + midnight moon (minute-accurate)
+	// 3–4. Solar noon + midnight moon (same now as events)
 	for (int day = -3; day <= 3; day++) {
 		long noon_diff = noon_from_now + (long)day * 86400L;
 		int x_noon = prv_x_from_now_diff(noon_diff, x_now_mark, graph_w, total_hours);
@@ -325,8 +340,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	// 7. Upcoming calendar event indicators (per-calendar color)
 	TimelineEventMode event_mode = settings_get()->timeline_event;
 	if (event_mode != TIMELINE_EVENT_NONE && dl->event_count > 0) {
-		time_t now = time(NULL);
-		int x_now = graph_x + graph_w / 5;
+		time_t now = now_sec; /* same clock as noon/rise/set */
+		int x_now = x_now_mark;
 		long window_start = (long)now - (long)past_hours * 3600L;
 		long window_end = (long)now + (long)forecast_hours * 3600L;
 
@@ -338,13 +353,12 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 			GColor event_col = prv_event_color(dl->events[i].color, is_light);
 			long diff_sec = start_sec - (long)now;
-			int x = x_now + (int)((diff_sec * (long)graph_w) /
-			                      (3600L * (long)total_hours));
+			int x = prv_x_from_now_diff(diff_sec, x_now, graph_w, total_hours);
 
 			if (event_mode == TIMELINE_EVENT_SPAN && end_sec > start_sec) {
 				long end_diff_sec = end_sec - (long)now;
-				int x_end = x_now + (int)((end_diff_sec * (long)graph_w) /
-				                          (3600L * (long)total_hours));
+				int x_end =
+				    prv_x_from_now_diff(end_diff_sec, x_now, graph_w, total_hours);
 				prv_draw_event_span(ctx, x, x_end, line_y, event_col);
 			} else {
 				prv_draw_event_bar(ctx, x, line_y, event_col);
