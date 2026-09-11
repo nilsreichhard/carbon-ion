@@ -207,7 +207,7 @@ static void prv_layout_step_label(TimeLayer *tl) {
 	int time_y = TL_SMALL_H - TL_TIME_PAD;
 	int num_h = 18;
 	int k_h = 14;
-	int num_k_gap = 2; // clear space between number and K
+	int num_k_gap = -2; // slight overlap so K sits closer under the number
 	int stack_h = num_h + num_k_gap + k_h;
 	int band_h = TL_TIME_H - TL_TIME_PAD;
 	int step_y = time_y + TL_TIME_PAD + (band_h - stack_h) / 2;
