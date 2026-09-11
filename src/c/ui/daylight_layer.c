@@ -274,10 +274,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
 		graphics_context_set_stroke_width(ctx, 1);
-		// Stem from screen/layer top edge through the track
-		graphics_draw_line(ctx, GPoint(x_now, 0), GPoint(x_now, line_y + 6));
-		// Horizontal bar flush with top edge — wider + a few px tall
-		graphics_fill_rect(ctx, GRect(x_now - 6, 0, 13, 3), 0, GCornerNone);
+		// Stem from screen/layer top edge through the track (2px wide)
+		graphics_fill_rect(ctx, GRect(x_now - 1, 0, 2, line_y + 7), 0, GCornerNone);
+		// Horizontal bar flush with top — same width as bottom T (±2 => 5px)
+		graphics_fill_rect(ctx, GRect(x_now - 2, 0, 5, 3), 0, GCornerNone);
 	}
 
 	// 6. Battery life depletion markers directly on the timeline bar

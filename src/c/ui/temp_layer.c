@@ -252,9 +252,15 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
 		graphics_context_set_stroke_width(ctx, 1);
-		graphics_draw_line(ctx, GPoint(x_now, 0), GPoint(x_now, lh));
-		// Top horizontal crossbar T matching reference HTML
-		graphics_draw_line(ctx, GPoint(x_now - 2, 0), GPoint(x_now + 2, 0));
+#if defined(PBL_COLOR)
+		graphics_context_set_fill_color(ctx, GColorRed);
+#else
+		graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
+#endif
+		// Stem 2px wide (+1 vs prior 1px line)
+		graphics_fill_rect(ctx, GRect(x_now - 1, 0, 2, lh), 0, GCornerNone);
+		// Top horizontal crossbar T (±2 => 5px), flush with chart top
+		graphics_fill_rect(ctx, GRect(x_now - 2, 0, 5, 1), 0, GCornerNone);
 	}
 
 	// Floating temperature labels overlapping on top of the left side of the chart (Right-aligned)
