@@ -262,22 +262,17 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// 5. Red line indicator at 1/5 of the timeline (flush top T-bar)
+	// 5. Red line indicator at 1/5 of the timeline (vertical stem only)
 	NeedleMode needle_mode = settings_get()->needle_mode;
 	if (needle_mode == NEEDLE_BOTH || needle_mode == NEEDLE_ABOVE) {
 		int x_now = graph_x + (graph_w / 5);
 #if defined(PBL_COLOR)
-		graphics_context_set_stroke_color(ctx, GColorRed);
 		graphics_context_set_fill_color(ctx, GColorRed);
 #else
-		graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
 		graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
-		graphics_context_set_stroke_width(ctx, 1);
 		// Stem from screen/layer top edge through the track (2px wide)
 		graphics_fill_rect(ctx, GRect(x_now - 1, 0, 2, line_y + 7), 0, GCornerNone);
-		// Horizontal bar flush with top — same width as bottom T (±2 => 5px)
-		graphics_fill_rect(ctx, GRect(x_now - 2, 0, 5, 3), 0, GCornerNone);
 	}
 
 	// 6. Battery life depletion markers directly on the timeline bar

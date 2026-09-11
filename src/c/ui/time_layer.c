@@ -207,7 +207,8 @@ static void prv_layout_step_label(TimeLayer *tl) {
 	int time_y = TL_SMALL_H - TL_TIME_PAD;
 	int num_h = 18;
 	int k_h = 14;
-	int stack_h = num_h + k_h - 2;
+	int num_k_gap = 2; // clear space between number and K
+	int stack_h = num_h + num_k_gap + k_h;
 	int band_h = TL_TIME_H - TL_TIME_PAD;
 	int step_y = time_y + TL_TIME_PAD + (band_h - stack_h) / 2;
 
@@ -233,7 +234,7 @@ static void prv_layout_step_label(TimeLayer *tl) {
 	                GRect(slot_left, step_y, slot_w, num_h));
 	text_layer_set_text_alignment(tl->step_label, GTextAlignmentCenter);
 	layer_set_frame(text_layer_get_layer(tl->step_k_label),
-	                GRect(slot_left, step_y + num_h - 4, slot_w, k_h));
+	                GRect(slot_left, step_y + num_h + num_k_gap, slot_w, k_h));
 	text_layer_set_text_alignment(tl->step_k_label, GTextAlignmentCenter);
 }
 

@@ -242,25 +242,17 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// Red needle indicator on the bottom chart at exactly 1/5 (6h past, 24h future)
+	// Red needle indicator on the bottom chart at exactly 1/5 (vertical stem only)
 	NeedleMode needle_mode = settings_get()->needle_mode;
 	if (needle_mode == NEEDLE_BOTH || needle_mode == NEEDLE_BELOW) {
 		int x_now = graph_x + (graph_w / 5);
-#if defined(PBL_COLOR)
-		graphics_context_set_stroke_color(ctx, GColorRed);
-#else
-		graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
-#endif
-		graphics_context_set_stroke_width(ctx, 1);
 #if defined(PBL_COLOR)
 		graphics_context_set_fill_color(ctx, GColorRed);
 #else
 		graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
-		// Stem 2px wide (+1 vs prior 1px line)
+		// Stem 2px wide
 		graphics_fill_rect(ctx, GRect(x_now - 1, 0, 2, lh), 0, GCornerNone);
-		// Top horizontal crossbar T (±2 => 5px), flush with chart top
-		graphics_fill_rect(ctx, GRect(x_now - 2, 0, 5, 1), 0, GCornerNone);
 	}
 
 	// Floating temperature labels overlapping on top of the left side of the chart (Right-aligned)
