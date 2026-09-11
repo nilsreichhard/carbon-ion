@@ -20,6 +20,7 @@ struct TimeLayer {
 	TextLayer *cond_label; // weather condition icon right of city
 	TextLayer *time_label;
 	TextLayer *step_label;
+	TextLayer *step_k_label; // "K" under step thousands
 	TextLayer *date_label;
 	Layer *status_layer;   // BT disconnected & quiet mode indicators left of time
 	GFont icon_font;
@@ -199,13 +200,16 @@ static void prv_update_location_row(TimeLayer *tl) {
 // Place the step label in the right flank between the centered time digits and
 // the watch edge, then center the number inside that flank.
 static void prv_layout_step_label(TimeLayer *tl) {
-	if (!tl || !tl->container || !tl->step_label)
+	if (!tl || !tl->container || !tl->step_label || !tl->step_k_label)
 		return;
 	GRect frame = layer_get_frame(tl->container);
 	int w = frame.size.w;
 	int time_y = TL_SMALL_H - TL_TIME_PAD;
-	int step_h = 18;
-	int step_y = time_y + TL_TIME_PAD + (TL_TIME_H - TL_TIME_PAD - step_h) / 2;
+	int num_h = 18;
+	int k_h = 14;
+	int stack_h = num_h + k_h - 2;
+	int band_h = TL_TIME_H - TL_TIME_PAD;
+	int step_y = time_y + TL_TIME_PAD + (band_h - stack_h) / 2;
 
 	GFont time_font = fonts_get_system_font(TL_TIME_FONT_KEY);
 	const char *time_str = tl->time_buf[0] ? tl->time_buf : "00:00";
@@ -226,8 +230,11 @@ static void prv_layout_step_label(TimeLayer *tl) {
 	}
 
 	layer_set_frame(text_layer_get_layer(tl->step_label),
-	                GRect(slot_left, step_y, slot_w, step_h));
+	                GRect(slot_left, step_y, slot_w, num_h));
 	text_layer_set_text_alignment(tl->step_label, GTextAlignmentCenter);
+	layer_set_frame(text_layer_get_layer(tl->step_k_label),
+	                GRect(slot_left, step_y + num_h - 4, slot_w, k_h));
+	text_layer_set_text_alignment(tl->step_k_label, GTextAlignmentCenter);
 }
 
 TimeLayer *time_layer_create(GRect frame) {
@@ -292,9 +299,10 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text(tl->time_label, tl->time_buf);
 	layer_add_child(tl->container, text_layer_get_layer(tl->time_label));
 
-	// Step count — right flank of the time row; recentered after time is known
+	// Step count — number with "K" stacked under it in the right flank
 	int tz_ampm_y = time_y + TL_TIME_PAD + (TL_TIME_H - TL_TIME_PAD - 18) / 2;
 	GFont step_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
+	GFont step_k_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
 	tl->step_label = text_layer_create(GRect(w / 2, tz_ampm_y, w / 2 - 2, 18));
 	text_layer_set_background_color(tl->step_label, GColorClear);
 	text_layer_set_text_color(tl->step_label, GColorLightGray);
@@ -303,6 +311,15 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text(tl->step_label, tl->step_buf);
 	layer_set_hidden(text_layer_get_layer(tl->step_label), true);
 	layer_add_child(tl->container, text_layer_get_layer(tl->step_label));
+
+	tl->step_k_label = text_layer_create(GRect(w / 2, tz_ampm_y + 14, w / 2 - 2, 14));
+	text_layer_set_background_color(tl->step_k_label, GColorClear);
+	text_layer_set_text_color(tl->step_k_label, GColorLightGray);
+	text_layer_set_font(tl->step_k_label, step_k_font);
+	text_layer_set_text_alignment(tl->step_k_label, GTextAlignmentCenter);
+	text_layer_set_text(tl->step_k_label, "K");
+	layer_set_hidden(text_layer_get_layer(tl->step_k_label), true);
+	layer_add_child(tl->container, text_layer_get_layer(tl->step_k_label));
 	prv_layout_step_label(tl);
 
 	// Status indicators (BT disconnected & Quiet mode) left of time
@@ -337,6 +354,7 @@ void time_layer_destroy(TimeLayer *layer) {
 	layer_destroy(layer->status_layer);
 	fonts_unload_custom_font(layer->icon_font);
 	text_layer_destroy(layer->date_label);
+	text_layer_destroy(layer->step_k_label);
 	text_layer_destroy(layer->step_label);
 	text_layer_destroy(layer->time_label);
 	text_layer_destroy(layer->city_label);
@@ -399,6 +417,7 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	text_layer_set_text_color(layer->time_label, text_color);
 	text_layer_set_text_color(layer->date_label, text_color);
 	text_layer_set_text_color(layer->step_label, sub_color);
+	text_layer_set_text_color(layer->step_k_label, sub_color);
 
 	bool is_24h = clock_is_24h_style();
 
@@ -415,6 +434,9 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	}
 	text_layer_set_text(layer->time_label, layer->time_buf);
 	prv_layout_step_label(layer);
+	bool hide_steps = !settings->show_step_count || layer->step_buf[0] == '\0';
+	layer_set_hidden(text_layer_get_layer(layer->step_label), hide_steps);
+	layer_set_hidden(text_layer_get_layer(layer->step_k_label), hide_steps);
 	layer_set_hidden(text_layer_get_layer(layer->step_label),
 	                 !settings->show_step_count || layer->step_buf[0] == '\0');
 
@@ -440,4 +462,5 @@ void time_layer_set_steps(TimeLayer *layer, int steps) {
 	text_layer_set_text(layer->step_label, layer->step_buf);
 	prv_layout_step_label(layer);
 	layer_set_hidden(text_layer_get_layer(layer->step_label), !show);
+	layer_set_hidden(text_layer_get_layer(layer->step_k_label), !show);
 }
