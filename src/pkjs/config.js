@@ -80,7 +80,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_TIMELINE_EVENT',
 				'label': 'Calendar Events',
-				'description': 'Show ICS events on the daylight timeline. Add up to 3 calendar URLs below and pick a color for each.',
+				'description': 'Show ICS events on the daylight timeline. Add up to 3 calendar URLs below and pick a color for each.\n\nHow to get a URL:\n• Google Calendar: Settings → your calendar → Integrate calendar → Secret address in iCal format\n• Outlook / Office 365: Calendar → Share → Publish calendar → ICS link\n• Apple Calendar (iCloud): Calendar sharing → Public Calendar → copy the webcal/ICS link (webcal:// is fine)\n\nLeave all URLs blank and/or set Calendar Events to Off to hide events.',
 				'defaultValue': 2,
 				'options': [
 					{ 'label': 'Bar at start time', 'value': 1 },
@@ -92,7 +92,7 @@ module.exports = [
 				'type': 'input',
 				'messageKey': 'SETTING_CALENDAR_ICS_URL',
 				'label': 'Calendar 1 ICS URL',
-				'description': 'Paste a private ICS/iCal subscription URL, then set Calendar Events to Bar or Duration.\n\nHow to get a URL:\n• Google Calendar: Settings → your calendar → Integrate calendar → Secret address in iCal format\n• Outlook / Office 365: Calendar → Share → Publish calendar → ICS link\n• Apple Calendar (iCloud): Calendar sharing → Public Calendar → copy the webcal/ICS link (webcal:// is fine)\n\nLeave all URLs blank and/or set Calendar Events to Off to hide events.',
+				'description': 'Paste a private ICS/iCal subscription URL.',
 				'defaultValue': '',
 				'attributes': {
 					'placeholder': 'https://calendar.google.com/calendar/ical/.../basic.ics',
