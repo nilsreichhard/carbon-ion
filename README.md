@@ -16,7 +16,7 @@ Developed by **Nils Reich** ([@nilsreichhard](https://github.com/nilsreichhard))
 - **Continuous Astronomical Daylight Track**: Full-width 3px baseline track, multi-day daylight spans with sunrise/sunset delimiter brackets, and per-midnight astronomical lunar phases.
 - **Hourly Timeline Axis Scale**: Bottom ticks marking hourly intervals (3px) and solar noon/midnight milestones (5px).
 - **Dead-Center Time & Zero-Overlap Status Icons**: Large bold digital clock with date below, city and condition icon above, and dedicated left margin for Bluetooth alert and Quiet Time bell runes.
-- **Daily Step Counter**: Clean, compact step count (`1k`, `2k`, `10k`) right-aligned on the right side of the clock row.
+- **Daily Step Counter**: Clean, compact step count in thousands (`1`, `2`, `10`) right-aligned on the right side of the clock row.
 - **Timeline Calendar Events**: Projects approaching events onto the **daylight** timeline track as a short vertical blue bar (start-only) or a solid blue duration block, powered by iCal/ICS calendar feeds. (WMO weather icons live on `event_layer`, not calendar events.)
 - **Precipitation & Cloud Density Tracks**: Inverted rain histogram and vector cloud lobes.
 - **Theme Parity**: Full Dark Theme and Light Theme support.

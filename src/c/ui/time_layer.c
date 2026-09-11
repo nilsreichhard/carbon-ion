@@ -394,7 +394,7 @@ void time_layer_set_steps(TimeLayer *layer, int steps) {
 		return;
 	if (steps < 0)
 		steps = 0;
-	snprintf(layer->step_buf, sizeof(layer->step_buf), "%dk", steps / 1000);
+	snprintf(layer->step_buf, sizeof(layer->step_buf), "%d", steps / 1000);
 	text_layer_set_text(layer->step_label, layer->step_buf);
 	layer_set_hidden(text_layer_get_layer(layer->step_label),
 	                 !settings_get()->show_step_count);
