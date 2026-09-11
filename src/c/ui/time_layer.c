@@ -196,6 +196,40 @@ static void prv_update_location_row(TimeLayer *tl) {
 	layer_set_hidden(text_layer_get_layer(tl->cond_label), false);
 }
 
+// Place the step label in the right flank between the centered time digits and
+// the watch edge, then center the number inside that flank.
+static void prv_layout_step_label(TimeLayer *tl) {
+	if (!tl || !tl->container || !tl->step_label)
+		return;
+	GRect frame = layer_get_frame(tl->container);
+	int w = frame.size.w;
+	int time_y = TL_SMALL_H - TL_TIME_PAD;
+	int step_h = 18;
+	int step_y = time_y + TL_TIME_PAD + (TL_TIME_H - TL_TIME_PAD - step_h) / 2;
+
+	GFont time_font = fonts_get_system_font(TL_TIME_FONT_KEY);
+	const char *time_str = tl->time_buf[0] ? tl->time_buf : "00:00";
+	GSize time_size = graphics_text_layout_get_content_size(
+	    time_str, time_font, GRect(0, 0, w, TL_TIME_H),
+	    GTextOverflowModeWordWrap, GTextAlignmentCenter);
+
+	int gap = 4;
+	int edge = 2;
+	int slot_left = (w + time_size.w) / 2 + gap;
+	if (slot_left < w / 2)
+		slot_left = w / 2;
+	int slot_right = w - edge;
+	int slot_w = slot_right - slot_left;
+	if (slot_w < 18) {
+		slot_w = 18;
+		slot_left = w - edge - slot_w;
+	}
+
+	layer_set_frame(text_layer_get_layer(tl->step_label),
+	                GRect(slot_left, step_y, slot_w, step_h));
+	text_layer_set_text_alignment(tl->step_label, GTextAlignmentCenter);
+}
+
 TimeLayer *time_layer_create(GRect frame) {
 	TimeLayer *tl = malloc(sizeof(TimeLayer));
 	if (!tl)
@@ -258,10 +292,10 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text(tl->time_label, tl->time_buf);
 	layer_add_child(tl->container, text_layer_get_layer(tl->time_label));
 
-	// Step count — right of time row, horizontally centered in its slot
+	// Step count — right flank of the time row; recentered after time is known
 	int tz_ampm_y = time_y + TL_TIME_PAD + (TL_TIME_H - TL_TIME_PAD - 18) / 2;
 	GFont step_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
-	tl->step_label = text_layer_create(GRect(w - 40, tz_ampm_y, 36, 18));
+	tl->step_label = text_layer_create(GRect(w / 2, tz_ampm_y, w / 2 - 2, 18));
 	text_layer_set_background_color(tl->step_label, GColorClear);
 	text_layer_set_text_color(tl->step_label, GColorLightGray);
 	text_layer_set_font(tl->step_label, step_font);
@@ -269,6 +303,7 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text(tl->step_label, tl->step_buf);
 	layer_set_hidden(text_layer_get_layer(tl->step_label), true);
 	layer_add_child(tl->container, text_layer_get_layer(tl->step_label));
+	prv_layout_step_label(tl);
 
 	// Status indicators (BT disconnected & Quiet mode) left of time
 #if PBL_PLATFORM_GABBRO || defined(PBL_ROUND)
@@ -364,8 +399,6 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	text_layer_set_text_color(layer->time_label, text_color);
 	text_layer_set_text_color(layer->date_label, text_color);
 	text_layer_set_text_color(layer->step_label, sub_color);
-	layer_set_hidden(text_layer_get_layer(layer->step_label),
-	                 !settings->show_step_count);
 
 	bool is_24h = clock_is_24h_style();
 
@@ -381,6 +414,9 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 		layer->time_buf[sizeof(layer->time_buf) - 1] = '\0';
 	}
 	text_layer_set_text(layer->time_label, layer->time_buf);
+	prv_layout_step_label(layer);
+	layer_set_hidden(text_layer_get_layer(layer->step_label),
+	                 !settings->show_step_count || layer->step_buf[0] == '\0');
 
 	// Date — format string stored in settings; leading zeros stripped
 	// automatically. Full weekday name expanded if %A is used.
@@ -402,5 +438,6 @@ void time_layer_set_steps(TimeLayer *layer, int steps) {
 		layer->step_buf[0] = '\0';
 	}
 	text_layer_set_text(layer->step_label, layer->step_buf);
+	prv_layout_step_label(layer);
 	layer_set_hidden(text_layer_get_layer(layer->step_label), !show);
 }
