@@ -129,6 +129,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 
 #if defined(PBL_COLOR)
+	graphics_context_set_compositing_mode(ctx, GCompOpAssign);
 	int line_bottom = lh;
 #define TEMP_TO_F(t) (tl->celsius ? ((t) * 9 / 5 + 32) : (t))
 #define COLOR_DARK_THEME(tf)                                                   \
@@ -162,6 +163,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		for (int i = start_col; i <= end_col && i <= total_hours; i++) {
 			int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
 			GColor fill_col = GET_TEMP_COLOR(TEMP_TO_F(avg));
+			fill_col.a = 3; /* force fully opaque (no alpha blend) */
 			graphics_context_set_fill_color(ctx, fill_col);
 			int x0 = spx[i - 1], y0 = spy[i - 1], x1 = spx[i], y1 = spy[i];
 			int dx = x1 - x0, dy = y1 - y0;
@@ -188,6 +190,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	for (int i = 1; i <= total_hours; i++) {
 		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
 		GColor stroke_col = GET_TEMP_COLOR(TEMP_TO_F(avg));
+		stroke_col.a = 3; /* force fully opaque (no alpha blend) */
 		graphics_context_set_stroke_color(ctx, stroke_col);
 		graphics_draw_line(ctx, GPoint(spx[i - 1], spy[i - 1]),
 		                   GPoint(spx[i], spy[i]));
