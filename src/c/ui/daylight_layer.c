@@ -111,10 +111,21 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 	}
 }
 
-static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col, uint8_t stroke_width) {
-	graphics_context_set_stroke_color(ctx, col);
-	graphics_context_set_stroke_width(ctx, stroke_width);
-	graphics_draw_line(ctx, GPoint(x, line_y - 5), GPoint(x, line_y + 5));
+// Start-only events: short vertical bar (~3px wide, reduced height).
+static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col) {
+	graphics_context_set_fill_color(ctx, col);
+	graphics_fill_rect(ctx, GRect(x - 1, line_y - 3, 3, 7), 0, GCornerNone);
+}
+
+// Duration events: solid block spanning [x0,x1] with reduced height.
+static void prv_draw_event_span(GContext *ctx, int x0, int x1, int line_y, GColor col) {
+	int left = x0 < x1 ? x0 : x1;
+	int right = x0 < x1 ? x1 : x0;
+	int width = right - left;
+	if (width < 3)
+		width = 3;
+	graphics_context_set_fill_color(ctx, col);
+	graphics_fill_rect(ctx, GRect(left, line_y - 3, width, 7), 0, GCornerNone);
 }
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
@@ -334,25 +345,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			long diff_sec = start_sec - (long)now;
 			int x = x_now + (int)((diff_sec * (long)graph_w) /
 			                      (3600L * (long)total_hours));
-			uint8_t stroke_width = (event_mode == TIMELINE_EVENT_BAR) ? 1 : 2;
-			prv_draw_event_bar(ctx, x, line_y, event_col, stroke_width);
 
 			if (event_mode == TIMELINE_EVENT_SPAN && end_sec > start_sec) {
 				long end_diff_sec = end_sec - (long)now;
 				int x_end = x_now + (int)((end_diff_sec * (long)graph_w) /
 				                          (3600L * (long)total_hours));
-				prv_draw_event_bar(ctx, x_end, line_y, event_col, 2);
-
-				int bracket_x1 = x < x_end ? x : x_end;
-				int bracket_x2 = x < x_end ? x_end : x;
-				graphics_context_set_stroke_color(ctx, event_col);
-				graphics_context_set_stroke_width(ctx, 2);
-				graphics_draw_line(ctx, GPoint(bracket_x1, line_y - 6),
-				                   GPoint(bracket_x2, line_y - 6));
-				graphics_draw_line(ctx, GPoint(bracket_x1, line_y - 6),
-				                   GPoint(bracket_x1, line_y + 6));
-				graphics_draw_line(ctx, GPoint(bracket_x2, line_y - 6),
-				                   GPoint(bracket_x2, line_y + 6));
+				prv_draw_event_span(ctx, x, x_end, line_y, event_col);
+			} else {
+				prv_draw_event_bar(ctx, x, line_y, event_col);
 			}
 		}
 	}
@@ -424,6 +424,8 @@ void daylight_layer_set_events(DaylightLayer *layer, const TimelineEvent *events
 		return;
 	if (count > MAX_TIMELINE_EVENTS)
 		count = MAX_TIMELINE_EVENTS;
+	if (count > 0 && !events)
+		count = 0;
 	layer->event_count = count;
 	for (uint8_t i = 0; i < count; i++) {
 		layer->events[i] = events[i];

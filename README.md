@@ -3,7 +3,7 @@
 
 # Carbon Ion — Pebble Weather Watchface
 
-**Carbon Ion** is a high-precision, weather-focused watchface engineered exclusively for **Pebble Time 2** (`emery`, 200×228 color display), featuring live meteorological and astronomical telemetry powered by the free [Open-Meteo](https://open-meteo.com) API with zero API keys required.
+**Carbon Ion** is a high-precision, weather-focused watchface engineered **exclusively for Pebble Time 2 / Emery** (`emery`, 200×228 color display). Other platforms are not build targets. Live meteorological and astronomical telemetry is powered by the free [Open-Meteo](https://open-meteo.com) API with zero API keys required.
 
 Developed by **Nils Reich** ([@nilsreichhard](https://github.com/nilsreichhard)), based on the original open-source [Carbon watchface](https://github.com/cr0ybot/carbon) by **Cory Hughart** ([@cr0ybot](https://github.com/cr0ybot)).
 
@@ -17,7 +17,7 @@ Developed by **Nils Reich** ([@nilsreichhard](https://github.com/nilsreichhard))
 - **Hourly Timeline Axis Scale**: Bottom ticks marking hourly intervals (3px) and solar noon/midnight milestones (5px).
 - **Dead-Center Time & Zero-Overlap Status Icons**: Large bold digital clock with date below, city and condition icon above, and dedicated left margin for Bluetooth alert and Quiet Time bell runes.
 - **Daily Step Counter**: Clean, compact step count (`1k`, `2k`, `10k`) right-aligned on the right side of the clock row.
-- **Timeline Calendar Events**: Projects approaching events directly onto the timeline track as a crisp 2px vertical blue bar or full meeting duration bracket (`|────|`), powered by iCal/ICS calendar feeds.
+- **Timeline Calendar Events**: Projects approaching events onto the **daylight** timeline track as a short vertical blue bar (start-only) or a solid blue duration block, powered by iCal/ICS calendar feeds. (WMO weather icons live on `event_layer`, not calendar events.)
 - **Precipitation & Cloud Density Tracks**: Inverted rain histogram and vector cloud lobes.
 - **Theme Parity**: Full Dark Theme and Light Theme support.
 
@@ -29,7 +29,7 @@ Configurable on your phone via Pebble app settings (Clay):
 - **Current Time Needle**: Top track & meteogram, Top track only, Bottom meteogram only, or Hidden.
 - **Timeline Battery Markers**: 20% yellow / 10% orange / 0% red, 10% orange / 0% red, 0% red, or None.
 - **Calendar Events**: Blue bar at start time, Duration span, or Off.
-- **Calendar ICS URL**: Paste private iCal/ICS link from Google Calendar, Apple iCloud, or Outlook.
+- **Calendar ICS URL**: Paste a private iCal/ICS link from Google Calendar, Apple iCloud, or Outlook (see settings page how-to). Leave blank / set Calendar Events Off to clear.
 - **Color Theme**: Dark (Black) or Light (White).
 - **Bluetooth Disconnect Alert**: Show red alert icon when disconnected.
 - **Silent Mode Indicator**: Show muted bell icon when Quiet Time is active.
@@ -77,6 +77,20 @@ The clipboard JSON contains everything displayed in the **Debug** section, inclu
 > **Before sharing debug info in a GitHub issue, obfuscate the `lat` and `lon` values** inside `cache.payload` and anything else you deem sensitive to protect your location privacy.
 
 ---
+
+
+## Watchface layer stack (Emery)
+
+Top → bottom on the root window:
+
+1. `daylight_layer` — astronomical daylight track, battery milestones, **calendar ICS event bars/blocks**
+2. `cloud_layer` — cloud cover lobes
+3. `precip_layer` — precipitation histogram
+4. `event_layer` — WMO weather condition icons (not calendar events)
+5. `time_layer` — clock, date, city, BT/quiet icons, step counter
+6. `temp_layer` — temperature curves + high/current/low labels (pinned bottom)
+
+Icon glyph map: `resources/fonts/icons.icomoon.json` (IcoMoon TTF under `resources/fonts/`).
 
 ## Development
 

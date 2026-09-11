@@ -1,6 +1,6 @@
 {
   "name": "carbon-ion",
-  "description": "High-precision weather graph watchface for Pebble Time 2 (Emery) and Round 2 (Gabbro), based on Carbon by Cory Hughart.",
+  "description": "High-precision weather graph watchface for Pebble Time 2 (Emery), based on Carbon by Cory Hughart.",
   "author": {
     "name": "Nils Reich",
     "url": "https://github.com/nilsreichhard/carbon-ion"
@@ -42,10 +42,8 @@
       "CITY_NAME": 10013,
       "SETTING_TEMP_UNIT": 10014,
       "SETTING_FETCH_INTERVAL": 10015,
-      "SETTING_ACCENT_COLOR": 10016,
       "SETTING_DATE_FORMAT": 10017,
-      "SETTING_BATTERY_DISPLAY": 10018,
-      "SETTING_SHOW_TIMEZONE": 10019,
+      "SETTING_SHOW_ADVANCED_OPTIONS": 10020,
       "SETTING_GEOCODE_ENABLED": 10021,
       "SETTING_LOCATION_OVERRIDE": 10022,
       "SETTING_USE_STATIC_LOCATION": 10023,
