@@ -114,7 +114,8 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 // Start-only events: short vertical bar (~3px wide, compact height).
 static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col) {
 	graphics_context_set_fill_color(ctx, col);
-	graphics_fill_rect(ctx, GRect(x - 1, line_y - 2, 3, 5), 0, GCornerNone);
+	// Sit above the track/noon-moon icons (icons are r=3 on line_y)
+	graphics_fill_rect(ctx, GRect(x - 1, line_y - 8, 3, 5), 0, GCornerNone);
 }
 
 // Duration events: solid block spanning [x0,x1] with compact height.
@@ -125,7 +126,8 @@ static void prv_draw_event_span(GContext *ctx, int x0, int x1, int line_y, GColo
 	if (width < 3)
 		width = 3;
 	graphics_context_set_fill_color(ctx, col);
-	graphics_fill_rect(ctx, GRect(left, line_y - 2, width, 5), 0, GCornerNone);
+	// Sit above the track/noon-moon icons
+	graphics_fill_rect(ctx, GRect(left, line_y - 8, width, 5), 0, GCornerNone);
 }
 
 #if defined(PBL_COLOR)
@@ -241,22 +243,27 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		graphics_context_set_stroke_color(ctx, day_col);
 	}
 
-	// 3. Solar Noon Markers across all cycles
-	for (int k = -72; k <= total_hours + 48; k += 24) {
-		int noon_t = ((12 - base_hour + 240) % 24) + k;
-		if (noon_t >= 0 && noon_t <= total_hours) {
-			int x_noon = graph_x + noon_t * graph_w / total_hours;
+	// 3–4. Solar noon + midnight moon markers (minute-accurate, same axis as events)
+	time_t now_sec = time(NULL);
+	int x_now_mark = graph_x + graph_w / 5;
+	int cur_h = (int)dl->current_hour;
+	int cur_m = (int)dl->current_minute;
+	// Seconds from now to today's 12:00 and next local midnight (24:00)
+	long noon_from_now = ((12 - cur_h) * 60 - cur_m) * 60L;
+	long midn_from_now = ((24 - cur_h) * 60 - cur_m) * 60L;
+	for (int day = -3; day <= 3; day++) {
+		long noon_diff = noon_from_now + (long)day * 86400L;
+		int x_noon = x_now_mark + (int)((noon_diff * (long)graph_w) /
+		                                 (3600L * (long)total_hours));
+		if (x_noon >= graph_x && x_noon <= graph_x + graph_w) {
 			prv_draw_col_marker(ctx, x_noon, 4, line_y);
 		}
-	}
 
-	// 4. Midnight Moon Phase Markers across all cycles
-	time_t now_sec = time(NULL);
-	for (int k = -72; k <= total_hours + 48; k += 24) {
-		int midn_t = ((24 - base_hour + 240) % 24) + k;
-		if (midn_t >= 0 && midn_t <= total_hours) {
-			int x_midn = graph_x + midn_t * graph_w / total_hours;
-			time_t target_sec = now_sec + (midn_t - past_hours) * 3600;
+		long midn_diff = midn_from_now + (long)day * 86400L;
+		int x_midn = x_now_mark + (int)((midn_diff * (long)graph_w) /
+		                                 (3600L * (long)total_hours));
+		if (x_midn >= graph_x && x_midn <= graph_x + graph_w) {
+			time_t target_sec = now_sec + midn_diff;
 			int moon_phase = prv_moon_phase_at(target_sec);
 			prv_draw_col_marker(ctx, x_midn, moon_phase, line_y);
 		}
