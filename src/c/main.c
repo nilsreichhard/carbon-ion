@@ -146,7 +146,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	uint8_t current_hour = now ? (uint8_t)now->tm_hour : 0;
 
 	if (!s_weather.is_valid) {
-		daylight_layer_set_data(s_daylight_layer, 6, 18, current_hour, true,
+		daylight_layer_set_data(s_daylight_layer, 6, 0, 18, 0, current_hour, true,
 		                        true);
 		temp_layer_set_current_hour(s_temp_layer, current_hour, 0);
 		time_layer_set_condition(s_time_layer,
@@ -218,7 +218,8 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	bool is_day = (current_hour >= s_weather.sunrise_hour &&
 	               current_hour < s_weather.sunset_hour);
 	daylight_layer_set_data(s_daylight_layer, s_weather.sunrise_hour,
-	                        s_weather.sunset_hour, current_hour, false, false);
+	                        s_weather.sunrise_minute, s_weather.sunset_hour,
+	                        s_weather.sunset_minute, current_hour, false, false);
 	cloud_layer_set_data(s_cloud_layer, cloud_view, code_view, current_hour);
 	precip_layer_set_data(s_precip_layer, precip_view, code_view, current_hour);
 	event_layer_set_data(s_event_layer, code_view, hours_remaining);
@@ -366,6 +367,20 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 	if (!t) t = dict_find(iter, 10011);
 	if (t)
 		s_weather.sunset_hour = (uint8_t)prv_tuple_int(t);
+
+	t = dict_find(iter, MESSAGE_KEY_WEATHER_SUNRISE_MINUTE);
+	if (!t) t = dict_find(iter, 10045);
+	if (t) {
+		int m = prv_tuple_int(t);
+		s_weather.sunrise_minute = (uint8_t)(m < 0 ? 0 : (m > 59 ? 59 : m));
+	}
+
+	t = dict_find(iter, MESSAGE_KEY_WEATHER_SUNSET_MINUTE);
+	if (!t) t = dict_find(iter, 10046);
+	if (t) {
+		int m = prv_tuple_int(t);
+		s_weather.sunset_minute = (uint8_t)(m < 0 ? 0 : (m > 59 ? 59 : m));
+	}
 
 	// Hourly byte arrays
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_PRECIP_PROB);

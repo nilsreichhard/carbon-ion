@@ -1007,6 +1007,21 @@ function extractHourFromUnix(timestamp, utcOffsetSec) {
 }
 
 /**
+ * Extract the local minute (0–59) from a Unix timestamp.
+ *
+ * @param   {number} timestamp
+ * @param   {number} utcOffsetSec
+ * @returns {number}
+ */
+function extractMinuteFromUnix(timestamp, utcOffsetSec) {
+	if (typeof utcOffsetSec === 'number') {
+		var localSec = ((timestamp + utcOffsetSec) % 86400 + 86400) % 86400;
+		return Math.floor((localSec % 3600) / 60);
+	}
+	return new Date(timestamp * 1000).getMinutes();
+}
+
+/**
  * Read the weather cache from localStorage, or null if absent/invalid.
  *
  * @returns {{expiresAt: number, payload: Object}|null}
@@ -1125,6 +1140,14 @@ function sendToWatch(payload) {
 	if (payload.sunset_hour != null) {
 		dict['WEATHER_SUNSET_HOUR'] = payload.sunset_hour;
 		dict[10011] = payload.sunset_hour;
+	}
+	if (payload.sunrise_minute != null) {
+		dict['WEATHER_SUNRISE_MINUTE'] = payload.sunrise_minute;
+		dict[10045] = payload.sunrise_minute;
+	}
+	if (payload.sunset_minute != null) {
+		dict['WEATHER_SUNSET_MINUTE'] = payload.sunset_minute;
+		dict[10046] = payload.sunset_minute;
 	}
 	if (payload.fetch_time != null) {
 		var fTime = Math.floor(payload.fetch_time);
@@ -1531,8 +1554,12 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 				var utcOffsetSec = json.utc_offset_seconds;
 				payload.sunrise_hour = dly && dly.sunrise
 					? extractHourFromUnix(dly.sunrise[0], utcOffsetSec) : 6;
+				payload.sunrise_minute = dly && dly.sunrise
+					? extractMinuteFromUnix(dly.sunrise[0], utcOffsetSec) : 0;
 				payload.sunset_hour = dly && dly.sunset
 					? extractHourFromUnix(dly.sunset[0], utcOffsetSec) : 20;
+				payload.sunset_minute = dly && dly.sunset
+					? extractMinuteFromUnix(dly.sunset[0], utcOffsetSec) : 0;
 
 				// forecast_hours=FORECAST_HOURS returns entries starting from now
 				if (hrly) {

@@ -179,7 +179,9 @@ void demo_data_load(WeatherData *weather, Settings *settings) {
 	weather->low_temp = s->low_temp;
 	weather->weather_code = s->weather_code;
 	weather->sunrise_hour = s->sunrise_hour;
+	weather->sunrise_minute = 0;
 	weather->sunset_hour = s->sunset_hour;
+	weather->sunset_minute = 0;
 	memcpy(weather->temp_hourly, s->temp_hourly, 36);
 	memcpy(weather->apparent_temp_hourly, s->apparent_hourly, 36);
 	memcpy(weather->precip_prob, s->precip_prob, 36);

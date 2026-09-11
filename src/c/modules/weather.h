@@ -54,6 +54,8 @@ typedef struct {
 	time_t fetch_time;   // unix timestamp of last successful fetch
 	uint8_t valid_hours; // hourly entries valid starting from fetch_time
 	                     // (0-WEATHER_HOURLY_COUNT)
+	uint8_t sunrise_minute; // 0-59 (appended for persist compat)
+	uint8_t sunset_minute;  // 0-59
 } WeatherData;
 
 _Static_assert(sizeof(WeatherData) <= (PERSIST_DATA_MAX_LENGTH * 2),

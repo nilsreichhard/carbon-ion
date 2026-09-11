@@ -18,7 +18,9 @@
 struct DaylightLayer {
 	Layer *layer;
 	uint8_t sunrise_hour;
+	uint8_t sunrise_minute;
 	uint8_t sunset_hour;
+	uint8_t sunset_minute;
 	uint8_t current_hour;
 	uint8_t current_minute;
 	uint8_t battery_percent;
@@ -114,8 +116,8 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 // Start-only events: short vertical bar (~3px wide, compact height).
 static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col) {
 	graphics_context_set_fill_color(ctx, col);
-	// Sit above the track/noon-moon icons (icons are r=3 on line_y)
-	graphics_fill_rect(ctx, GRect(x - 1, line_y - 8, 3, 5), 0, GCornerNone);
+	// On the track; drawn after noon/moon so events overlap on top
+	graphics_fill_rect(ctx, GRect(x - 1, line_y - 2, 3, 5), 0, GCornerNone);
 }
 
 // Duration events: solid block spanning [x0,x1] with compact height.
@@ -126,8 +128,8 @@ static void prv_draw_event_span(GContext *ctx, int x0, int x1, int line_y, GColo
 	if (width < 3)
 		width = 3;
 	graphics_context_set_fill_color(ctx, col);
-	// Sit above the track/noon-moon icons
-	graphics_fill_rect(ctx, GRect(left, line_y - 8, width, 5), 0, GCornerNone);
+	// On the track; drawn after noon/moon so events overlap on top
+	graphics_fill_rect(ctx, GRect(left, line_y - 2, width, 5), 0, GCornerNone);
 }
 
 #if defined(PBL_COLOR)
@@ -152,6 +154,12 @@ static GColor prv_event_color(uint8_t id, bool is_light) {
 }
 #endif
 
+
+// Pixel x for a time offset from "now" (needle at 1/5), minute-accurate.
+static int prv_x_from_now_diff(long diff_sec, int x_now, int graph_w, int total_hours) {
+	return x_now + (int)((diff_sec * (long)graph_w) / (3600L * (long)total_hours));
+}
+
 static void prv_update_proc(Layer *layer, GContext *ctx) {
 	DaylightLayer *dl = *(DaylightLayer **)layer_get_data(layer);
 	GRect bounds = layer_get_bounds(layer);
@@ -166,102 +174,67 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int line_y = lh / 2;
 	bool is_light = settings_get()->light_theme;
 
-	int base_hour = ((int)dl->current_hour - past_hours + 240) % 24;
-
 	// Theme colors
 	GColor night_col = is_light ? GColorBlack : GColorDarkGray;
 	GColor day_col = is_light ? GColorLightGray : GColorWhite;
 	GColor bracket_col = is_light ? GColorBlack : GColorWhite;
 
-	// Calculate daylight spans across the rolling multi-day window
-	int raw_rise = ((int)dl->sunrise_hour - base_hour + 240) % 24;
-	int raw_set = ((int)dl->sunset_hour - base_hour + 240) % 24;
-	if (raw_set < raw_rise)
-		raw_set += 24;
-
-	typedef struct {
-		int start;
-		int end;
-		int orig_rise;
-		int orig_set;
-	} DaySpan;
-	DaySpan day_spans[8];
-	int day_span_count = 0;
-
-	for (int k = -72; k <= total_hours + 48; k += 24) {
-		int span_rise = raw_rise + k;
-		int span_set = raw_set + k;
-		int clip_start = span_rise < 0 ? 0 : (span_rise > total_hours ? total_hours : span_rise);
-		int clip_end = span_set < 0 ? 0 : (span_set > total_hours ? total_hours : span_set);
-
-		if (clip_end > clip_start && day_span_count < 8) {
-			day_spans[day_span_count].start = clip_start;
-			day_spans[day_span_count].end = clip_end;
-			day_spans[day_span_count].orig_rise = span_rise;
-			day_spans[day_span_count].orig_set = span_set;
-			day_span_count++;
-		}
-	}
-
-	// Sort day spans chronologically
-	for (int i = 0; i < day_span_count - 1; i++) {
-		for (int j = i + 1; j < day_span_count; j++) {
-			if (day_spans[j].start < day_spans[i].start) {
-				DaySpan tmp = day_spans[i];
-				day_spans[i] = day_spans[j];
-				day_spans[j] = tmp;
-			}
-		}
-	}
-
-	// 1. Draw solid Night Track across 100% full screen width (3px bold)
-	graphics_context_set_stroke_width(ctx, 3);
-	graphics_context_set_stroke_color(ctx, night_col);
-	graphics_draw_line(ctx, GPoint(graph_x, line_y), GPoint(graph_x + graph_w, line_y));
-
-	// 2. Draw Daylight Spans & Brackets across all multi-day cycles (3px bold)
-	graphics_context_set_stroke_color(ctx, day_col);
-	for (int i = 0; i < day_span_count; i++) {
-		int x1 = graph_x + day_spans[i].start * graph_w / total_hours;
-		int x2 = graph_x + day_spans[i].end * graph_w / total_hours;
-		if (x2 > x1) {
-			graphics_draw_line(ctx, GPoint(x1, line_y), GPoint(x2, line_y));
-		}
-
-		// Endcap brackets at sunrise and sunset (in both dark and light theme)
-		graphics_context_set_stroke_color(ctx, bracket_col);
-		graphics_context_set_stroke_width(ctx, 1);
-		if (day_spans[i].orig_rise >= 0 && day_spans[i].orig_rise <= total_hours) {
-			int xr = graph_x + day_spans[i].orig_rise * graph_w / total_hours;
-			graphics_draw_line(ctx, GPoint(xr, line_y - 4), GPoint(xr, line_y + 4));
-		}
-		if (day_spans[i].orig_set >= 0 && day_spans[i].orig_set <= total_hours) {
-			int xs = graph_x + day_spans[i].orig_set * graph_w / total_hours;
-			graphics_draw_line(ctx, GPoint(xs, line_y - 4), GPoint(xs, line_y + 4));
-		}
-		graphics_context_set_stroke_width(ctx, 3);
-		graphics_context_set_stroke_color(ctx, day_col);
-	}
-
-	// 3–4. Solar noon + midnight moon markers (minute-accurate, same axis as events)
 	time_t now_sec = time(NULL);
 	int x_now_mark = graph_x + graph_w / 5;
 	int cur_h = (int)dl->current_hour;
 	int cur_m = (int)dl->current_minute;
-	// Seconds from now to today's 12:00 and next local midnight (24:00)
+	int rise_h = (int)dl->sunrise_hour;
+	int rise_m = (int)dl->sunrise_minute;
+	int set_h = (int)dl->sunset_hour;
+	int set_m = (int)dl->sunset_minute;
+
+	// Seconds from now to today's sunrise/sunset/noon/midnight (minute-accurate)
+	long rise_from_now = ((rise_h - cur_h) * 60 + (rise_m - cur_m)) * 60L;
+	long set_from_now = ((set_h - cur_h) * 60 + (set_m - cur_m)) * 60L;
+	if (set_from_now <= rise_from_now)
+		set_from_now += 86400L;
 	long noon_from_now = ((12 - cur_h) * 60 - cur_m) * 60L;
 	long midn_from_now = ((24 - cur_h) * 60 - cur_m) * 60L;
+
+	// 1. Night track full width
+	graphics_context_set_stroke_width(ctx, 3);
+	graphics_context_set_stroke_color(ctx, night_col);
+	graphics_draw_line(ctx, GPoint(graph_x, line_y), GPoint(graph_x + graph_w, line_y));
+
+	// 2. Daylight spans + sunrise/sunset brackets (minute-accurate)
+	graphics_context_set_stroke_color(ctx, day_col);
+	for (int day = -3; day <= 3; day++) {
+		long rd = rise_from_now + (long)day * 86400L;
+		long sd = set_from_now + (long)day * 86400L;
+		int xr = prv_x_from_now_diff(rd, x_now_mark, graph_w, total_hours);
+		int xs = prv_x_from_now_diff(sd, x_now_mark, graph_w, total_hours);
+		int x1 = xr < graph_x ? graph_x : xr;
+		int x2 = xs > graph_x + graph_w ? graph_x + graph_w : xs;
+		if (x2 > x1) {
+			graphics_context_set_stroke_width(ctx, 3);
+			graphics_context_set_stroke_color(ctx, day_col);
+			graphics_draw_line(ctx, GPoint(x1, line_y), GPoint(x2, line_y));
+		}
+		graphics_context_set_stroke_color(ctx, bracket_col);
+		graphics_context_set_stroke_width(ctx, 1);
+		if (xr >= graph_x && xr <= graph_x + graph_w) {
+			graphics_draw_line(ctx, GPoint(xr, line_y - 4), GPoint(xr, line_y + 4));
+		}
+		if (xs >= graph_x && xs <= graph_x + graph_w) {
+			graphics_draw_line(ctx, GPoint(xs, line_y - 4), GPoint(xs, line_y + 4));
+		}
+	}
+
+	// 3–4. Solar noon + midnight moon (minute-accurate)
 	for (int day = -3; day <= 3; day++) {
 		long noon_diff = noon_from_now + (long)day * 86400L;
-		int x_noon = x_now_mark + (int)((noon_diff * (long)graph_w) /
-		                                 (3600L * (long)total_hours));
+		int x_noon = prv_x_from_now_diff(noon_diff, x_now_mark, graph_w, total_hours);
 		if (x_noon >= graph_x && x_noon <= graph_x + graph_w) {
 			prv_draw_col_marker(ctx, x_noon, 4, line_y);
 		}
 
 		long midn_diff = midn_from_now + (long)day * 86400L;
-		int x_midn = x_now_mark + (int)((midn_diff * (long)graph_w) /
-		                                 (3600L * (long)total_hours));
+		int x_midn = prv_x_from_now_diff(midn_diff, x_now_mark, graph_w, total_hours);
 		if (x_midn >= graph_x && x_midn <= graph_x + graph_w) {
 			time_t target_sec = now_sec + midn_diff;
 			int moon_phase = prv_moon_phase_at(target_sec);
@@ -385,7 +358,9 @@ DaylightLayer *daylight_layer_create(GRect frame) {
 	if (!dl)
 		return NULL;
 	dl->sunrise_hour = 6;
+	dl->sunrise_minute = 0;
 	dl->sunset_hour = 18;
+	dl->sunset_minute = 0;
 	dl->current_hour = 0;
 	dl->current_minute = 0;
 	dl->battery_percent = 100;
@@ -428,12 +403,15 @@ Layer *daylight_layer_get_layer(DaylightLayer *layer) {
 }
 
 void daylight_layer_set_data(DaylightLayer *layer, uint8_t sunrise_hour,
-                             uint8_t sunset_hour, uint8_t current_hour,
+                             uint8_t sunrise_minute, uint8_t sunset_hour,
+                             uint8_t sunset_minute, uint8_t current_hour,
                              bool sunrise_approx, bool sunset_approx) {
 	if (!layer)
 		return;
 	layer->sunrise_hour = sunrise_hour;
+	layer->sunrise_minute = sunrise_minute > 59 ? 59 : sunrise_minute;
 	layer->sunset_hour = sunset_hour;
+	layer->sunset_minute = sunset_minute > 59 ? 59 : sunset_minute;
 	layer->current_hour = current_hour;
 	layer->sunrise_approx = sunrise_approx;
 	layer->sunset_approx = sunset_approx;
