@@ -81,7 +81,7 @@ module.exports = [
 				'messageKey': 'SETTING_TIMELINE_EVENT',
 				'label': 'Calendar Events',
 				'description': 'Show ICS events on the daylight timeline. Add up to 3 calendar URLs below and pick a color for each.',
-				'defaultValue': 1,
+				'defaultValue': 2,
 				'options': [
 					{ 'label': 'Bar at start time', 'value': 1 },
 					{ 'label': 'Duration span', 'value': 2 },
@@ -102,7 +102,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_CALENDAR_COLOR_1',
 				'label': 'Calendar 1 color',
-				'defaultValue': 0,
+				'defaultValue': 1,
 				'options': [
 					{ 'label': 'Cyan', 'value': 0 },
 					{ 'label': 'Blue', 'value': 1 },
@@ -127,7 +127,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_CALENDAR_COLOR_2',
 				'label': 'Calendar 2 color',
-				'defaultValue': 2,
+				'defaultValue': 7,
 				'options': [
 					{ 'label': 'Cyan', 'value': 0 },
 					{ 'label': 'Blue', 'value': 1 },
@@ -152,7 +152,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_CALENDAR_COLOR_3',
 				'label': 'Calendar 3 color',
-				'defaultValue': 4,
+				'defaultValue': 2,
 				'options': [
 					{ 'label': 'Cyan', 'value': 0 },
 					{ 'label': 'Blue', 'value': 1 },
@@ -178,7 +178,7 @@ module.exports = [
 				'messageKey': 'SETTING_LIGHT_THEME',
 				'label': 'Color Theme',
 				'description': 'Background appearance.',
-				'defaultValue': 0,
+				'defaultValue': 1,
 				'options': [
 					{ 'label': 'Dark', 'value': 0 },
 					{ 'label': 'Light', 'value': 1 },
@@ -209,7 +209,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_DATE_FORMAT',
 				'label': 'Date Format',
-				'defaultValue': '%A, %m/%d',
+				'defaultValue': '%A, %b %d',
 				'options': [
 					{ 'label': 'Monday, 1/15', 'value': '%A, %m/%d' },
 					{ 'label': 'Monday, 15/1', 'value': '%A, %d/%m' },
@@ -234,7 +234,7 @@ module.exports = [
 				'messageKey': 'SETTING_TEMP_UNIT',
 				'label': 'Temperature Unit',
 				'description': 'Auto detects unit from your phone locale.',
-				'defaultValue': -1,
+				'defaultValue': 0,
 				'options': [
 					{ 'label': 'Auto (Locale)', 'value': -1 },
 					{ 'label': 'Celsius (°C)', 'value': 0 },
@@ -245,7 +245,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_FETCH_INTERVAL',
 				'label': 'Refresh Interval',
-				'defaultValue': 30,
+				'defaultValue': 15,
 				'options': [
 					{ 'label': 'Every 15 minutes', 'value': 15 },
 					{ 'label': 'Every 30 minutes', 'value': 30 },

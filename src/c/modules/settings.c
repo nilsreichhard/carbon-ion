@@ -17,9 +17,9 @@ static Settings s_settings;
 // struct to maintain compatibility with old persisted data.
 static const Settings s_defaults = {
     .temp_unit_celsius = true,
-    .light_theme = false,
-    .date_format = "%A, %m/%d",
-    .fetch_interval_min = 30,
+    .light_theme = true,
+    .date_format = "%A, %b %d",
+    .fetch_interval_min = 15,
     .infill_mode = INFILL_FUTURE,
     .needle_mode = NEEDLE_BOTH,
     .forecast_hours = DEFAULT_FORECAST_HOURS,
@@ -27,7 +27,7 @@ static const Settings s_defaults = {
     .show_silent_mode = true,
     .timeline_battery = TIMELINE_BATT_10_0,
     .show_step_count = true,
-    .timeline_event = TIMELINE_EVENT_BAR,
+    .timeline_event = TIMELINE_EVENT_SPAN,
 };
 
 void settings_init(void) {
