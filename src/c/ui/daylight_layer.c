@@ -382,7 +382,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
 #endif
 		// Extend a few px past below-timeline events (track + gap + EVENT_BAR_H)
-		graphics_fill_rect(ctx, GRect(x_now - 1, 0, 2, line_y + 12), 0,
+		graphics_fill_rect(ctx, GRect(x_now - 1, 0, 2, line_y + 10), 0,
 		                   GCornerNone);
 	}
 }
