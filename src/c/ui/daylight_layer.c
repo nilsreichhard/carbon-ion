@@ -113,25 +113,28 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 	}
 }
 
-// Top y of a 5px event bar relative to the track centerline.
-// place: 0=on, 1=above, 2=below
+// Event bar height matches the daylight track (3px).
+#define EVENT_BAR_H 3
+
+// Top y relative to track centerline. place: 0=on, 1=above, 2=below
 static int prv_event_top_y(int line_y, uint8_t place) {
 	if (place == 1)
-		return line_y - 8; // above track
+		return line_y - 1 - EVENT_BAR_H - 1; // above track (1px gap)
 	if (place == 2)
-		return line_y + 3; // below track
-	return line_y - 2;     // on track (overlaps icons)
+		return line_y + 2; // below track (track ends at line_y+1)
+	return line_y - 1; // on track — same band as the 3px timeline fill
 }
 
-// Start-only events: short vertical bar (~3px wide, compact height).
+// Start-only events: short vertical bar (~3px wide).
 static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col,
                                uint8_t place) {
 	graphics_context_set_fill_color(ctx, col);
-	graphics_fill_rect(ctx, GRect(x - 1, prv_event_top_y(line_y, place), 3, 5), 0,
-	                   GCornerNone);
+	graphics_fill_rect(ctx,
+	                   GRect(x - 1, prv_event_top_y(line_y, place), 3, EVENT_BAR_H),
+	                   0, GCornerNone);
 }
 
-// Duration events: solid block spanning [x0,x1] with compact height.
+// Duration events: solid block spanning [x0,x1].
 static void prv_draw_event_span(GContext *ctx, int x0, int x1, int line_y,
                                 GColor col, uint8_t place) {
 	int left = x0 < x1 ? x0 : x1;
@@ -140,9 +143,9 @@ static void prv_draw_event_span(GContext *ctx, int x0, int x1, int line_y,
 	if (width < 3)
 		width = 3;
 	graphics_context_set_fill_color(ctx, col);
-	graphics_fill_rect(ctx,
-	                   GRect(left, prv_event_top_y(line_y, place), width, 5), 0,
-	                   GCornerNone);
+	graphics_fill_rect(
+	    ctx, GRect(left, prv_event_top_y(line_y, place), width, EVENT_BAR_H), 0,
+	    GCornerNone);
 }
 
 #if defined(PBL_COLOR)
@@ -270,19 +273,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// 5. Red line indicator at 1/5 of the timeline (vertical stem only)
-	NeedleMode needle_mode = settings_get()->needle_mode;
-	if (needle_mode == NEEDLE_BOTH || needle_mode == NEEDLE_ABOVE) {
-		int x_now = graph_x + (graph_w / 5);
-#if defined(PBL_COLOR)
-		graphics_context_set_fill_color(ctx, GColorRed);
-#else
-		graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
-#endif
-		// Stem from screen/layer top edge through the track (2px wide)
-		graphics_fill_rect(ctx, GRect(x_now - 1, 0, 2, line_y + 7), 0, GCornerNone);
-	}
-
 	// 6. Battery life depletion markers directly on the timeline bar
 	TimelineBatteryMode tb_mode = settings_get()->timeline_battery;
 	if (tb_mode != TIMELINE_BATT_NONE && !dl->battery_charging && dl->battery_percent < 100) {
@@ -350,7 +340,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// 7. Upcoming calendar event indicators (per-calendar color)
+	// Calendar events (after icons; needle drawn after this)
 	TimelineEventMode event_mode = settings_get()->timeline_event;
 	if (event_mode != TIMELINE_EVENT_NONE && dl->event_count > 0) {
 		time_t now = now_sec; /* same clock as noon/rise/set */
@@ -380,6 +370,20 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				prv_draw_event_bar(ctx, x, line_y, event_col, place);
 			}
 		}
+	}
+
+	// Red needle last so it stays above events (covers below-track bars)
+	NeedleMode needle_mode = settings_get()->needle_mode;
+	if (needle_mode == NEEDLE_BOTH || needle_mode == NEEDLE_ABOVE) {
+		int x_now = graph_x + (graph_w / 5);
+#if defined(PBL_COLOR)
+		graphics_context_set_fill_color(ctx, GColorRed);
+#else
+		graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
+#endif
+		// Extend a few px past below-timeline events (track + gap + EVENT_BAR_H)
+		graphics_fill_rect(ctx, GRect(x_now - 1, 0, 2, line_y + 12), 0,
+		                   GCornerNone);
 	}
 }
 
