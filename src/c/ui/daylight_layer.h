@@ -16,6 +16,7 @@ typedef struct {
 	uint32_t start_time; // unix timestamp
 	uint32_t end_time;   // unix timestamp
 	uint8_t color;       // calendar color id (0-7)
+	uint8_t place;       // 0=on track, 1=above, 2=below
 } TimelineEvent;
 
 DaylightLayer *daylight_layer_create(GRect frame);

@@ -115,6 +115,18 @@ module.exports = [
 				],
 			},
 			{
+				'type': 'select',
+				'messageKey': 'SETTING_CALENDAR_PLACE_1',
+				'label': 'Calendar 1 position',
+				'description': 'Where this calendar\'s events sit relative to the daylight bar.',
+				'defaultValue': 0,
+				'options': [
+					{ 'label': 'On timeline', 'value': 0 },
+					{ 'label': 'Above timeline', 'value': 1 },
+					{ 'label': 'Below timeline', 'value': 2 },
+				],
+			},
+			{
 				'type': 'input',
 				'messageKey': 'SETTING_CALENDAR_ICS_URL_2',
 				'label': 'Calendar 2 ICS URL (optional)',
@@ -140,6 +152,18 @@ module.exports = [
 				],
 			},
 			{
+				'type': 'select',
+				'messageKey': 'SETTING_CALENDAR_PLACE_2',
+				'label': 'Calendar 2 position',
+				'description': 'Where this calendar\'s events sit relative to the daylight bar.',
+				'defaultValue': 0,
+				'options': [
+					{ 'label': 'On timeline', 'value': 0 },
+					{ 'label': 'Above timeline', 'value': 1 },
+					{ 'label': 'Below timeline', 'value': 2 },
+				],
+			},
+			{
 				'type': 'input',
 				'messageKey': 'SETTING_CALENDAR_ICS_URL_3',
 				'label': 'Calendar 3 ICS URL (optional)',
@@ -162,6 +186,18 @@ module.exports = [
 					{ 'label': 'Purple', 'value': 5 },
 					{ 'label': 'Yellow', 'value': 6 },
 					{ 'label': 'Magenta', 'value': 7 },
+				],
+			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_CALENDAR_PLACE_3',
+				'label': 'Calendar 3 position',
+				'description': 'Where this calendar\'s events sit relative to the daylight bar.',
+				'defaultValue': 0,
+				'options': [
+					{ 'label': 'On timeline', 'value': 0 },
+					{ 'label': 'Above timeline', 'value': 1 },
+					{ 'label': 'Below timeline', 'value': 2 },
 				],
 			},
 		],

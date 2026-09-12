@@ -113,23 +113,36 @@ static void prv_draw_col_marker(GContext *ctx, int cx, int phase, int line_y) {
 	}
 }
 
+// Top y of a 5px event bar relative to the track centerline.
+// place: 0=on, 1=above, 2=below
+static int prv_event_top_y(int line_y, uint8_t place) {
+	if (place == 1)
+		return line_y - 8; // above track
+	if (place == 2)
+		return line_y + 3; // below track
+	return line_y - 2;     // on track (overlaps icons)
+}
+
 // Start-only events: short vertical bar (~3px wide, compact height).
-static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col) {
+static void prv_draw_event_bar(GContext *ctx, int x, int line_y, GColor col,
+                               uint8_t place) {
 	graphics_context_set_fill_color(ctx, col);
-	// On the track; drawn after noon/moon so events overlap on top
-	graphics_fill_rect(ctx, GRect(x - 1, line_y - 2, 3, 5), 0, GCornerNone);
+	graphics_fill_rect(ctx, GRect(x - 1, prv_event_top_y(line_y, place), 3, 5), 0,
+	                   GCornerNone);
 }
 
 // Duration events: solid block spanning [x0,x1] with compact height.
-static void prv_draw_event_span(GContext *ctx, int x0, int x1, int line_y, GColor col) {
+static void prv_draw_event_span(GContext *ctx, int x0, int x1, int line_y,
+                                GColor col, uint8_t place) {
 	int left = x0 < x1 ? x0 : x1;
 	int right = x0 < x1 ? x1 : x0;
 	int width = right - left;
 	if (width < 3)
 		width = 3;
 	graphics_context_set_fill_color(ctx, col);
-	// On the track; drawn after noon/moon so events overlap on top
-	graphics_fill_rect(ctx, GRect(left, line_y - 2, width, 5), 0, GCornerNone);
+	graphics_fill_rect(ctx,
+	                   GRect(left, prv_event_top_y(line_y, place), width, 5), 0,
+	                   GCornerNone);
 }
 
 #if defined(PBL_COLOR)
@@ -352,6 +365,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				continue;
 
 			GColor event_col = prv_event_color(dl->events[i].color, is_light);
+			uint8_t place = dl->events[i].place;
+			if (place > 2)
+				place = 0;
 			long diff_sec = start_sec - (long)now;
 			int x = prv_x_from_now_diff(diff_sec, x_now, graph_w, total_hours);
 
@@ -359,9 +375,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				long end_diff_sec = end_sec - (long)now;
 				int x_end =
 				    prv_x_from_now_diff(end_diff_sec, x_now, graph_w, total_hours);
-				prv_draw_event_span(ctx, x, x_end, line_y, event_col);
+				prv_draw_event_span(ctx, x, x_end, line_y, event_col, place);
 			} else {
-				prv_draw_event_bar(ctx, x, line_y, event_col);
+				prv_draw_event_bar(ctx, x, line_y, event_col, place);
 			}
 		}
 	}

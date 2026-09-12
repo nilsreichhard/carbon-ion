@@ -5,7 +5,7 @@
     "name": "Nils Reich",
     "url": "https://github.com/nilsreichhard/carbon-ion"
   },
-  "version": "2.1.2",
+  "version": "2.1.3",
   "keywords": [
     "pebble-app"
   ],
@@ -69,7 +69,11 @@
       "SETTING_CALENDAR_COLOR_3": 10043,
       "TIMELINE_EVENT_COLORS": 10044,
       "WEATHER_SUNRISE_MINUTE": 10045,
-      "WEATHER_SUNSET_MINUTE": 10046
+      "WEATHER_SUNSET_MINUTE": 10046,
+      "SETTING_CALENDAR_PLACE_1": 10047,
+      "SETTING_CALENDAR_PLACE_2": 10048,
+      "SETTING_CALENDAR_PLACE_3": 10049,
+      "TIMELINE_EVENT_PLACES": 10050
     },
     "resources": {
       "media": [

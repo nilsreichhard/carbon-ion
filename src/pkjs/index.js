@@ -1159,10 +1159,12 @@ function sendToWatch(payload) {
 	var starts = [];
 	var ends = [];
 	var colors = [];
+	var places = [];
 	for (var ei = 0; ei < timelineEvents.length && ei < 6; ei++) {
 		starts.push(timelineEvents[ei].start);
 		ends.push(timelineEvents[ei].end);
 		colors.push((timelineEvents[ei].color | 0) & 0x07);
+		places.push((timelineEvents[ei].place | 0) & 0x03);
 	}
 	dict['TIMELINE_EVENT_STARTS'] = packUint32Array(starts);
 	dict[10037] = packUint32Array(starts);
@@ -1170,6 +1172,8 @@ function sendToWatch(payload) {
 	dict[10038] = packUint32Array(ends);
 	dict['TIMELINE_EVENT_COLORS'] = packUint8Array(colors, colors.length);
 	dict[10044] = packUint8Array(colors, colors.length);
+	dict['TIMELINE_EVENT_PLACES'] = packUint8Array(places, places.length);
+	dict[10050] = packUint8Array(places, places.length);
 
 	var nowMs = Date.now();
 	var signature = JSON.stringify(dict);
@@ -1228,7 +1232,14 @@ function getCalendarColorSetting(settings, key, fallback) {
 	return n;
 }
 
-/** @returns {{url:string,color:number,cacheKey:string}[]} */
+/** 0=on timeline, 1=above, 2=below */
+function getCalendarPlaceSetting(settings, key, fallback) {
+	var n = parseInt(getStringSetting(settings, key, String(fallback)), 10);
+	if (isNaN(n) || n < 0 || n > 2) return fallback;
+	return n;
+}
+
+/** @returns {{url:string,color:number,place:number,cacheKey:string}[]} */
 function getConfiguredCalendars(settings) {
 	return [
 		{
@@ -1236,6 +1247,7 @@ function getConfiguredCalendars(settings) {
 				settings, 'SETTING_CALENDAR_ICS_URL', 'cached_calendar_url'
 			),
 			color: getCalendarColorSetting(settings, 'SETTING_CALENDAR_COLOR_1', 0),
+			place: getCalendarPlaceSetting(settings, 'SETTING_CALENDAR_PLACE_1', 0),
 			cacheKey: 'cached_calendar_url',
 		},
 		{
@@ -1243,6 +1255,7 @@ function getConfiguredCalendars(settings) {
 				settings, 'SETTING_CALENDAR_ICS_URL_2', 'cached_calendar_url_2'
 			),
 			color: getCalendarColorSetting(settings, 'SETTING_CALENDAR_COLOR_2', 2),
+			place: getCalendarPlaceSetting(settings, 'SETTING_CALENDAR_PLACE_2', 0),
 			cacheKey: 'cached_calendar_url_2',
 		},
 		{
@@ -1250,6 +1263,7 @@ function getConfiguredCalendars(settings) {
 				settings, 'SETTING_CALENDAR_ICS_URL_3', 'cached_calendar_url_3'
 			),
 			color: getCalendarColorSetting(settings, 'SETTING_CALENDAR_COLOR_3', 4),
+			place: getCalendarPlaceSetting(settings, 'SETTING_CALENDAR_PLACE_3', 0),
 			cacheKey: 'cached_calendar_url_3',
 		},
 	].filter(function (c) { return !!c.url; });
@@ -1434,6 +1448,7 @@ function fetchCalendarEvents(payload, callback) {
 					start: parsed[i].start,
 					end: parsed[i].end,
 					color: cal.color,
+					place: cal.place,
 				});
 			}
 			anyOk = true;

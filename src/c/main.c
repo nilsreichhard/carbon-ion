@@ -238,6 +238,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
 #define KEY_TIMELINE_EVENT_STARTS 10037
 #define KEY_TIMELINE_EVENT_ENDS 10038
 #define KEY_TIMELINE_EVENT_COLORS 10044
+#define KEY_TIMELINE_EVENT_PLACES 10050
 #define MAX_TIMELINE_EVENTS_MSG 6
 
 static uint32_t prv_read_uint32_le(const uint8_t *bytes, int offset, int total_len) {
@@ -262,6 +263,8 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 	if (!ends) ends = dict_find(iter, MESSAGE_KEY_TIMELINE_EVENT_ENDS);
 	Tuple *colors = dict_find(iter, KEY_TIMELINE_EVENT_COLORS);
 	if (!colors) colors = dict_find(iter, MESSAGE_KEY_TIMELINE_EVENT_COLORS);
+	Tuple *places = dict_find(iter, KEY_TIMELINE_EVENT_PLACES);
+	if (!places) places = dict_find(iter, MESSAGE_KEY_TIMELINE_EVENT_PLACES);
 
 	TimelineEvent events[MAX_TIMELINE_EVENTS_MSG];
 	uint8_t count = 0;
@@ -277,6 +280,7 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 				events[i].start_time = start_ts;
 				events[i].end_time = start_ts + 3600;
 				events[i].color = 0;
+				events[i].place = 0;
 				count++;
 			}
 		}
@@ -302,6 +306,17 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 		for (uint8_t i = 0; i < count; i++) {
 			if (i < color_len) {
 				events[i].color = color_bytes[i] & 0x07;
+			}
+		}
+	}
+
+	if (places && places->type == TUPLE_BYTE_ARRAY && count > 0) {
+		const uint8_t *place_bytes = places->value->data;
+		int place_len = places->length;
+		for (uint8_t i = 0; i < count; i++) {
+			if (i < place_len) {
+				uint8_t pl = place_bytes[i] & 0x03;
+				events[i].place = (pl > 2) ? 0 : pl;
 			}
 		}
 	}
@@ -585,6 +600,7 @@ static void prv_window_load(Window *window) {
 		demo_events[0].start_time = (uint32_t)demo_now_t + 9000; // now + 2.5h
 		demo_events[0].end_time = demo_events[0].start_time + 45 * 60;
 		demo_events[0].color = 0;
+		demo_events[0].place = 0;
 		daylight_layer_set_events(s_daylight_layer, demo_events, 1);
 	}
 #else
