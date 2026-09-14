@@ -68,14 +68,14 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int cy, int intensity,
 		return;
 
 #if defined(PBL_COLOR)
-	// Yellow reads on both themes; slightly darker stroke on light theme.
+	/* Light theme: orange reads better on pale bg than chrome yellow. */
 	graphics_context_set_stroke_color(ctx,
-	                                  is_light ? GColorChromeYellow : GColorYellow);
+	                                  is_light ? GColorOrange : GColorYellow);
 #else
 	graphics_context_set_stroke_color(ctx, GColorWhite);
 	(void)is_light;
 #endif
-	graphics_context_set_stroke_width(ctx, 1);
+	graphics_context_set_stroke_width(ctx, is_light ? 2 : 1);
 
 	// 1–3 diagonal rays; length scales with intensity.
 	int ray_count = 1 + (intensity / 100); // 1..3
@@ -109,8 +109,42 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	graphics_context_set_antialiased(ctx, false);
 
-	// Rays first so cloud lobes can sit on top while sunlight still shows
-	// through gaps / around edges.
+	/* Clouds first, then rays on top so sunlight stays visible over cover. */
+	if (!clouds_off) {
+		for (int i = total_hours - 1; i >= 0; i--) {
+			if (cl->cover[i] < clear_th)
+				continue;
+
+#if defined(PBL_COLOR)
+			// Color clouds based on WMO severity for severe conditions only
+			uint8_t code = cl->hourly_code[i];
+			GColor cloud_color;
+			if (code == 95 || code == 96 || code == 99) {
+				cloud_color = GColorLightGray; // storm clouds — grey
+			} else if (code == 75 || code == 77 || code == 85 || code == 86) {
+				cloud_color = GColorCeleste; // blizzard clouds — light blue
+			} else {
+				cloud_color = is_light ? GColorLightGray : GColorWhite;
+			}
+			graphics_context_set_fill_color(ctx, cloud_color);
+#else
+			graphics_context_set_fill_color(ctx, GColorWhite);
+#endif
+
+			// Draw later hours first so sooner clouds overlap them.
+			int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
+			int r;
+			if (cl->cover[i] < small_th) {
+				r = 2;
+			} else if (cl->cover[i] < med_th) {
+				r = 3;
+			} else {
+				r = 4;
+			}
+			prv_draw_cloud(ctx, cx, cy, r);
+		}
+	}
+
 	if (draw_rays) {
 		for (int i = 0; i < total_hours; i++) {
 			int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
@@ -118,42 +152,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			int intensity = wm2 >= 800 ? 255 : (wm2 * 255) / 800;
 			prv_draw_sun_rays(ctx, cx, cy, intensity, is_light);
 		}
-	}
-
-	if (clouds_off)
-		return;
-
-	for (int i = total_hours - 1; i >= 0; i--) {
-		if (cl->cover[i] < clear_th)
-			continue;
-
-#if defined(PBL_COLOR)
-		// Color clouds based on WMO severity for severe conditions only
-		uint8_t code = cl->hourly_code[i];
-		GColor cloud_color;
-		if (code == 95 || code == 96 || code == 99) {
-			cloud_color = GColorLightGray; // storm clouds — grey
-		} else if (code == 75 || code == 77 || code == 85 || code == 86) {
-			cloud_color = GColorCeleste; // blizzard clouds — light blue
-		} else {
-			cloud_color = is_light ? GColorLightGray : GColorWhite;
-		}
-		graphics_context_set_fill_color(ctx, cloud_color);
-#else
-		graphics_context_set_fill_color(ctx, GColorWhite);
-#endif
-
-		// Draw later hours first so sooner clouds overlap them.
-		int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
-		int r;
-		if (cl->cover[i] < small_th) {
-			r = 2;
-		} else if (cl->cover[i] < med_th) {
-			r = 3;
-		} else {
-			r = 4;
-		}
-		prv_draw_cloud(ctx, cx, cy, r);
 	}
 }
 
