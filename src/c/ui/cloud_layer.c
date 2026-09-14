@@ -177,25 +177,21 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
 	if (dy > span)
 		dy = span;
 
+	/* Always start at the top of the cloud strip; drawn after clouds (above). */
+	int y0 = 0;
 	if (vertical) {
-		/* Split: vertical bars starting at the top of the strip. */
-		int y0 = 0;
+		/* Split: vertical bars. */
 		for (int r = 0; r < ray_count; r++) {
 			int ox = cx - 1 + r;
 			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox, y0 + dy));
 		}
 	} else {
-		/* Total: classic angled rays (≈45°) as in the reference look. */
+		/* Total: classic angled rays (≈45°), hanging down from the top. */
 		int dx = dy;
 		if (dx < 2)
 			dx = 2;
-		int y0 = (strip_h - dy) / 2;
-		if (y0 < 0)
-			y0 = 0;
-		if (y0 + dy > strip_h)
-			y0 = strip_h - dy;
-		if (y0 < 0)
-			y0 = 0;
+		if (dy > strip_h)
+			dy = strip_h;
 		for (int r = 0; r < ray_count; r++) {
 			int ox = cx - 1 + r;
 			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox + dx, y0 + dy));
@@ -235,7 +231,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	graphics_context_set_antialiased(ctx, false);
 
-	/* Clouds first; angled rays span the full cloud strip height (1× or 3× CLOUD_H). */
+	/* Clouds first, then sun rays on top (overlap clouds, start at strip top). */
 	if (!clouds_off) {
 		if (split) {
 			/* Full-size lobes (same as Total); reduce padding by tighter pitch. */
