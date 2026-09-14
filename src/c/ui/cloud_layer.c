@@ -149,7 +149,8 @@ static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
 }
 
 static void prv_draw_sun_rays(GContext *ctx, int cx, int cy, int intensity,
-                              int min_intensity, bool is_light, bool compact) {
+                              int min_intensity, bool is_light, bool compact,
+                              int band_h) {
 	/* intensity 0–255 from shortwave vs sensitivity full-scale. */
 	if (intensity < min_intensity)
 		return;
@@ -164,18 +165,29 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int cy, int intensity,
 #endif
 	graphics_context_set_stroke_width(ctx, 1);
 
-	// 1–3 diagonal rays; length scales with intensity.
 	int ray_count = 1 + (intensity / 100); // 1..3
 	if (ray_count > 3)
 		ray_count = 3;
-	int len = 3 + (intensity * 7) / 255; // 3..10 px
-	int v_off = 3;
+
+	int len;
+	int v_off;
 	if (compact) {
-		/* Fit inside a ~h/3 band. */
-		if (len > 5)
-			len = 5;
+		/* One small set per altitude band (~h/3). */
+		len = 2 + (intensity * 3) / 255; // 2..5
 		v_off = 1;
+	} else {
+		/* Total mode: expand to fill the full cloud strip, not a 1× copy of split. */
+		int span = band_h > 2 ? band_h - 2 : 6;
+		len = 4 + (intensity * (span - 4)) / 255; // grow with intensity up to strip
+		if (len < 4)
+			len = 4;
+		if (len > span)
+			len = span;
+		v_off = len / 2;
+		if (ray_count < 2 && intensity >= 40)
+			ray_count = 2;
 	}
+
 	for (int r = 0; r < ray_count; r++) {
 		int ox = cx - 1 + r;
 		int oy = cy - v_off - (r % 2);
@@ -257,20 +269,21 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			int wm2 = (int)cl->shortwave[i] * 4; // unpack
 			int base = wm2 >= sun_full ? 255 : (wm2 * 255) / sun_full;
 			if (split) {
-				/* One compact ray set per altitude band, dimmed by that band's cover. */
+				/* Compact set per band — not three copies of the expanded Total rays. */
 				prv_draw_sun_rays(ctx, cx, cy_high,
 				                  prv_ray_intensity_for_cover(base, cl->cover_high[i]),
-				                  sun_min, is_light, true);
+				                  sun_min, is_light, true, band);
 				prv_draw_sun_rays(ctx, cx, cy_mid,
 				                  prv_ray_intensity_for_cover(base, cl->cover_mid[i]),
-				                  sun_min, is_light, true);
+				                  sun_min, is_light, true, band);
 				prv_draw_sun_rays(ctx, cx, cy_low,
 				                  prv_ray_intensity_for_cover(base, cl->cover_low[i]),
-				                  sun_min, is_light, true);
+				                  sun_min, is_light, true, band);
 			} else {
+				/* Single expanded set spanning the full strip height. */
 				int intensity = prv_ray_intensity_for_cover(base, cl->cover[i]);
 				prv_draw_sun_rays(ctx, cx, cy_total, intensity, sun_min, is_light,
-				                  false);
+				                  false, h);
 			}
 		}
 	}
