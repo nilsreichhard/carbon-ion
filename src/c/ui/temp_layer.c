@@ -262,13 +262,13 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	/* Nudge labels up so min clears the bottom; current gets extra lift —
 	 * Gothic bold sits optically low in its box, so it looked biased toward min. */
 	const int label_lift = 3;
-	const int curr_lift = 3; /* optical: current vs high/low */
+	const int curr_lift = 1; /* slight optical lift; 3 was too high */
 	int y_high = (zone_h - sm_h) / 2 - label_lift;
 	if (y_high < 0) y_high = 0;
 	if (y_high + sm_h > zone_h) y_high = zone_h - sm_h;
 	int y_curr = zone_h + (zone_h - md_h) / 2 - label_lift - curr_lift;
-	/* Allow a bit more overlap with high so the clamp does not pin current down. */
-	if (y_curr < y_high + sm_h - 6) y_curr = y_high + sm_h - 6;
+	/* Mild overlap room so clamp does not pin current fully down. */
+	if (y_curr < y_high + sm_h - 4) y_curr = y_high + sm_h - 4;
 	if (y_curr + md_h > 2 * zone_h) y_curr = 2 * zone_h - md_h;
 	int y_low = 2 * zone_h + (zone_h - sm_h) / 2 - label_lift;
 	if (y_low < y_curr + md_h - 2) y_low = y_curr + md_h - 2;
