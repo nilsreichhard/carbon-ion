@@ -317,7 +317,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_SUNLIGHT_SENSITIVITY',
 				'label': 'Sunlight Sensitivity',
-				'description': 'How readily sunlight rays appear for a given shortwave radiation level.',
+				'description': 'How readily the sunlight colored range appears for a given shortwave radiation level.',
 				'defaultValue': 4,
 				'options': [
 					{ 'label': 'Very sensitive', 'value': 0 },

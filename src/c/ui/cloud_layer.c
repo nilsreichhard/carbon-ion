@@ -148,41 +148,31 @@ static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
 	}
 }
 
-static void prv_draw_sun_rays(GContext *ctx, int cx, int cy, int intensity,
-                              int min_intensity, bool is_light, int strip_h) {
-	/* intensity 0–255 from shortwave vs sensitivity full-scale.
-	 * Always one vertical set spanning the full cloud strip (Total or Split),
-	 * so rays cover all three bands when Cloud Display is Split. */
-	if (intensity < min_intensity)
+/* Colored sunlight range for one hour column (full strip height). */
+static void prv_draw_sun_range(GContext *ctx, int x, int w, int strip_h,
+                               int intensity, int min_intensity, bool is_light) {
+	if (intensity < min_intensity || w <= 0 || strip_h <= 0)
 		return;
-	(void)cy;
 
 #if defined(PBL_COLOR)
-	graphics_context_set_stroke_color(ctx,
-	                                  is_light ? GColorOrange : GColorYellow);
-#else
-	graphics_context_set_stroke_color(ctx, GColorWhite);
-	(void)is_light;
-#endif
-	graphics_context_set_stroke_width(ctx, 1);
-
-	int ray_count = 1 + (intensity / 100); // 1..3
-	if (ray_count > 3)
-		ray_count = 3;
-	if (ray_count < 2 && intensity >= 40)
-		ray_count = 2;
-
-	/* Full strip height — do not shrink with intensity. */
-	int y0 = 0;
-	int y1 = strip_h > 0 ? strip_h - 1 : 0;
-
-	for (int r = 0; r < ray_count; r++) {
-		int ox = cx - 1 + r;
-		graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox, y1));
+	GColor fill;
+	if (intensity < 85) {
+		fill = is_light ? GColorPastelYellow : GColorIcterine;
+	} else if (intensity < 170) {
+		fill = is_light ? GColorChromeYellow : GColorYellow;
+	} else {
+		fill = is_light ? GColorOrange : GColorChromeYellow;
 	}
+	graphics_context_set_fill_color(ctx, fill);
+#else
+	graphics_context_set_fill_color(ctx, GColorWhite);
+	(void)is_light;
+	(void)intensity;
+#endif
+	graphics_fill_rect(ctx, GRect(x, 0, w, strip_h), 0, GCornerNone);
 }
 
-/* Dim rays by cloud cover in that band (0% cover → full; 100% → none). */
+/* Dim sunlight by total cloud cover (0% cover → full; 100% → none). */
 static int prv_ray_intensity_for_cover(int base_intensity, uint8_t cover) {
 	int open = 100 - (int)cover;
 	if (open < 0)
@@ -214,7 +204,21 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	graphics_context_set_antialiased(ctx, false);
 
-	/* Clouds first, then rays on top so sunlight stays visible over cover. */
+	/* Sunlight colored range behind clouds — full strip height (Total and Split). */
+	if (draw_rays) {
+		for (int i = 0; i < total_hours; i++) {
+			int x0 = graph_x + (long)i * graph_w / total_hours;
+			int x1 = graph_x + (long)(i + 1) * graph_w / total_hours;
+			int col_w = x1 - x0;
+			if (col_w < 1)
+				col_w = 1;
+			int wm2 = (int)cl->shortwave[i] * 4; // unpack
+			int base = wm2 >= sun_full ? 255 : (wm2 * 255) / sun_full;
+			int intensity = prv_ray_intensity_for_cover(base, cl->cover[i]);
+			prv_draw_sun_range(ctx, x0, col_w, h, intensity, sun_min, is_light);
+		}
+	}
+
 	if (!clouds_off) {
 		if (split) {
 			/* Same strip height, three stacked bands: high / mid / low. */
@@ -236,19 +240,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			int cy = h / 2 - 2;
 			prv_draw_band(ctx, cl, cl->cover, total_hours, graph_x, graph_w, cy,
 			              clear_th, small_th, med_th, false, is_light);
-		}
-	}
-
-	if (draw_rays) {
-		/* One ray layer spanning the full strip height — same in Total and Split.
-		 * Clouds may be 1 or 3 bands; rays are never duplicated per cloud band. */
-		int cy = h / 2 - 2;
-		for (int i = 0; i < total_hours; i++) {
-			int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
-			int wm2 = (int)cl->shortwave[i] * 4; // unpack
-			int base = wm2 >= sun_full ? 255 : (wm2 * 255) / sun_full;
-			int intensity = prv_ray_intensity_for_cover(base, cl->cover[i]);
-			prv_draw_sun_rays(ctx, cx, cy, intensity, sun_min, is_light, h);
 		}
 	}
 }
