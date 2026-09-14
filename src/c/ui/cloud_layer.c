@@ -149,7 +149,7 @@ static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
 }
 
 /* Sun-ray bars: angled for Total, vertical-from-top for Split.
- * Fixed bar count (no gaps); intensity → length + color only. */
+ * Fixed bar count (no gaps); intensity → length only (one color). */
 static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
                               int min_intensity, bool is_light, bool vertical) {
 	if (intensity < min_intensity || strip_h <= 0)
@@ -158,16 +158,9 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
 	const int ray_count = 3; /* always the same — avoid gaps between hours */
 
 #if defined(PBL_COLOR)
-	GColor stroke_color;
-	/* Light: skip PastelYellow — invisible on white. Use amber→orange→red. */
-	if (intensity < 85) {
-		stroke_color = is_light ? GColorChromeYellow : GColorIcterine;
-	} else if (intensity < 170) {
-		stroke_color = is_light ? GColorOrange : GColorYellow;
-	} else {
-		stroke_color = is_light ? GColorDarkCandyAppleRed : GColorChromeYellow;
-	}
-	graphics_context_set_stroke_color(ctx, stroke_color);
+	/* One color; intensity is length only. */
+	graphics_context_set_stroke_color(ctx,
+	                                  is_light ? GColorOrange : GColorYellow);
 #else
 	graphics_context_set_stroke_color(ctx, GColorWhite);
 	(void)is_light;
