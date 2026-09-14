@@ -36,7 +36,7 @@ static inline int32_t prv_tuple_int(const Tuple *t) {
 #define STORAGE_KEY_WEATHER_PART3 5
 #define STORAGE_KEY_EVENTS 4
 
-// GRAPH_LAYERS_H is the combined height of daylight+cloud+precip+event — also
+// graph stack is the combined height of daylight+cloud+precip+event — also
 // used for the icon bar overlay and the temp layer so all three match. Must be
 // tall enough to fit the icon slots: >= 228 uses 22px icons (need 66px+),
 // middle tier uses 18px icons (56px gives zone_h=18), small uses 14px icons.
@@ -59,7 +59,7 @@ static inline int32_t prv_tuple_int(const Tuple *t) {
 #define EVENT_H 12
 // Sums to 56
 #endif
-#define GRAPH_LAYERS_H (DAYLIGHT_H + CLOUD_H + PRECIP_H + EVENT_H)
+#define GRAPH_LAYERS_H_BASE (DAYLIGHT_H + CLOUD_H + PRECIP_H + EVENT_H)
 
 #if defined(PBL_PLATFORM_EMERY)
 #define TEMP_H 56
@@ -86,6 +86,7 @@ static uint32_t s_minutes_since_launch;
 // Forward declarations
 static void prv_request_weather(void);
 static void prv_push_weather_to_layers(struct tm *now);
+static void prv_relayout_graph_stack(void);
 static void prv_update_steps(void);
 static void prv_apply_timeline_events(DictionaryIterator *iter);
 
@@ -356,6 +357,7 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 	// Check for settings changes first
 	settings_apply_from_message(iter);
+	prv_relayout_graph_stack();
 	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
 	window_set_background_color(s_main_window,
 	                            settings_get()->light_theme ? GColorWhite
@@ -583,6 +585,60 @@ static void prv_bt_handler(bool connected) {
 	}
 }
 
+
+static int prv_cloud_strip_h(void) {
+	/* Split: three rows, each the same height as Total's single layer. */
+	if (settings_get()->cloud_display_mode == CLOUD_DISPLAY_SPLIT)
+		return CLOUD_H * 3;
+	return CLOUD_H;
+}
+
+static int prv_graph_layers_h(void) {
+	return DAYLIGHT_H + prv_cloud_strip_h() + PRECIP_H + EVENT_H;
+}
+
+/** Reposition cloud/precip/event/time after Cloud Display mode changes. */
+static void prv_relayout_graph_stack(void) {
+	if (!s_main_window || !s_cloud_layer || !s_precip_layer || !s_event_layer ||
+	    !s_time_layer)
+		return;
+
+	Layer *root = window_get_root_layer(s_main_window);
+	GRect bounds = layer_get_bounds(root);
+	int w = bounds.size.w;
+	int cloud_h = prv_cloud_strip_h();
+	int y = DAYLIGHT_H;
+
+	layer_set_frame(cloud_layer_get_layer(s_cloud_layer),
+	                GRect(0, y, w, cloud_h));
+	y += cloud_h;
+
+	layer_set_frame(precip_layer_get_layer(s_precip_layer),
+	                GRect(0, y, w, PRECIP_H));
+	y += PRECIP_H;
+
+	layer_set_frame(event_layer_get_layer(s_event_layer),
+	                GRect(0, y, w, EVENT_H));
+	y += EVENT_H;
+
+	int graph_h = prv_graph_layers_h();
+	int avail_h = (bounds.size.h - TEMP_H) - graph_h;
+	int time_y = graph_h + (avail_h - TL_TIME_BLOCK_H) / 2;
+	if (time_y < graph_h)
+		time_y = graph_h;
+	int temp_y = bounds.size.h - TEMP_H;
+	if (time_y + TL_TIME_BLOCK_H > temp_y)
+		time_y = temp_y - TL_TIME_BLOCK_H;
+	if (time_y < graph_h)
+		time_y = graph_h;
+
+	layer_set_frame(time_layer_get_layer(s_time_layer),
+	                GRect(0, time_y, w, TL_TIME_BLOCK_H));
+
+	layer_mark_dirty(cloud_layer_get_layer(s_cloud_layer));
+	layer_mark_dirty(root);
+}
+
 static void prv_window_load(Window *window) {
 	Layer *root = window_get_root_layer(window);
 	GRect bounds = layer_get_bounds(root);
@@ -600,10 +656,11 @@ static void prv_window_load(Window *window) {
 	daylight_layer_set_battery(s_daylight_layer, init_batt.charge_percent,
 	                           init_batt.is_charging);
 
-	// Cloud cover layer
-	s_cloud_layer = cloud_layer_create(GRect(0, y, w, CLOUD_H));
+	// Cloud cover layer (Total = CLOUD_H; Split = 3× CLOUD_H rows)
+	int cloud_h = prv_cloud_strip_h();
+	s_cloud_layer = cloud_layer_create(GRect(0, y, w, cloud_h));
 	layer_add_child(root, cloud_layer_get_layer(s_cloud_layer));
-	y += CLOUD_H;
+	y += cloud_h;
 
 	// Precip graph
 	s_precip_layer = precip_layer_create(GRect(0, y, w, PRECIP_H));
@@ -616,8 +673,9 @@ static void prv_window_load(Window *window) {
 	y += EVENT_H;
 
 	// Time block — centered between top graphs and bottom meteogram
-	int avail_h = (bounds.size.h - TEMP_H) - GRAPH_LAYERS_H;
-	int time_y = GRAPH_LAYERS_H + (avail_h - TL_TIME_BLOCK_H) / 2;
+	int graph_h = prv_graph_layers_h();
+	int avail_h = (bounds.size.h - TEMP_H) - graph_h;
+	int time_y = graph_h + (avail_h - TL_TIME_BLOCK_H) / 2;
 	s_time_layer = time_layer_create(GRect(0, time_y, w, TL_TIME_BLOCK_H));
 	layer_add_child(root, time_layer_get_layer(s_time_layer));
 

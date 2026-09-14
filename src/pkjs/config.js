@@ -306,11 +306,11 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_CLOUD_DISPLAY_MODE',
 				'label': 'Cloud Display',
-				'description': 'Total cover, or split into low / mid / high altitude bands.',
+				'description': 'Total: one row. Split: three rows (high / mid / low), each as tall as Total; sun rays fill that height.',
 				'defaultValue': 0,
 				'options': [
-					{ 'label': 'Total', 'value': 0 },
-					{ 'label': 'Split (low / mid / high)', 'value': 1 },
+					{ 'label': 'Total (1 layer)', 'value': 0 },
+					{ 'label': 'Split (3 layers)', 'value': 1 },
 				],
 			},
 			{

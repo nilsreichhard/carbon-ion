@@ -223,10 +223,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	graphics_context_set_antialiased(ctx, false);
 
-	/* Clouds first; one angled ray overlay on top (Total and Split share strip height). */
+	/* Clouds first; angled rays span the full cloud strip height (1× or 3× CLOUD_H). */
 	if (!clouds_off) {
 		if (split) {
-			/* Same strip height, three stacked bands: high / mid / low. */
+			/* Three rows, each the same height as Total's single layer. */
 			int band = h / 3;
 			if (band < 4)
 				band = 4;
@@ -235,12 +235,13 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			int cy_low = 2 * band + band / 2 - 1;
 			if (cy_low >= h)
 				cy_low = h - 2;
+			/* Full-size lobes (same as Total) — each row matches single-layer height. */
 			prv_draw_band(ctx, cl, cl->cover_high, total_hours, graph_x, graph_w,
-			              cy_high, clear_th, small_th, med_th, true, is_light);
+			              cy_high, clear_th, small_th, med_th, false, is_light);
 			prv_draw_band(ctx, cl, cl->cover_mid, total_hours, graph_x, graph_w,
-			              cy_mid, clear_th, small_th, med_th, true, is_light);
+			              cy_mid, clear_th, small_th, med_th, false, is_light);
 			prv_draw_band(ctx, cl, cl->cover_low, total_hours, graph_x, graph_w,
-			              cy_low, clear_th, small_th, med_th, true, is_light);
+			              cy_low, clear_th, small_th, med_th, false, is_light);
 		} else {
 			int cy = h / 2 - 2;
 			prv_draw_band(ctx, cl, cl->cover, total_hours, graph_x, graph_w, cy,
