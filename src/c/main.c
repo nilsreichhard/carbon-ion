@@ -587,9 +587,7 @@ static void prv_bt_handler(bool connected) {
 
 
 static int prv_cloud_strip_h(void) {
-	/* Split: three full-size rows packed tight — ~2× CLOUD_H total strip. */
-	if (settings_get()->cloud_display_mode == CLOUD_DISPLAY_SPLIT)
-		return CLOUD_H * 2;
+	/* Total and Split share CLOUD_H — Split packs 3 bands inside; clock stays. */
 	return CLOUD_H;
 }
 
@@ -656,7 +654,7 @@ static void prv_window_load(Window *window) {
 	daylight_layer_set_battery(s_daylight_layer, init_batt.charge_percent,
 	                           init_batt.is_charging);
 
-	// Cloud cover layer (Total = CLOUD_H; Split = 3× CLOUD_H rows)
+	// Cloud cover layer (Total and Split both use CLOUD_H)
 	int cloud_h = prv_cloud_strip_h();
 	s_cloud_layer = cloud_layer_create(GRect(0, y, w, cloud_h));
 	layer_add_child(root, cloud_layer_get_layer(s_cloud_layer));
