@@ -306,7 +306,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_CLOUD_DISPLAY_MODE',
 				'label': 'Cloud Display',
-				'description': 'Total: one row. Split: three closer stacked rows (high / mid / low); sun rays fill the strip height.',
+				'description': 'Total: one row. Split: three full-size rows stacked with less padding; sun rays fill the strip.',
 				'defaultValue': 0,
 				'options': [
 					{ 'label': 'Total (1 layer)', 'value': 0 },
