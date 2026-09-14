@@ -75,7 +75,7 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int cy, int intensity,
 	graphics_context_set_stroke_color(ctx, GColorWhite);
 	(void)is_light;
 #endif
-	graphics_context_set_stroke_width(ctx, is_light ? 2 : 1);
+	graphics_context_set_stroke_width(ctx, 1);
 
 	// 1–3 diagonal rays; length scales with intensity.
 	int ray_count = 1 + (intensity / 100); // 1..3

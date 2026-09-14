@@ -97,7 +97,7 @@
   "name": "carbon-ion",
   "shortName": "Carbon Ion",
   "longName": "Carbon Ion",
-  "versionLabel": "2.2.1",
+  "versionLabel": "2.2.2",
   "companyName": "Nils Reich",
   "appKeys": {
     "WEATHER_REQUEST": 10000,
