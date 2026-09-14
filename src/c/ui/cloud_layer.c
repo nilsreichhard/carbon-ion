@@ -149,12 +149,14 @@ static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
 }
 
 /* Sun-ray bars: angled for Total, vertical-from-top for Split.
- * One bar per pixel across the hour column (no gaps between bars).
- * Intensity → length + color only. */
+ * Always draw a fixed count spanning the hour column (no empty hour gaps).
+ * Intensity → length + color only (never skip for being "too weak"). */
 static void prv_draw_sun_rays(GContext *ctx, int x0, int col_w, int strip_h,
                               int intensity, bool is_light, bool vertical) {
 	if (strip_h <= 0 || col_w <= 0)
 		return;
+
+	const int ray_count = 3;
 
 #if defined(PBL_COLOR)
 	GColor stroke_color;
@@ -175,6 +177,7 @@ static void prv_draw_sun_rays(GContext *ctx, int x0, int col_w, int strip_h,
 	graphics_context_set_stroke_width(ctx, 1);
 
 	int span = strip_h > 2 ? strip_h - 1 : 4;
+	/* Weak hours still get a short stub so the timeline stays continuous. */
 	int dy = 1 + (intensity * (span - 1)) / 255;
 	if (dy < 1)
 		dy = 1;
@@ -182,20 +185,21 @@ static void prv_draw_sun_rays(GContext *ctx, int x0, int col_w, int strip_h,
 		dy = span;
 
 	int y0 = 0;
-	int dx = 0;
-	if (!vertical) {
-		dx = dy;
-		if (dx < 2)
-			dx = 2;
-		if (dy > strip_h)
-			dy = strip_h;
-	}
-
-	/* Paint every x in the hour column — adjacent bars, no gaps between them. */
-	for (int ox = x0; ox < x0 + col_w; ox++) {
+	for (int r = 0; r < ray_count; r++) {
+		/* Spread bars across the full hour column to avoid gaps between hours. */
+		int ox = x0 + (col_w * (2 * r + 1)) / (2 * ray_count);
+		if (ox < x0)
+			ox = x0;
+		if (ox >= x0 + col_w)
+			ox = x0 + col_w - 1;
 		if (vertical) {
 			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox, y0 + dy));
 		} else {
+			int dx = dy;
+			if (dx < 2)
+				dx = 2;
+			if (dy > strip_h)
+				dy = strip_h;
 			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox + dx, y0 + dy));
 		}
 	}
