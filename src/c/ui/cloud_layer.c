@@ -148,9 +148,10 @@ static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
 	}
 }
 
-/* Angled sun-ray bars; length + stroke width scale with intensity. */
+/* Sun-ray bars: angled for Total (1 layer), vertical-from-top for Split.
+ * Intensity → bar count (1–3) + length; stroke thickens when strong. */
 static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
-                              int min_intensity, bool is_light) {
+                              int min_intensity, bool is_light, bool vertical) {
 	if (intensity < min_intensity || strip_h <= 0)
 		return;
 
@@ -162,32 +163,43 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
 	(void)is_light;
 #endif
 
-	/* Width (stroke) and count grow with strength. */
 	int stroke = intensity >= 170 ? 2 : 1;
 	graphics_context_set_stroke_width(ctx, stroke);
 
-	int ray_count = 1 + (intensity / 100); // 1..3
+	int ray_count = 1 + (intensity / 85); // 1..3
 	if (ray_count > 3)
 		ray_count = 3;
 
-	/* Length: short when weak, up to nearly full strip when strong.
-	 * Mild diagonal (dx ≈ dy/3) so bars still reach top→bottom in Split. */
-	int span = strip_h > 2 ? strip_h - 2 : 4;
+	int span = strip_h > 2 ? strip_h - 1 : 4;
 	int dy = 3 + (intensity * (span - 3)) / 255;
 	if (dy < 3)
 		dy = 3;
 	if (dy > span)
 		dy = span;
-	int dx = 1 + dy / 3;
-	if (dx < 1)
-		dx = 1;
-	int y0 = (strip_h - dy) / 2;
-	if (y0 < 0)
-		y0 = 0;
 
-	for (int r = 0; r < ray_count; r++) {
-		int ox = cx - 1 + r;
-		graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox + dx, y0 + dy));
+	if (vertical) {
+		/* Split: vertical bars starting at the top of the strip. */
+		int y0 = 0;
+		for (int r = 0; r < ray_count; r++) {
+			int ox = cx - 1 + r;
+			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox, y0 + dy));
+		}
+	} else {
+		/* Total: classic angled rays (≈45°) as in the reference look. */
+		int dx = dy;
+		if (dx < 2)
+			dx = 2;
+		int y0 = (strip_h - dy) / 2;
+		if (y0 < 0)
+			y0 = 0;
+		if (y0 + dy > strip_h)
+			y0 = strip_h - dy;
+		if (y0 < 0)
+			y0 = 0;
+		for (int r = 0; r < ray_count; r++) {
+			int ox = cx - 1 + r;
+			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox + dx, y0 + dy));
+		}
 	}
 }
 
@@ -259,7 +271,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			int wm2 = (int)cl->shortwave[i] * 4; // unpack
 			int base = wm2 >= sun_full ? 255 : (wm2 * 255) / sun_full;
 			int intensity = prv_ray_intensity_for_cover(base, cl->cover[i]);
-			prv_draw_sun_rays(ctx, cx, h, intensity, sun_min, is_light);
+			prv_draw_sun_rays(ctx, cx, h, intensity, sun_min, is_light, split);
 		}
 	}
 }
