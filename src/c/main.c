@@ -587,9 +587,9 @@ static void prv_bt_handler(bool connected) {
 
 
 static int prv_cloud_strip_h(void) {
-	/* Split: three rows, each the same height as Total's single layer. */
+	/* Split: three stacked rows, closer than 3× Total — ~2× CLOUD_H total. */
 	if (settings_get()->cloud_display_mode == CLOUD_DISPLAY_SPLIT)
-		return CLOUD_H * 3;
+		return CLOUD_H * 2;
 	return CLOUD_H;
 }
 

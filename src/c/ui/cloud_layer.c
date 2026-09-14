@@ -226,22 +226,25 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	/* Clouds first; angled rays span the full cloud strip height (1× or 3× CLOUD_H). */
 	if (!clouds_off) {
 		if (split) {
-			/* Three rows, each the same height as Total's single layer. */
+			/* Three compact rows packed into ~2× CLOUD_H (closer stack). */
 			int band = h / 3;
 			if (band < 4)
 				band = 4;
-			int cy_high = band / 2 - 1;
-			int cy_mid = band + band / 2 - 1;
-			int cy_low = 2 * band + band / 2 - 1;
-			if (cy_low >= h)
+			/* Center lobes with minimal padding between rows. */
+			int cy_high = band / 2;
+			int cy_mid = band + band / 2;
+			int cy_low = 2 * band + band / 2;
+			if (cy_high < 2)
+				cy_high = 2;
+			if (cy_low >= h - 1)
 				cy_low = h - 2;
-			/* Full-size lobes (same as Total) — each row matches single-layer height. */
+			/* Slightly smaller lobes so rows can sit closer without clipping. */
 			prv_draw_band(ctx, cl, cl->cover_high, total_hours, graph_x, graph_w,
-			              cy_high, clear_th, small_th, med_th, false, is_light);
+			              cy_high, clear_th, small_th, med_th, true, is_light);
 			prv_draw_band(ctx, cl, cl->cover_mid, total_hours, graph_x, graph_w,
-			              cy_mid, clear_th, small_th, med_th, false, is_light);
+			              cy_mid, clear_th, small_th, med_th, true, is_light);
 			prv_draw_band(ctx, cl, cl->cover_low, total_hours, graph_x, graph_w,
-			              cy_low, clear_th, small_th, med_th, false, is_light);
+			              cy_low, clear_th, small_th, med_th, true, is_light);
 		} else {
 			int cy = h / 2 - 2;
 			prv_draw_band(ctx, cl, cl->cover, total_hours, graph_x, graph_w, cy,
