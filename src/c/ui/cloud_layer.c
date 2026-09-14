@@ -160,7 +160,7 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
 #if defined(PBL_COLOR)
 	/* One color; intensity is length only. */
 	graphics_context_set_stroke_color(ctx,
-	                                  is_light ? GColorOrange : GColorYellow);
+	                                  is_light ? GColorChromeYellow : GColorYellow);
 #else
 	graphics_context_set_stroke_color(ctx, GColorWhite);
 	(void)is_light;
