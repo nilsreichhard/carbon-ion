@@ -159,12 +159,13 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
 
 #if defined(PBL_COLOR)
 	GColor stroke_color;
+	/* Light: skip PastelYellow — invisible on white. Use amber→orange→red. */
 	if (intensity < 85) {
-		stroke_color = is_light ? GColorPastelYellow : GColorIcterine;
+		stroke_color = is_light ? GColorChromeYellow : GColorIcterine;
 	} else if (intensity < 170) {
-		stroke_color = is_light ? GColorChromeYellow : GColorYellow;
+		stroke_color = is_light ? GColorOrange : GColorYellow;
 	} else {
-		stroke_color = is_light ? GColorOrange : GColorChromeYellow;
+		stroke_color = is_light ? GColorDarkCandyAppleRed : GColorChromeYellow;
 	}
 	graphics_context_set_stroke_color(ctx, stroke_color);
 #else
@@ -184,7 +185,7 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
 	int y0 = 0;
 	if (vertical) {
 		for (int r = 0; r < ray_count; r++) {
-			int ox = cx - 1 + r;
+			int ox = cx - 2 + r * 2; /* spaced like earlier look */
 			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox, y0 + dy));
 		}
 	} else {
@@ -194,7 +195,7 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
 		if (dy > strip_h)
 			dy = strip_h;
 		for (int r = 0; r < ray_count; r++) {
-			int ox = cx - 1 + r;
+			int ox = cx - 2 + r * 2; /* spaced like earlier look */
 			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox + dx, y0 + dy));
 		}
 	}
