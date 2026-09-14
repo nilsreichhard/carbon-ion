@@ -151,10 +151,11 @@ static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
 static void prv_draw_sun_rays(GContext *ctx, int cx, int cy, int intensity,
                               int min_intensity, bool is_light, int strip_h) {
 	/* intensity 0–255 from shortwave vs sensitivity full-scale.
-	 * Always one expanded set spanning the full cloud strip (Total or Split).
-	 * Mostly upright (small dx, large dy) so rays reach top→bottom even in Split. */
+	 * Always one vertical set spanning the full cloud strip (Total or Split),
+	 * so rays cover all three bands when Cloud Display is Split. */
 	if (intensity < min_intensity)
 		return;
+	(void)cy;
 
 #if defined(PBL_COLOR)
 	graphics_context_set_stroke_color(ctx,
@@ -171,22 +172,13 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int cy, int intensity,
 	if (ray_count < 2 && intensity >= 40)
 		ray_count = 2;
 
-	/* Vertical span: grow with intensity up to nearly full strip height. */
-	int span = strip_h > 2 ? strip_h - 2 : 6;
-	int dy = 4 + (intensity * (span - 4)) / 255;
-	if (dy < 4)
-		dy = 4;
-	if (dy > span)
-		dy = span;
-	/* Shallow diagonal: only 1–2 px horizontal for the whole height. */
-	int dx = 1 + (intensity >= 180 ? 1 : 0);
-	int v_off = dy / 2;
+	/* Full strip height — do not shrink with intensity. */
+	int y0 = 0;
+	int y1 = strip_h > 0 ? strip_h - 1 : 0;
 
 	for (int r = 0; r < ray_count; r++) {
 		int ox = cx - 1 + r;
-		int y0 = cy - v_off - (r % 2);
-		int y1 = y0 + dy;
-		graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox + dx, y1));
+		graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox, y1));
 	}
 }
 
