@@ -57,10 +57,13 @@ typedef struct {
 	uint8_t sunrise_minute; // 0-59 (appended for persist compat)
 	uint8_t sunset_minute;  // 0-59
 	uint8_t shortwave_radiation[WEATHER_HOURLY_COUNT]; // packed W/m²/4
+	uint8_t cloud_cover_low[WEATHER_HOURLY_COUNT];  /* append for persist */
+	uint8_t cloud_cover_mid[WEATHER_HOURLY_COUNT];
+	uint8_t cloud_cover_high[WEATHER_HOURLY_COUNT];
 } WeatherData;
 
-_Static_assert(sizeof(WeatherData) <= (PERSIST_DATA_MAX_LENGTH * 2),
-               "WeatherData exceeds 512 bytes");
+_Static_assert(sizeof(WeatherData) <= (PERSIST_DATA_MAX_LENGTH * 3),
+               "WeatherData exceeds 768 bytes");
 
 /**
  * Converts a WMO weather code (0-99) to a WeatherCondition enum.

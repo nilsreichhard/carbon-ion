@@ -194,6 +194,16 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		}
 	}
 
+
+	t = dict_find(iter, KEY_SETTING_CLOUD_DISPLAY_MODE);
+	if (!t) t = dict_find(iter, 10055);
+	if (t) {
+		int dm = prv_tuple_int(t);
+		if (dm >= 0 && dm <= 1) {
+			s_settings.cloud_display_mode = (CloudDisplayMode)dm;
+		}
+	}
+
 	if (memcmp(&prev, &s_settings, sizeof(Settings)) != 0) {
 		settings_save();
 	}

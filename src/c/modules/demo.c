@@ -187,6 +187,16 @@ void demo_data_load(WeatherData *weather, Settings *settings) {
 	memcpy(weather->precip_prob, s->precip_prob, 36);
 	memcpy(weather->cloud_cover, s->cloud_cover, 36);
 	memcpy(weather->hourly_weather_code, s->hourly_code, 36);
+	/* Split bands: derive plausible low/mid/high from total cover. */
+	memset(weather->cloud_cover_low, 0, sizeof(weather->cloud_cover_low));
+	memset(weather->cloud_cover_mid, 0, sizeof(weather->cloud_cover_mid));
+	memset(weather->cloud_cover_high, 0, sizeof(weather->cloud_cover_high));
+	for (int i = 0; i < 36; i++) {
+		uint8_t c = s->cloud_cover[i];
+		weather->cloud_cover_low[i] = (uint8_t)((c * 5) / 10);
+		weather->cloud_cover_mid[i] = (uint8_t)((c * 3) / 10);
+		weather->cloud_cover_high[i] = (uint8_t)((c * 2) / 10);
+	}
 	memset(weather->shortwave_radiation, 0, sizeof(weather->shortwave_radiation));
 	for (int i = 0; i < WEATHER_HOURLY_COUNT; i++) {
 		/* Demo daytime sun: ~600 W/m² packed as /4 during daylight hours. */
@@ -200,6 +210,9 @@ void demo_data_load(WeatherData *weather, Settings *settings) {
 		weather->apparent_temp_hourly[i] = s->apparent_hourly[i % 36];
 		weather->precip_prob[i] = s->precip_prob[i % 36];
 		weather->cloud_cover[i] = s->cloud_cover[i % 36];
+		weather->cloud_cover_low[i] = weather->cloud_cover_low[i % 36];
+		weather->cloud_cover_mid[i] = weather->cloud_cover_mid[i % 36];
+		weather->cloud_cover_high[i] = weather->cloud_cover_high[i % 36];
 		weather->hourly_weather_code[i] = s->hourly_code[i % 36];
 	}
 	strncpy(weather->city_name, s->city_name, WEATHER_CITY_MAX_LEN - 1);

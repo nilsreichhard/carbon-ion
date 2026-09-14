@@ -33,6 +33,7 @@ static inline int32_t prv_tuple_int(const Tuple *t) {
 // Storage key for persisting last-received weather across cold starts
 #define STORAGE_KEY_WEATHER 2
 #define STORAGE_KEY_WEATHER_PART2 3
+#define STORAGE_KEY_WEATHER_PART3 5
 #define STORAGE_KEY_EVENTS 4
 
 // GRAPH_LAYERS_H is the combined height of daylight+cloud+precip+event — also
@@ -189,12 +190,18 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	int8_t temp_view[MAX_GRAPH_HOURS + 1];
 	int8_t appar_view[MAX_GRAPH_HOURS + 1];
 	uint8_t cloud_view[MAX_GRAPH_HOURS + 1];
+	uint8_t cloud_low_view[MAX_GRAPH_HOURS + 1];
+	uint8_t cloud_mid_view[MAX_GRAPH_HOURS + 1];
+	uint8_t cloud_high_view[MAX_GRAPH_HOURS + 1];
 	uint8_t code_view[MAX_GRAPH_HOURS + 1];
 	uint8_t shortwave_view[MAX_GRAPH_HOURS + 1];
 	memset(precip_view, 0, sizeof(precip_view));
 	memset(temp_view, 0, sizeof(temp_view));
 	memset(appar_view, 0, sizeof(appar_view));
 	memset(cloud_view, 0, sizeof(cloud_view));
+	memset(cloud_low_view, 0, sizeof(cloud_low_view));
+	memset(cloud_mid_view, 0, sizeof(cloud_mid_view));
+	memset(cloud_high_view, 0, sizeof(cloud_high_view));
 	memset(code_view, 0, sizeof(code_view));
 	memset(shortwave_view, 0, sizeof(shortwave_view));
 
@@ -202,6 +209,9 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	memcpy(temp_view, &s_weather.temp_hourly[start_idx], copy_len);
 	memcpy(appar_view, &s_weather.apparent_temp_hourly[start_idx], copy_len);
 	memcpy(cloud_view, &s_weather.cloud_cover[start_idx], copy_len);
+	memcpy(cloud_low_view, &s_weather.cloud_cover_low[start_idx], copy_len);
+	memcpy(cloud_mid_view, &s_weather.cloud_cover_mid[start_idx], copy_len);
+	memcpy(cloud_high_view, &s_weather.cloud_cover_high[start_idx], copy_len);
 	memcpy(code_view, &s_weather.hourly_weather_code[start_idx], copy_len);
 	memcpy(shortwave_view, &s_weather.shortwave_radiation[start_idx], copy_len);
 
@@ -224,6 +234,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	                        s_weather.sunrise_minute, s_weather.sunset_hour,
 	                        s_weather.sunset_minute, current_hour, false, false);
 	cloud_layer_set_data(s_cloud_layer, cloud_view, code_view, shortwave_view,
+	                       cloud_low_view, cloud_mid_view, cloud_high_view,
 	                       current_hour);
 	precip_layer_set_data(s_precip_layer, precip_view, code_view, current_hour);
 	event_layer_set_data(s_event_layer, code_view, hours_remaining);
@@ -430,6 +441,27 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 		memcpy(s_weather.cloud_cover, t->value->data, len);
 	}
 
+	t = dict_find(iter, MESSAGE_KEY_WEATHER_CLOUD_COVER_LOW);
+	if (!t) t = dict_find(iter, 10056);
+	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+		int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
+		memcpy(s_weather.cloud_cover_low, t->value->data, len);
+	}
+
+	t = dict_find(iter, MESSAGE_KEY_WEATHER_CLOUD_COVER_MID);
+	if (!t) t = dict_find(iter, 10057);
+	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+		int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
+		memcpy(s_weather.cloud_cover_mid, t->value->data, len);
+	}
+
+	t = dict_find(iter, MESSAGE_KEY_WEATHER_CLOUD_COVER_HIGH);
+	if (!t) t = dict_find(iter, 10058);
+	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+		int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
+		memcpy(s_weather.cloud_cover_high, t->value->data, len);
+	}
+
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_HOURLY_CODE);
 	if (!t) t = dict_find(iter, 10009);
 	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
@@ -467,11 +499,23 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 		s_weather.valid_hours = WEATHER_HOURLY_COUNT;
 		s_last_answered_seq = s_last_sent_request_seq;
 
-		// Persist for cold-start restoration across 2 storage keys
-		persist_write_data(STORAGE_KEY_WEATHER, &s_weather, 256);
-		persist_write_data(STORAGE_KEY_WEATHER_PART2,
-		                   ((const uint8_t *)&s_weather) + 256,
-		                   sizeof(s_weather) - 256);
+		// Persist for cold-start restoration across 3 storage keys (256 each)
+		{
+			const uint8_t *raw = (const uint8_t *)&s_weather;
+			int remain = (int)sizeof(s_weather);
+			int n = remain < 256 ? remain : 256;
+			persist_write_data(STORAGE_KEY_WEATHER, raw, n);
+			remain -= n;
+			if (remain > 0) {
+				n = remain < 256 ? remain : 256;
+				persist_write_data(STORAGE_KEY_WEATHER_PART2, raw + 256, n);
+				remain -= n;
+			}
+			if (remain > 0) {
+				n = remain < 256 ? remain : 256;
+				persist_write_data(STORAGE_KEY_WEATHER_PART3, raw + 512, n);
+			}
+		}
 	}
 
 	// Apply settings and push weather to layers ONCE
@@ -651,11 +695,19 @@ static void init(void) {
 	demo_data_load(&s_weather, settings_get());
 #else
 	if (persist_exists(STORAGE_KEY_WEATHER)) {
-		persist_read_data(STORAGE_KEY_WEATHER, &s_weather, 256);
-		if (persist_exists(STORAGE_KEY_WEATHER_PART2)) {
-			persist_read_data(STORAGE_KEY_WEATHER_PART2,
-			                  ((uint8_t *)&s_weather) + 256,
-			                  sizeof(s_weather) - 256);
+		uint8_t *raw = (uint8_t *)&s_weather;
+		int remain = (int)sizeof(s_weather);
+		int n = remain < 256 ? remain : 256;
+		persist_read_data(STORAGE_KEY_WEATHER, raw, n);
+		remain -= n;
+		if (remain > 0 && persist_exists(STORAGE_KEY_WEATHER_PART2)) {
+			n = remain < 256 ? remain : 256;
+			persist_read_data(STORAGE_KEY_WEATHER_PART2, raw + 256, n);
+			remain -= n;
+		}
+		if (remain > 0 && persist_exists(STORAGE_KEY_WEATHER_PART3)) {
+			n = remain < 256 ? remain : 256;
+			persist_read_data(STORAGE_KEY_WEATHER_PART3, raw + 512, n);
 		}
 	}
 #endif

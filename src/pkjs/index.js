@@ -1083,6 +1083,9 @@ function writeCache(payload) {
  * @param {number[]} payload.temp_hourly           Hourly temperature values.
  * @param {number[]} payload.apparent_temp_hourly  Hourly apparent temperature values.
  * @param {number[]} payload.cloud_cover           Hourly cloud cover (0–100).
+ * @param {number[]} payload.cloud_cover_low       Hourly low-altitude cloud cover (0–100).
+ * @param {number[]} payload.cloud_cover_mid       Hourly mid-altitude cloud cover (0–100).
+ * @param {number[]} payload.cloud_cover_high      Hourly high-altitude cloud cover (0–100).
  * @param {number[]} payload.hourly_weather_code   Hourly WMO weather codes.
  * @param {number[]} payload.shortwave_radiation   Hourly shortwave radiation (W/m²).
  * @param {string}   payload.city_name             City label for the time layer.
@@ -1102,6 +1105,9 @@ function sendToWatch(payload) {
 	var tempHourly = (payload.temp_hourly || []).slice(0, hourlyCount);
 	var apparentHourly = (payload.apparent_temp_hourly || []).slice(0, hourlyCount);
 	var cloudCover = (payload.cloud_cover || []).slice(0, hourlyCount);
+	var cloudCoverLow = (payload.cloud_cover_low || []).slice(0, hourlyCount);
+	var cloudCoverMid = (payload.cloud_cover_mid || []).slice(0, hourlyCount);
+	var cloudCoverHigh = (payload.cloud_cover_high || []).slice(0, hourlyCount);
 	var hourlyCode = (payload.hourly_weather_code || []).slice(0, hourlyCount);
 	var shortwave = (payload.shortwave_radiation || []).slice(0, hourlyCount);
 
@@ -1109,6 +1115,9 @@ function sendToWatch(payload) {
 	while (tempHourly.length < hourlyCount) tempHourly.push(0);
 	while (apparentHourly.length < hourlyCount) apparentHourly.push(0);
 	while (cloudCover.length < hourlyCount) cloudCover.push(0);
+	while (cloudCoverLow.length < hourlyCount) cloudCoverLow.push(0);
+	while (cloudCoverMid.length < hourlyCount) cloudCoverMid.push(0);
+	while (cloudCoverHigh.length < hourlyCount) cloudCoverHigh.push(0);
 	while (hourlyCode.length < hourlyCount) hourlyCode.push(0);
 	while (shortwave.length < hourlyCount) shortwave.push(0);
 
@@ -1128,6 +1137,12 @@ function sendToWatch(payload) {
 		10007: packInt8Array(apparentHourly, hourlyCount),
 		'WEATHER_CLOUD_COVER': packUint8Array(cloudCover, hourlyCount),
 		10008: packUint8Array(cloudCover, hourlyCount),
+		'WEATHER_CLOUD_COVER_LOW': packUint8Array(cloudCoverLow, hourlyCount),
+		10056: packUint8Array(cloudCoverLow, hourlyCount),
+		'WEATHER_CLOUD_COVER_MID': packUint8Array(cloudCoverMid, hourlyCount),
+		10057: packUint8Array(cloudCoverMid, hourlyCount),
+		'WEATHER_CLOUD_COVER_HIGH': packUint8Array(cloudCoverHigh, hourlyCount),
+		10058: packUint8Array(cloudCoverHigh, hourlyCount),
 		'WEATHER_HOURLY_CODE': packUint8Array(hourlyCode, hourlyCount),
 		10009: packUint8Array(hourlyCode, hourlyCount),
 		'WEATHER_SHORTWAVE_RADIATION': packShortwaveArray(shortwave, hourlyCount),
@@ -1562,7 +1577,7 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 		'?latitude=' + lat +
 		'&longitude=' + lon +
 		'&current=temperature_2m,weather_code' +
-		'&hourly=precipitation_probability,temperature_2m,apparent_temperature,cloud_cover,weather_code,shortwave_radiation' +
+		'&hourly=precipitation_probability,temperature_2m,apparent_temperature,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,weather_code,shortwave_radiation' +
 		'&past_hours=12' +
 		'&forecast_hours=60' +
 		'&daily=sunrise,sunset,temperature_2m_min,temperature_2m_max' +
@@ -1608,6 +1623,9 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 					payload.temp_hourly = hrly.temperature_2m || [];
 					payload.apparent_temp_hourly = hrly.apparent_temperature || [];
 					payload.cloud_cover = hrly.cloud_cover || [];
+					payload.cloud_cover_low = hrly.cloud_cover_low || [];
+					payload.cloud_cover_mid = hrly.cloud_cover_mid || [];
+					payload.cloud_cover_high = hrly.cloud_cover_high || [];
 					payload.hourly_weather_code = hrly.weather_code || [];
 					payload.shortwave_radiation = hrly.shortwave_radiation || [];
 				}
@@ -1996,6 +2014,13 @@ Pebble.addEventListener('webviewclosed', function (e) {
 	if (cloudSensitivity >= 0 && cloudSensitivity <= 4) {
 		dict[10051] = cloudSensitivity;
 		dict['SETTING_CLOUD_SENSITIVITY'] = cloudSensitivity;
+	}
+
+	var cloudDisplayMode = extractInt(rawSettings['SETTING_CLOUD_DISPLAY_MODE']);
+	if (isNaN(cloudDisplayMode)) cloudDisplayMode = 0; // Total default
+	if (cloudDisplayMode >= 0 && cloudDisplayMode <= 1) {
+		dict[10055] = cloudDisplayMode;
+		dict['SETTING_CLOUD_DISPLAY_MODE'] = cloudDisplayMode;
 	}
 
 	var sunlightSens = extractInt(rawSettings['SETTING_SUNLIGHT_SENSITIVITY']);

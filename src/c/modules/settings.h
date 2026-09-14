@@ -49,6 +49,11 @@ typedef enum {
 } CloudSensitivity;
 
 typedef enum {
+	CLOUD_DISPLAY_TOTAL = 0, // one row of lobes from total cloud_cover
+	CLOUD_DISPLAY_SPLIT = 1, // stacked high / mid / low bands
+} CloudDisplayMode;
+
+typedef enum {
 	SUN_SENS_VERY = 0,        // weak sun still shows; full scale ~500 W/m²
 	SUN_SENS_SENSITIVE = 1,   // prior on-toggle feel; full ~800
 	SUN_SENS_BALANCED = 2,    // full ~950
@@ -80,6 +85,7 @@ typedef enum {
 #define KEY_SETTING_CLOUD_SENSITIVITY 10051
 #define KEY_SETTING_SUNLIGHT_RAYS 10052
 #define KEY_SETTING_SUNLIGHT_SENSITIVITY 10054
+#define KEY_SETTING_CLOUD_DISPLAY_MODE 10055
 
 typedef struct {
 	bool temp_unit_celsius;
@@ -97,6 +103,7 @@ typedef struct {
 	CloudSensitivity cloud_sensitivity;
 	bool sunlight_rays; /* legacy toggle; migrated into sunlight_sensitivity */
 	SunlightSensitivity sunlight_sensitivity;
+	CloudDisplayMode cloud_display_mode; /* append for persist compat */
 } Settings;
 
 void settings_init(void);

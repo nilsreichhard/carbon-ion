@@ -304,6 +304,17 @@ module.exports = [
 			},
 			{
 				'type': 'select',
+				'messageKey': 'SETTING_CLOUD_DISPLAY_MODE',
+				'label': 'Cloud Display',
+				'description': 'Total cover, or split into low / mid / high altitude bands.',
+				'defaultValue': 0,
+				'options': [
+					{ 'label': 'Total', 'value': 0 },
+					{ 'label': 'Split (low / mid / high)', 'value': 1 },
+				],
+			},
+			{
+				'type': 'select',
 				'messageKey': 'SETTING_SUNLIGHT_SENSITIVITY',
 				'label': 'Sunlight Sensitivity',
 				'description': 'How readily sunlight rays appear for a given shortwave radiation level.',

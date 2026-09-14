@@ -17,4 +17,5 @@ void cloud_layer_destroy(CloudLayer *layer);
 Layer *cloud_layer_get_layer(CloudLayer *layer);
 void cloud_layer_set_data(CloudLayer *layer, const uint8_t *cover,
                           const uint8_t *hourly_code, const uint8_t *shortwave,
-                          uint8_t current_hour);
+                          const uint8_t *cover_low, const uint8_t *cover_mid,
+                          const uint8_t *cover_high, uint8_t current_hour);
