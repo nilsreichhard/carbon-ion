@@ -539,6 +539,27 @@ function packUint8Array(values, hourlyCount) {
  * @param   {number[]} values  Input values; missing entries default to 0.
  * @returns {number[]}         hourlyCount-element array clamped to [-128, 127], encoded as unsigned bytes.
  */
+
+/**
+ * Pack shortwave radiation (W/m²) into uint8 as value/4, clamped to 0–255.
+ * Watch multiplies by 4 to recover approximate W/m² (0–1020).
+ *
+ * @param {number[]} values
+ * @param {number}   hourlyCount
+ * @returns {number[]}
+ */
+function packShortwaveArray(values, hourlyCount) {
+	var out = [];
+	for (var i = 0; i < hourlyCount; i++) {
+		var v = (values && values[i] != null) ? Number(values[i]) : 0;
+		if (isNaN(v) || v < 0) v = 0;
+		var packed = Math.round(v / 4);
+		if (packed > 255) packed = 255;
+		out.push(packed);
+	}
+	return out;
+}
+
 function packInt8Array(values, hourlyCount) {
 	var arr = [];
 	for (var i = 0; i < hourlyCount; i++) {
@@ -1063,6 +1084,7 @@ function writeCache(payload) {
  * @param {number[]} payload.apparent_temp_hourly  Hourly apparent temperature values.
  * @param {number[]} payload.cloud_cover           Hourly cloud cover (0–100).
  * @param {number[]} payload.hourly_weather_code   Hourly WMO weather codes.
+ * @param {number[]} payload.shortwave_radiation   Hourly shortwave radiation (W/m²).
  * @param {string}   payload.city_name             City label for the time layer.
  * @param {string}   payload.temp_unit             'celsius' or 'fahrenheit'.
  * @param {number}  [payload.current_temp]         Current temperature (omitted when null).
@@ -1081,12 +1103,14 @@ function sendToWatch(payload) {
 	var apparentHourly = (payload.apparent_temp_hourly || []).slice(0, hourlyCount);
 	var cloudCover = (payload.cloud_cover || []).slice(0, hourlyCount);
 	var hourlyCode = (payload.hourly_weather_code || []).slice(0, hourlyCount);
+	var shortwave = (payload.shortwave_radiation || []).slice(0, hourlyCount);
 
 	while (precipProb.length < hourlyCount) precipProb.push(0);
 	while (tempHourly.length < hourlyCount) tempHourly.push(0);
 	while (apparentHourly.length < hourlyCount) apparentHourly.push(0);
 	while (cloudCover.length < hourlyCount) cloudCover.push(0);
 	while (hourlyCode.length < hourlyCount) hourlyCode.push(0);
+	while (shortwave.length < hourlyCount) shortwave.push(0);
 
 	// 0 = celsius, 1 = fahrenheit  (matches settings.c convention)
 	var tempUnitFlag = (payload.temp_unit === 'fahrenheit') ? 1 : 0;
@@ -1106,6 +1130,8 @@ function sendToWatch(payload) {
 		10008: packUint8Array(cloudCover, hourlyCount),
 		'WEATHER_HOURLY_CODE': packUint8Array(hourlyCode, hourlyCount),
 		10009: packUint8Array(hourlyCode, hourlyCount),
+		'WEATHER_SHORTWAVE_RADIATION': packShortwaveArray(shortwave, hourlyCount),
+		10053: packShortwaveArray(shortwave, hourlyCount),
 		'CITY_NAME': cityName.substring(0, 23),
 		10013: cityName.substring(0, 23),
 		'SETTING_TEMP_UNIT': tempUnitFlag,
@@ -1536,7 +1562,7 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 		'?latitude=' + lat +
 		'&longitude=' + lon +
 		'&current=temperature_2m,weather_code' +
-		'&hourly=precipitation_probability,temperature_2m,apparent_temperature,cloud_cover,weather_code' +
+		'&hourly=precipitation_probability,temperature_2m,apparent_temperature,cloud_cover,weather_code,shortwave_radiation' +
 		'&past_hours=12' +
 		'&forecast_hours=60' +
 		'&daily=sunrise,sunset,temperature_2m_min,temperature_2m_max' +
@@ -1576,13 +1602,14 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 				payload.sunset_minute = dly && dly.sunset
 					? extractMinuteFromUnix(dly.sunset[0], utcOffsetSec) : 0;
 
-				// forecast_hours=FORECAST_HOURS returns entries starting from now
+				// past_hours=12 + forecast_hours=60 → 72 hourly slots starting 12h ago
 				if (hrly) {
 					payload.precip_prob = hrly.precipitation_probability || [];
 					payload.temp_hourly = hrly.temperature_2m || [];
 					payload.apparent_temp_hourly = hrly.apparent_temperature || [];
 					payload.cloud_cover = hrly.cloud_cover || [];
 					payload.hourly_weather_code = hrly.weather_code || [];
+					payload.shortwave_radiation = hrly.shortwave_radiation || [];
 				}
 
 				// Record the real origin time so the watch can compute how many
@@ -1963,6 +1990,18 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		dict[10035] = timelineEvent;
 		dict['SETTING_TIMELINE_EVENT'] = timelineEvent;
 	}
+
+	var cloudSensitivity = extractInt(rawSettings['SETTING_CLOUD_SENSITIVITY']);
+	if (isNaN(cloudSensitivity)) cloudSensitivity = 1; // Sensitive default
+	if (cloudSensitivity >= 0 && cloudSensitivity <= 4) {
+		dict[10051] = cloudSensitivity;
+		dict['SETTING_CLOUD_SENSITIVITY'] = cloudSensitivity;
+	}
+
+	var sunlightRays = extractBool(rawSettings['SETTING_SUNLIGHT_RAYS']);
+	if (sunlightRays === null || sunlightRays === undefined) sunlightRays = 0;
+	dict[10052] = sunlightRays ? 1 : 0;
+	dict['SETTING_SUNLIGHT_RAYS'] = sunlightRays ? 1 : 0;
 
 	var clearCacheRequested = extractBool(rawSettings['SETTING_CLEAR_CACHE']) === 1;
 

@@ -288,6 +288,27 @@ module.exports = [
 					{ 'label': 'Every 60 minutes', 'value': 60 },
 				],
 			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_CLOUD_SENSITIVITY',
+				'label': 'Cloud Coverage Sensitivity',
+				'description': 'How readily cloud lobes appear for a given cloud-cover percentage.',
+				'defaultValue': 1,
+				'options': [
+					{ 'label': 'Very sensitive', 'value': 0 },
+					{ 'label': 'Sensitive', 'value': 1 },
+					{ 'label': 'Balanced', 'value': 2 },
+					{ 'label': 'Insensitive', 'value': 3 },
+					{ 'label': 'Off', 'value': 4 },
+				],
+			},
+			{
+				'type': 'toggle',
+				'messageKey': 'SETTING_SUNLIGHT_RAYS',
+				'label': 'Sunlight rays',
+				'description': 'Show sunlight intensity as diagonal yellow rays (from shortwave radiation).',
+				'defaultValue': false,
+			},
 		],
 	},
 	{

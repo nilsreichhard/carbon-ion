@@ -187,6 +187,14 @@ void demo_data_load(WeatherData *weather, Settings *settings) {
 	memcpy(weather->precip_prob, s->precip_prob, 36);
 	memcpy(weather->cloud_cover, s->cloud_cover, 36);
 	memcpy(weather->hourly_weather_code, s->hourly_code, 36);
+	memset(weather->shortwave_radiation, 0, sizeof(weather->shortwave_radiation));
+	for (int i = 0; i < WEATHER_HOURLY_COUNT; i++) {
+		/* Demo daytime sun: ~600 W/m² packed as /4 during daylight hours. */
+		int hour = (i + 12) % 24; /* rough local hour across the buffer */
+		if (hour >= s->sunrise_hour && hour < s->sunset_hour) {
+			weather->shortwave_radiation[i] = 150; /* ~600 W/m² */
+		}
+	}
 	for (int i = 36; i < WEATHER_HOURLY_COUNT; i++) {
 		weather->temp_hourly[i] = s->temp_hourly[i % 36];
 		weather->apparent_temp_hourly[i] = s->apparent_hourly[i % 36];

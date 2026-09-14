@@ -39,6 +39,14 @@ typedef enum {
 	TIMELINE_WINDOW_48H = 48, // 48h future + 12h past = 60h total
 } TimelineWindow;
 
+
+typedef enum {
+	CLOUD_SENS_VERY = 0,       // clear 5, small<25, med<55
+	CLOUD_SENS_SENSITIVE = 1,  // clear 15, small<40, med<70 (default)
+	CLOUD_SENS_BALANCED = 2,   // clear 25, small<50, med<75
+	CLOUD_SENS_INSENSITIVE = 3,// clear 40, small<65, med<85
+	CLOUD_SENS_OFF = 4,        // never draw lobes
+} CloudSensitivity;
 typedef enum {
 	TIMELINE_EVENT_NONE = 0,
 	TIMELINE_EVENT_BAR = 1,
@@ -60,6 +68,8 @@ typedef enum {
 #define KEY_SETTING_TIMELINE_BATTERY 10033
 #define KEY_SETTING_SHOW_STEP_COUNT 10034
 #define KEY_SETTING_TIMELINE_EVENT 10035
+#define KEY_SETTING_CLOUD_SENSITIVITY 10051
+#define KEY_SETTING_SUNLIGHT_RAYS 10052
 
 typedef struct {
 	bool temp_unit_celsius;
@@ -74,6 +84,8 @@ typedef struct {
 	TimelineBatteryMode timeline_battery;
 	bool show_step_count;
 	TimelineEventMode timeline_event;
+	CloudSensitivity cloud_sensitivity;
+	bool sunlight_rays;
 } Settings;
 
 void settings_init(void);

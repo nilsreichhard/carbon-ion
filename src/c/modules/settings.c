@@ -28,6 +28,8 @@ static const Settings s_defaults = {
     .timeline_battery = TIMELINE_BATT_10_0,
     .show_step_count = true,
     .timeline_event = TIMELINE_EVENT_SPAN,
+    .cloud_sensitivity = CLOUD_SENS_SENSITIVE,
+    .sunlight_rays = false,
 };
 
 void settings_init(void) {
@@ -154,6 +156,22 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		if (em >= 0 && em <= 2) {
 			s_settings.timeline_event = (TimelineEventMode)em;
 		}
+	}
+
+
+	t = dict_find(iter, KEY_SETTING_CLOUD_SENSITIVITY);
+	if (!t) t = dict_find(iter, 10051);
+	if (t) {
+		int cs = prv_tuple_int(t);
+		if (cs >= 0 && cs <= 4) {
+			s_settings.cloud_sensitivity = (CloudSensitivity)cs;
+		}
+	}
+
+	t = dict_find(iter, KEY_SETTING_SUNLIGHT_RAYS);
+	if (!t) t = dict_find(iter, 10052);
+	if (t) {
+		s_settings.sunlight_rays = (prv_tuple_int(t) != 0);
 	}
 
 	if (memcmp(&prev, &s_settings, sizeof(Settings)) != 0) {

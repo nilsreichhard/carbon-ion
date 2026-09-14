@@ -190,17 +190,20 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	int8_t appar_view[MAX_GRAPH_HOURS + 1];
 	uint8_t cloud_view[MAX_GRAPH_HOURS + 1];
 	uint8_t code_view[MAX_GRAPH_HOURS + 1];
+	uint8_t shortwave_view[MAX_GRAPH_HOURS + 1];
 	memset(precip_view, 0, sizeof(precip_view));
 	memset(temp_view, 0, sizeof(temp_view));
 	memset(appar_view, 0, sizeof(appar_view));
 	memset(cloud_view, 0, sizeof(cloud_view));
 	memset(code_view, 0, sizeof(code_view));
+	memset(shortwave_view, 0, sizeof(shortwave_view));
 
 	memcpy(precip_view, &s_weather.precip_prob[start_idx], copy_len);
 	memcpy(temp_view, &s_weather.temp_hourly[start_idx], copy_len);
 	memcpy(appar_view, &s_weather.apparent_temp_hourly[start_idx], copy_len);
 	memcpy(cloud_view, &s_weather.cloud_cover[start_idx], copy_len);
 	memcpy(code_view, &s_weather.hourly_weather_code[start_idx], copy_len);
+	memcpy(shortwave_view, &s_weather.shortwave_radiation[start_idx], copy_len);
 
 	uint8_t hours_remaining = copy_len;
 
@@ -220,7 +223,8 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	daylight_layer_set_data(s_daylight_layer, s_weather.sunrise_hour,
 	                        s_weather.sunrise_minute, s_weather.sunset_hour,
 	                        s_weather.sunset_minute, current_hour, false, false);
-	cloud_layer_set_data(s_cloud_layer, cloud_view, code_view, current_hour);
+	cloud_layer_set_data(s_cloud_layer, cloud_view, code_view, shortwave_view,
+	                       current_hour);
 	precip_layer_set_data(s_precip_layer, precip_view, code_view, current_hour);
 	event_layer_set_data(s_event_layer, code_view, hours_remaining);
 	time_layer_set_condition(s_time_layer,
@@ -431,6 +435,13 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
 		int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
 		memcpy(s_weather.hourly_weather_code, t->value->data, len);
+	}
+
+	t = dict_find(iter, MESSAGE_KEY_WEATHER_SHORTWAVE_RADIATION);
+	if (!t) t = dict_find(iter, 10053);
+	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+		int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
+		memcpy(s_weather.shortwave_radiation, t->value->data, len);
 	}
 
 	t = dict_find(iter, MESSAGE_KEY_CITY_NAME);

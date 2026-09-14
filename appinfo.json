@@ -61,7 +61,10 @@
     "SETTING_CALENDAR_COLOR_1": 10041,
     "SETTING_CALENDAR_COLOR_2": 10042,
     "SETTING_CALENDAR_COLOR_3": 10043,
-    "TIMELINE_EVENT_COLORS": 10044
+    "TIMELINE_EVENT_COLORS": 10044,
+    "SETTING_CLOUD_SENSITIVITY": 10051,
+    "SETTING_SUNLIGHT_RAYS": 10052,
+    "WEATHER_SHORTWAVE_RADIATION": 10053
   },
   "resources": {
     "media": [
@@ -94,7 +97,7 @@
   "name": "carbon-ion",
   "shortName": "Carbon Ion",
   "longName": "Carbon Ion",
-  "versionLabel": "2.1.6",
+  "versionLabel": "2.2.0",
   "companyName": "Nils Reich",
   "appKeys": {
     "WEATHER_REQUEST": 10000,
@@ -144,6 +147,9 @@
     "SETTING_CALENDAR_COLOR_1": 10041,
     "SETTING_CALENDAR_COLOR_2": 10042,
     "SETTING_CALENDAR_COLOR_3": 10043,
-    "TIMELINE_EVENT_COLORS": 10044
+    "TIMELINE_EVENT_COLORS": 10044,
+    "SETTING_CLOUD_SENSITIVITY": 10051,
+    "SETTING_SUNLIGHT_RAYS": 10052,
+    "WEATHER_SHORTWAVE_RADIATION": 10053
   }
 }

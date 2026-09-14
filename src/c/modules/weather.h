@@ -56,6 +56,7 @@ typedef struct {
 	                     // (0-WEATHER_HOURLY_COUNT)
 	uint8_t sunrise_minute; // 0-59 (appended for persist compat)
 	uint8_t sunset_minute;  // 0-59
+	uint8_t shortwave_radiation[WEATHER_HOURLY_COUNT]; // packed W/m²/4
 } WeatherData;
 
 _Static_assert(sizeof(WeatherData) <= (PERSIST_DATA_MAX_LENGTH * 2),
