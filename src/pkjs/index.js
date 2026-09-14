@@ -1998,10 +1998,16 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		dict['SETTING_CLOUD_SENSITIVITY'] = cloudSensitivity;
 	}
 
-	var sunlightRays = extractBool(rawSettings['SETTING_SUNLIGHT_RAYS']);
-	if (sunlightRays === null || sunlightRays === undefined) sunlightRays = 0;
-	dict[10052] = sunlightRays ? 1 : 0;
-	dict['SETTING_SUNLIGHT_RAYS'] = sunlightRays ? 1 : 0;
+	var sunlightSens = extractInt(rawSettings['SETTING_SUNLIGHT_SENSITIVITY']);
+	if (isNaN(sunlightSens)) {
+		/* Migrate legacy toggle if sensitivity not yet in Clay store */
+		var legacyRays = extractBool(rawSettings['SETTING_SUNLIGHT_RAYS']);
+		sunlightSens = legacyRays ? 1 : 4;
+	}
+	if (sunlightSens >= 0 && sunlightSens <= 4) {
+		dict[10054] = sunlightSens;
+		dict['SETTING_SUNLIGHT_SENSITIVITY'] = sunlightSens;
+	}
 
 	var clearCacheRequested = extractBool(rawSettings['SETTING_CLEAR_CACHE']) === 1;
 

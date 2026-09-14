@@ -8,6 +8,7 @@
  */
 
 #include "settings.h"
+#include <stddef.h>
 
 #define STORAGE_KEY_SETTINGS 0
 
@@ -30,6 +31,7 @@ static const Settings s_defaults = {
     .timeline_event = TIMELINE_EVENT_SPAN,
     .cloud_sensitivity = CLOUD_SENS_SENSITIVE,
     .sunlight_rays = false,
+    .sunlight_sensitivity = SUN_SENS_OFF,
 };
 
 void settings_init(void) {
@@ -45,6 +47,11 @@ void settings_init(void) {
 			                    ? stored_size
 			                    : (int)sizeof(s_settings);
 			persist_read_data(STORAGE_KEY_SETTINGS, &s_settings, read_size);
+			/* Upgrade from pre-sensitivity builds: map legacy rays toggle. */
+			if (stored_size <= (int)offsetof(Settings, sunlight_sensitivity)) {
+				s_settings.sunlight_sensitivity =
+				    s_settings.sunlight_rays ? SUN_SENS_SENSITIVE : SUN_SENS_OFF;
+			}
 		}
 	}
 }
@@ -168,10 +175,23 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		}
 	}
 
-	t = dict_find(iter, KEY_SETTING_SUNLIGHT_RAYS);
-	if (!t) t = dict_find(iter, 10052);
+	t = dict_find(iter, KEY_SETTING_SUNLIGHT_SENSITIVITY);
+	if (!t) t = dict_find(iter, 10054);
 	if (t) {
-		s_settings.sunlight_rays = (prv_tuple_int(t) != 0);
+		int ss = prv_tuple_int(t);
+		if (ss >= 0 && ss <= 4) {
+			s_settings.sunlight_sensitivity = (SunlightSensitivity)ss;
+			s_settings.sunlight_rays = (ss != SUN_SENS_OFF);
+		}
+	} else {
+		/* Legacy Clay toggle only */
+		t = dict_find(iter, KEY_SETTING_SUNLIGHT_RAYS);
+		if (!t) t = dict_find(iter, 10052);
+		if (t) {
+			s_settings.sunlight_rays = (prv_tuple_int(t) != 0);
+			s_settings.sunlight_sensitivity =
+			    s_settings.sunlight_rays ? SUN_SENS_SENSITIVE : SUN_SENS_OFF;
+		}
 	}
 
 	if (memcmp(&prev, &s_settings, sizeof(Settings)) != 0) {

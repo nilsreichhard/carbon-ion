@@ -64,6 +64,7 @@
     "TIMELINE_EVENT_COLORS": 10044,
     "SETTING_CLOUD_SENSITIVITY": 10051,
     "SETTING_SUNLIGHT_RAYS": 10052,
+    "SETTING_SUNLIGHT_SENSITIVITY": 10054,
     "WEATHER_SHORTWAVE_RADIATION": 10053
   },
   "resources": {
@@ -97,7 +98,7 @@
   "name": "carbon-ion",
   "shortName": "Carbon Ion",
   "longName": "Carbon Ion",
-  "versionLabel": "2.2.2",
+  "versionLabel": "2.2.3",
   "companyName": "Nils Reich",
   "appKeys": {
     "WEATHER_REQUEST": 10000,
@@ -150,6 +151,7 @@
     "TIMELINE_EVENT_COLORS": 10044,
     "SETTING_CLOUD_SENSITIVITY": 10051,
     "SETTING_SUNLIGHT_RAYS": 10052,
+    "SETTING_SUNLIGHT_SENSITIVITY": 10054,
     "WEATHER_SHORTWAVE_RADIATION": 10053
   }
 }

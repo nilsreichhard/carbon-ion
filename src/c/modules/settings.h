@@ -47,6 +47,15 @@ typedef enum {
 	CLOUD_SENS_INSENSITIVE = 3,// clear 40, small<65, med<85
 	CLOUD_SENS_OFF = 4,        // never draw lobes
 } CloudSensitivity;
+
+typedef enum {
+	SUN_SENS_VERY = 0,        // weak sun still shows; full scale ~500 W/m²
+	SUN_SENS_SENSITIVE = 1,   // prior on-toggle feel; full ~800
+	SUN_SENS_BALANCED = 2,    // full ~950
+	SUN_SENS_INSENSITIVE = 3, // only strong sun; full ~1100
+	SUN_SENS_OFF = 4,         // never draw rays
+} SunlightSensitivity;
+
 typedef enum {
 	TIMELINE_EVENT_NONE = 0,
 	TIMELINE_EVENT_BAR = 1,
@@ -70,6 +79,7 @@ typedef enum {
 #define KEY_SETTING_TIMELINE_EVENT 10035
 #define KEY_SETTING_CLOUD_SENSITIVITY 10051
 #define KEY_SETTING_SUNLIGHT_RAYS 10052
+#define KEY_SETTING_SUNLIGHT_SENSITIVITY 10054
 
 typedef struct {
 	bool temp_unit_celsius;
@@ -85,7 +95,8 @@ typedef struct {
 	bool show_step_count;
 	TimelineEventMode timeline_event;
 	CloudSensitivity cloud_sensitivity;
-	bool sunlight_rays;
+	bool sunlight_rays; /* legacy toggle; migrated into sunlight_sensitivity */
+	SunlightSensitivity sunlight_sensitivity;
 } Settings;
 
 void settings_init(void);

@@ -5,7 +5,7 @@
     "name": "Nils Reich",
     "url": "https://github.com/nilsreichhard/carbon-ion"
   },
-  "version": "2.2.2",
+  "version": "2.2.3",
   "keywords": [
     "pebble-app"
   ],
@@ -76,7 +76,8 @@
       "TIMELINE_EVENT_PLACES": 10050,
       "SETTING_CLOUD_SENSITIVITY": 10051,
       "SETTING_SUNLIGHT_RAYS": 10052,
-      "WEATHER_SHORTWAVE_RADIATION": 10053
+      "WEATHER_SHORTWAVE_RADIATION": 10053,
+      "SETTING_SUNLIGHT_SENSITIVITY": 10054
     },
     "resources": {
       "media": [

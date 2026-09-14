@@ -55,6 +55,36 @@ static void prv_get_thresholds(CloudSensitivity sens, int *clear_th,
 	}
 }
 
+static void prv_get_sun_thresholds(SunlightSensitivity sens, int *min_intensity,
+                                   int *full_wm2, bool *off) {
+	*off = false;
+	switch (sens) {
+	case SUN_SENS_VERY:
+		*min_intensity = 8;
+		*full_wm2 = 500;
+		break;
+	case SUN_SENS_BALANCED:
+		*min_intensity = 35;
+		*full_wm2 = 950;
+		break;
+	case SUN_SENS_INSENSITIVE:
+		*min_intensity = 70;
+		*full_wm2 = 1100;
+		break;
+	case SUN_SENS_OFF:
+		*off = true;
+		*min_intensity = 256;
+		*full_wm2 = 800;
+		break;
+	case SUN_SENS_SENSITIVE:
+	default:
+		*min_intensity = 20;
+		*full_wm2 = 800;
+		break;
+	}
+}
+
+
 static void prv_draw_cloud(GContext *ctx, int cx, int cy, int r) {
 	graphics_fill_circle(ctx, GPoint(cx, cy), r);
 	graphics_fill_circle(ctx, GPoint(cx - r, cy + r / 2), r * 2 / 3);
@@ -62,9 +92,9 @@ static void prv_draw_cloud(GContext *ctx, int cx, int cy, int r) {
 }
 
 static void prv_draw_sun_rays(GContext *ctx, int cx, int cy, int intensity,
-                              bool is_light) {
-	// intensity 0–255 maps ~0–800 W/m². Skip near-zero / night.
-	if (intensity < 20)
+                              int min_intensity, bool is_light) {
+	/* intensity 0–255 from shortwave vs sensitivity full-scale. */
+	if (intensity < min_intensity)
 		return;
 
 #if defined(PBL_COLOR)
@@ -104,7 +134,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	bool clouds_off = false;
 	prv_get_thresholds(settings->cloud_sensitivity, &clear_th, &small_th,
 	                   &med_th, &clouds_off);
-	bool draw_rays = settings->sunlight_rays;
+	int sun_min = 20, sun_full = 800;
+	bool rays_off = false;
+	prv_get_sun_thresholds(settings->sunlight_sensitivity, &sun_min, &sun_full,
+	                       &rays_off);
+	bool draw_rays = !rays_off;
 	bool is_light = settings->light_theme;
 
 	graphics_context_set_antialiased(ctx, false);
@@ -149,8 +183,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		for (int i = 0; i < total_hours; i++) {
 			int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
 			int wm2 = (int)cl->shortwave[i] * 4; // unpack
-			int intensity = wm2 >= 800 ? 255 : (wm2 * 255) / 800;
-			prv_draw_sun_rays(ctx, cx, cy, intensity, is_light);
+			int intensity = wm2 >= sun_full ? 255 : (wm2 * 255) / sun_full;
+			prv_draw_sun_rays(ctx, cx, cy, intensity, sun_min, is_light);
 		}
 	}
 }
