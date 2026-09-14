@@ -148,27 +148,30 @@ static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
 	}
 }
 
-/* Sun-ray bars: angled for Total (1 layer), vertical-from-top for Split.
- * Intensity → bar count (1–3) + length; stroke thickens when strong. */
+/* Sun-ray bars: angled for Total, vertical-from-top for Split.
+ * Fixed bar count (no gaps); intensity → length + color only. */
 static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
                               int min_intensity, bool is_light, bool vertical) {
 	if (intensity < min_intensity || strip_h <= 0)
 		return;
 
+	const int ray_count = 3; /* always the same — avoid gaps between hours */
+
 #if defined(PBL_COLOR)
-	graphics_context_set_stroke_color(ctx,
-	                                  is_light ? GColorOrange : GColorYellow);
+	GColor stroke_color;
+	if (intensity < 85) {
+		stroke_color = is_light ? GColorPastelYellow : GColorIcterine;
+	} else if (intensity < 170) {
+		stroke_color = is_light ? GColorChromeYellow : GColorYellow;
+	} else {
+		stroke_color = is_light ? GColorOrange : GColorChromeYellow;
+	}
+	graphics_context_set_stroke_color(ctx, stroke_color);
 #else
 	graphics_context_set_stroke_color(ctx, GColorWhite);
 	(void)is_light;
 #endif
-
-	int stroke = intensity >= 170 ? 2 : 1;
-	graphics_context_set_stroke_width(ctx, stroke);
-
-	int ray_count = 1 + (intensity / 85); // 1..3
-	if (ray_count > 3)
-		ray_count = 3;
+	graphics_context_set_stroke_width(ctx, 1);
 
 	int span = strip_h > 2 ? strip_h - 1 : 4;
 	int dy = 3 + (intensity * (span - 3)) / 255;
@@ -180,13 +183,11 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
 	/* Always start at the top of the cloud strip; drawn after clouds (above). */
 	int y0 = 0;
 	if (vertical) {
-		/* Split: vertical bars. */
 		for (int r = 0; r < ray_count; r++) {
 			int ox = cx - 1 + r;
 			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox, y0 + dy));
 		}
 	} else {
-		/* Total: classic angled rays (≈45°), hanging down from the top. */
 		int dx = dy;
 		if (dx < 2)
 			dx = 2;
