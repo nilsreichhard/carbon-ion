@@ -229,22 +229,26 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	/* Clouds first, then sun rays on top (overlap clouds, start at strip top). */
 	if (!clouds_off) {
 		if (split) {
-			/* Pack high/mid/low into fixed CLOUD_H; smaller lobes, tight pitch. */
-			int pitch = (h >= 14) ? 4 : 3;
+			/* Full-size lobes; tighter row pitch than earlier ~9px centers. */
+			int pitch = 6;
+			if (pitch * 2 + 8 > h)
+				pitch = (h - 8) / 2;
+			if (pitch < 5)
+				pitch = 5;
 			int mid = h / 2;
 			int cy_high = mid - pitch;
 			int cy_mid = mid;
 			int cy_low = mid + pitch;
-			if (cy_high < 2)
-				cy_high = 2;
-			if (cy_low > h - 3)
-				cy_low = h - 3;
+			if (cy_high < 4)
+				cy_high = 4;
+			if (cy_low > h - 5)
+				cy_low = h - 5;
 			prv_draw_band(ctx, cl, cl->cover_high, total_hours, graph_x, graph_w,
-			              cy_high, clear_th, small_th, med_th, true, is_light);
+			              cy_high, clear_th, small_th, med_th, false, is_light);
 			prv_draw_band(ctx, cl, cl->cover_mid, total_hours, graph_x, graph_w,
-			              cy_mid, clear_th, small_th, med_th, true, is_light);
+			              cy_mid, clear_th, small_th, med_th, false, is_light);
 			prv_draw_band(ctx, cl, cl->cover_low, total_hours, graph_x, graph_w,
-			              cy_low, clear_th, small_th, med_th, true, is_light);
+			              cy_low, clear_th, small_th, med_th, false, is_light);
 		} else {
 			int cy = h / 2 - 2;
 			prv_draw_band(ctx, cl, cl->cover, total_hours, graph_x, graph_w, cy,
