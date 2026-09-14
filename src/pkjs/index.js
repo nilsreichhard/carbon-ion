@@ -1204,7 +1204,7 @@ function sendToWatch(payload) {
 	for (var ei = 0; ei < timelineEvents.length && ei < 6; ei++) {
 		starts.push(timelineEvents[ei].start);
 		ends.push(timelineEvents[ei].end);
-		colors.push((timelineEvents[ei].color | 0) & 0x07);
+		colors.push((timelineEvents[ei].color | 0) & 0x0F);
 		places.push((timelineEvents[ei].place | 0) & 0x03);
 	}
 	dict['TIMELINE_EVENT_STARTS'] = packUint32Array(starts);
@@ -1269,7 +1269,7 @@ function sanitizeCalendarUrlSetting(settings, key, cacheKey) {
 
 function getCalendarColorSetting(settings, key, fallback) {
 	var n = parseInt(getStringSetting(settings, key, String(fallback)), 10);
-	if (isNaN(n) || n < 0 || n > 7) return fallback;
+	if (isNaN(n) || n < 0 || n > 15) return fallback;
 	return n;
 }
 

@@ -321,7 +321,7 @@ static void prv_apply_timeline_events(DictionaryIterator *iter) {
 		int color_len = colors->length;
 		for (uint8_t i = 0; i < count; i++) {
 			if (i < color_len) {
-				events[i].color = color_bytes[i] & 0x07;
+				events[i].color = color_bytes[i] & 0x0F;
 			}
 		}
 	}

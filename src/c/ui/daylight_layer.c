@@ -158,6 +158,14 @@ static GColor prv_event_color(uint8_t id, bool is_light) {
 	case 5: return GColorPurple;
 	case 6: return GColorYellow;
 	case 7: return GColorMagenta;
+	case 8: return GColorTiffanyBlue;
+	case 9: return GColorFashionMagenta;
+	case 10: return GColorInchworm;
+	case 11: return GColorDarkCandyAppleRed;
+	case 12: return GColorPictonBlue;
+	case 13: return GColorMintGreen;
+	case 14: return GColorIndigo;
+	case 15: return GColorChromeYellow;
 	case 0:
 	default:
 		return is_light ? GColorVividCerulean : GColorCyan;
