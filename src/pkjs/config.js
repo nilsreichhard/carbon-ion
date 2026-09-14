@@ -317,7 +317,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_SUNLIGHT_SENSITIVITY',
 				'label': 'Sunlight Sensitivity',
-				'description': 'How readily the sunlight colored range appears for a given shortwave radiation level.',
+				'description': 'How readily angled sunlight ray bars appear; length and width scale with shortwave strength.',
 				'defaultValue': 4,
 				'options': [
 					{ 'label': 'Very sensitive', 'value': 0 },
