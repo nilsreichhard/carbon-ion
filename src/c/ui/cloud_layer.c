@@ -149,20 +149,17 @@ static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
 }
 
 /* Sun-ray bars: angled for Total, vertical-from-top for Split.
- * Always draw a fixed count spanning the hour column (no empty hour gaps).
- * Intensity → length + color only (never skip for being "too weak"). */
-static void prv_draw_sun_rays(GContext *ctx, int x0, int col_w, int strip_h,
-                              int intensity, bool is_light, bool vertical) {
-	if (strip_h <= 0 || col_w <= 0)
+ * Fixed bar count (no gaps); intensity → length + color only. */
+static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
+                              int min_intensity, bool is_light, bool vertical) {
+	if (intensity < min_intensity || strip_h <= 0)
 		return;
 
-	const int ray_count = 3;
+	const int ray_count = 3; /* always the same — avoid gaps between hours */
 
 #if defined(PBL_COLOR)
 	GColor stroke_color;
-	if (intensity < 40) {
-		stroke_color = is_light ? GColorLightGray : GColorDarkGray;
-	} else if (intensity < 85) {
+	if (intensity < 85) {
 		stroke_color = is_light ? GColorPastelYellow : GColorIcterine;
 	} else if (intensity < 170) {
 		stroke_color = is_light ? GColorChromeYellow : GColorYellow;
@@ -177,29 +174,27 @@ static void prv_draw_sun_rays(GContext *ctx, int x0, int col_w, int strip_h,
 	graphics_context_set_stroke_width(ctx, 1);
 
 	int span = strip_h > 2 ? strip_h - 1 : 4;
-	/* Weak hours still get a short stub so the timeline stays continuous. */
-	int dy = 1 + (intensity * (span - 1)) / 255;
-	if (dy < 1)
-		dy = 1;
+	int dy = 3 + (intensity * (span - 3)) / 255;
+	if (dy < 3)
+		dy = 3;
 	if (dy > span)
 		dy = span;
 
+	/* Always start at the top of the cloud strip; drawn after clouds (above). */
 	int y0 = 0;
-	for (int r = 0; r < ray_count; r++) {
-		/* Spread bars across the full hour column to avoid gaps between hours. */
-		int ox = x0 + (col_w * (2 * r + 1)) / (2 * ray_count);
-		if (ox < x0)
-			ox = x0;
-		if (ox >= x0 + col_w)
-			ox = x0 + col_w - 1;
-		if (vertical) {
+	if (vertical) {
+		for (int r = 0; r < ray_count; r++) {
+			int ox = cx - 1 + r;
 			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox, y0 + dy));
-		} else {
-			int dx = dy;
-			if (dx < 2)
-				dx = 2;
-			if (dy > strip_h)
-				dy = strip_h;
+		}
+	} else {
+		int dx = dy;
+		if (dx < 2)
+			dx = 2;
+		if (dy > strip_h)
+			dy = strip_h;
+		for (int r = 0; r < ray_count; r++) {
+			int ox = cx - 1 + r;
 			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox + dx, y0 + dy));
 		}
 	}
@@ -269,17 +264,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	if (draw_rays) {
 		for (int i = 0; i < total_hours; i++) {
-			int x0 = graph_x + (long)i * graph_w / total_hours;
-			int x1 = graph_x + (long)(i + 1) * graph_w / total_hours;
-			int col_w = x1 - x0;
-			if (col_w < 1)
-				col_w = 1;
+			int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
 			int wm2 = (int)cl->shortwave[i] * 4; // unpack
 			int base = wm2 >= sun_full ? 255 : (wm2 * 255) / sun_full;
 			int intensity = prv_ray_intensity_for_cover(base, cl->cover[i]);
-			/* Always draw — length/color encode strength (incl. night stubs). */
-			(void)sun_min;
-			prv_draw_sun_rays(ctx, x0, col_w, h, intensity, is_light, split);
+			prv_draw_sun_rays(ctx, cx, h, intensity, sun_min, is_light, split);
 		}
 	}
 }
