@@ -149,7 +149,7 @@ static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
 }
 
 static void prv_draw_sun_rays(GContext *ctx, int cx, int cy, int intensity,
-                              int min_intensity, bool is_light) {
+                              int min_intensity, bool is_light, bool compact) {
 	/* intensity 0–255 from shortwave vs sensitivity full-scale. */
 	if (intensity < min_intensity)
 		return;
@@ -169,12 +169,27 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int cy, int intensity,
 	if (ray_count > 3)
 		ray_count = 3;
 	int len = 3 + (intensity * 7) / 255; // 3..10 px
+	int v_off = 3;
+	if (compact) {
+		/* Fit inside a ~h/3 band. */
+		if (len > 5)
+			len = 5;
+		v_off = 1;
+	}
 	for (int r = 0; r < ray_count; r++) {
 		int ox = cx - 1 + r;
-		int oy = cy - 3 - (r % 2);
+		int oy = cy - v_off - (r % 2);
 		graphics_draw_line(ctx, GPoint(ox, oy),
 		                   GPoint(ox + len, oy + len));
 	}
+}
+
+/* Dim rays by cloud cover in that band (0% cover → full; 100% → none). */
+static int prv_ray_intensity_for_cover(int base_intensity, uint8_t cover) {
+	int open = 100 - (int)cover;
+	if (open < 0)
+		open = 0;
+	return (base_intensity * open) / 100;
 }
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
@@ -227,12 +242,36 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 
 	if (draw_rays) {
-		int cy = h / 2 - 2;
+		int band = h / 3;
+		if (band < 4)
+			band = 4;
+		int cy_high = band / 2 - 1;
+		int cy_mid = band + band / 2 - 1;
+		int cy_low = 2 * band + band / 2 - 1;
+		if (cy_low >= h)
+			cy_low = h - 2;
+		int cy_total = h / 2 - 2;
+
 		for (int i = 0; i < total_hours; i++) {
 			int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
 			int wm2 = (int)cl->shortwave[i] * 4; // unpack
-			int intensity = wm2 >= sun_full ? 255 : (wm2 * 255) / sun_full;
-			prv_draw_sun_rays(ctx, cx, cy, intensity, sun_min, is_light);
+			int base = wm2 >= sun_full ? 255 : (wm2 * 255) / sun_full;
+			if (split) {
+				/* One compact ray set per altitude band, dimmed by that band's cover. */
+				prv_draw_sun_rays(ctx, cx, cy_high,
+				                  prv_ray_intensity_for_cover(base, cl->cover_high[i]),
+				                  sun_min, is_light, true);
+				prv_draw_sun_rays(ctx, cx, cy_mid,
+				                  prv_ray_intensity_for_cover(base, cl->cover_mid[i]),
+				                  sun_min, is_light, true);
+				prv_draw_sun_rays(ctx, cx, cy_low,
+				                  prv_ray_intensity_for_cover(base, cl->cover_low[i]),
+				                  sun_min, is_light, true);
+			} else {
+				int intensity = prv_ray_intensity_for_cover(base, cl->cover[i]);
+				prv_draw_sun_rays(ctx, cx, cy_total, intensity, sun_min, is_light,
+				                  false);
+			}
 		}
 	}
 }
