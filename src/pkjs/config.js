@@ -317,7 +317,7 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_SUNLIGHT_SENSITIVITY',
 				'label': 'Sunlight Sensitivity',
-				'description': 'Sunlight bars every hour (fixed count, no gaps); length and color show strength. Angled in Total, vertical in Split.',
+				'description': 'Sunlight bars fill each hour (no gaps between bars); length and color show strength. Angled in Total, vertical in Split.',
 				'defaultValue': 4,
 				'options': [
 					{ 'label': 'Very sensitive', 'value': 0 },
