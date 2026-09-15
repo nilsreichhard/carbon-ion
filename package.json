@@ -5,7 +5,7 @@
     "name": "Nils Reich",
     "url": "https://github.com/nilsreichhard/carbon-ion"
   },
-  "version": "2.5.14",
+  "version": "2.5.15",
   "keywords": [
     "pebble-app"
   ],
@@ -83,7 +83,9 @@
       "WEATHER_CLOUD_COVER_MID": 10057,
       "WEATHER_CLOUD_COVER_HIGH": 10058,
       "SETTING_STEP_SIZE": 10059,
-      "SETTING_STEP_DISPLAY": 10060
+      "SETTING_STEP_DISPLAY": 10060,
+      "SETTING_PRECIP_SENSITIVITY": 10061,
+      "SETTING_WEATHER_EVENT_DISPLAY": 10062
     },
     "resources": {
       "media": [

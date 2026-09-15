@@ -34,6 +34,8 @@ static const Settings s_defaults = {
     .sunlight_sensitivity = SUN_SENS_OFF,
     .cloud_display_mode = CLOUD_DISPLAY_TOTAL,
     .step_size = STEP_SIZE_DEFAULT,
+    .precip_sensitivity = PRECIP_SENS_SENSITIVE,
+    .weather_event_display = WEATHER_EVENT_RANGE_ICON,
 };
 
 void settings_init(void) {
@@ -229,6 +231,25 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		if (dm >= 0 && dm <= 1) {
 			s_settings.cloud_display_mode = (CloudDisplayMode)dm;
 		}
+	}
+
+
+	t = dict_find(iter, KEY_SETTING_PRECIP_SENSITIVITY);
+	if (!t) t = dict_find(iter, MESSAGE_KEY_SETTING_PRECIP_SENSITIVITY);
+	if (!t) t = dict_find(iter, 10061);
+	if (t) {
+		int v = prv_tuple_int(t);
+		if (v >= 0 && v <= 4)
+			s_settings.precip_sensitivity = (PrecipSensitivity)v;
+	}
+
+	t = dict_find(iter, KEY_SETTING_WEATHER_EVENT_DISPLAY);
+	if (!t) t = dict_find(iter, MESSAGE_KEY_SETTING_WEATHER_EVENT_DISPLAY);
+	if (!t) t = dict_find(iter, 10062);
+	if (t) {
+		int v = prv_tuple_int(t);
+		if (v >= 0 && v <= 2)
+			s_settings.weather_event_display = (WeatherEventDisplay)v;
 	}
 
 	if (memcmp(&prev, &s_settings, sizeof(Settings)) != 0) {

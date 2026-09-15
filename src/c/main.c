@@ -593,24 +593,33 @@ static int prv_cloud_strip_h_raw(void) {
 	return CLOUD_H;
 }
 
-/** Cloud + precip heights that keep the top stack at GRAPH_LAYERS_H_BASE. */
-static void prv_top_strip_heights(int *cloud_h_out, int *precip_h_out) {
+static int prv_event_strip_h(void) {
+	if (settings_get()->weather_event_display == WEATHER_EVENT_NONE)
+		return 0;
+	return EVENT_H;
+}
+
+/** Cloud + precip (+ optional event) heights; stack stays GRAPH_LAYERS_H_BASE. */
+static void prv_top_strip_heights(int *cloud_h_out, int *precip_h_out,
+                                  int *event_h_out) {
 	int cloud_h = prv_cloud_strip_h_raw();
-	int precip_h = GRAPH_LAYERS_H_BASE - DAYLIGHT_H - cloud_h - EVENT_H;
+	int event_h = prv_event_strip_h();
+	int precip_h = GRAPH_LAYERS_H_BASE - DAYLIGHT_H - cloud_h - event_h;
 	if (precip_h < 8) {
 		precip_h = 8;
-		cloud_h = GRAPH_LAYERS_H_BASE - DAYLIGHT_H - precip_h - EVENT_H;
+		cloud_h = GRAPH_LAYERS_H_BASE - DAYLIGHT_H - precip_h - event_h;
 		if (cloud_h < CLOUD_H)
 			cloud_h = CLOUD_H;
 	}
 	*cloud_h_out = cloud_h;
 	*precip_h_out = precip_h;
+	*event_h_out = event_h;
 }
 
 static int prv_graph_layers_h(void) {
-	int cloud_h, precip_h;
-	prv_top_strip_heights(&cloud_h, &precip_h);
-	return DAYLIGHT_H + cloud_h + precip_h + EVENT_H;
+	int cloud_h, precip_h, event_h;
+	prv_top_strip_heights(&cloud_h, &precip_h, &event_h);
+	return DAYLIGHT_H + cloud_h + precip_h + event_h;
 }
 
 /** Reposition cloud/precip/event/time after Cloud Display mode changes. */
@@ -622,8 +631,8 @@ static void prv_relayout_graph_stack(void) {
 	Layer *root = window_get_root_layer(s_main_window);
 	GRect bounds = layer_get_bounds(root);
 	int w = bounds.size.w;
-	int cloud_h, precip_h;
-	prv_top_strip_heights(&cloud_h, &precip_h);
+	int cloud_h, precip_h, event_h;
+	prv_top_strip_heights(&cloud_h, &precip_h, &event_h);
 	int y = DAYLIGHT_H;
 
 	layer_set_frame(cloud_layer_get_layer(s_cloud_layer),
@@ -635,8 +644,9 @@ static void prv_relayout_graph_stack(void) {
 	y += precip_h;
 
 	layer_set_frame(event_layer_get_layer(s_event_layer),
-	                GRect(0, y, w, EVENT_H));
-	y += EVENT_H;
+	                GRect(0, y, w, event_h > 0 ? event_h : 1));
+	layer_set_hidden(event_layer_get_layer(s_event_layer), event_h == 0);
+	y += event_h;
 
 	int graph_h = prv_graph_layers_h();
 	int avail_h = (bounds.size.h - TEMP_H) - graph_h;
@@ -653,6 +663,8 @@ static void prv_relayout_graph_stack(void) {
 	                GRect(0, time_y, w, TL_TIME_BLOCK_H));
 
 	layer_mark_dirty(cloud_layer_get_layer(s_cloud_layer));
+	layer_mark_dirty(precip_layer_get_layer(s_precip_layer));
+	layer_mark_dirty(event_layer_get_layer(s_event_layer));
 	layer_mark_dirty(root);
 }
 
@@ -674,21 +686,22 @@ static void prv_window_load(Window *window) {
 	                           init_batt.is_charging);
 
 	// Cloud + precip — Split grows clouds, shrinks rain; stack height fixed
-	int cloud_h, precip_h;
-	prv_top_strip_heights(&cloud_h, &precip_h);
+	int cloud_h, precip_h, event_h;
+	prv_top_strip_heights(&cloud_h, &precip_h, &event_h);
 	s_cloud_layer = cloud_layer_create(GRect(0, y, w, cloud_h));
 	layer_add_child(root, cloud_layer_get_layer(s_cloud_layer));
 	y += cloud_h;
 
-	// Precip graph (shorter in Split so the clock stays put)
+	// Precip graph (grows when Split clouds or weather events are off)
 	s_precip_layer = precip_layer_create(GRect(0, y, w, precip_h));
 	layer_add_child(root, precip_layer_get_layer(s_precip_layer));
 	y += precip_h;
 
 	// Event layer — WMO weather condition icons (not calendar ICS events)
-	s_event_layer = event_layer_create(GRect(0, y, w, EVENT_H));
+	s_event_layer = event_layer_create(GRect(0, y, w, event_h > 0 ? event_h : EVENT_H));
 	layer_add_child(root, event_layer_get_layer(s_event_layer));
-	y += EVENT_H;
+	layer_set_hidden(event_layer_get_layer(s_event_layer), event_h == 0);
+	y += event_h;
 
 	// Time block — centered between top graphs and bottom meteogram
 	int graph_h = prv_graph_layers_h();

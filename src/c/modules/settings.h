@@ -54,6 +54,20 @@ typedef enum {
 } CloudDisplayMode;
 
 typedef enum {
+	PRECIP_SENS_VERY = 0,
+	PRECIP_SENS_SENSITIVE = 1,  // default
+	PRECIP_SENS_BALANCED = 2,
+	PRECIP_SENS_INSENSITIVE = 3,
+	PRECIP_SENS_OFF = 4,
+} PrecipSensitivity;
+
+typedef enum {
+	WEATHER_EVENT_RANGE_ICON = 0, // range lines + icon (default)
+	WEATHER_EVENT_ICON = 1,        // icon only
+	WEATHER_EVENT_NONE = 2,        // hide; rain expands
+} WeatherEventDisplay;
+
+typedef enum {
 	SUN_SENS_VERY = 0,        // weak sun still shows; full scale ~500 W/m²
 	SUN_SENS_SENSITIVE = 1,   // prior on-toggle feel; full ~800
 	SUN_SENS_BALANCED = 2,    // full ~950
@@ -100,6 +114,8 @@ typedef enum {
 #define KEY_SETTING_CLOUD_DISPLAY_MODE 10055
 #define KEY_SETTING_STEP_SIZE 10059
 #define KEY_SETTING_STEP_DISPLAY 10060
+#define KEY_SETTING_PRECIP_SENSITIVITY 10061
+#define KEY_SETTING_WEATHER_EVENT_DISPLAY 10062
 
 typedef struct {
 	bool temp_unit_celsius;
@@ -119,6 +135,8 @@ typedef struct {
 	SunlightSensitivity sunlight_sensitivity;
 	CloudDisplayMode cloud_display_mode; /* append for persist compat */
 	StepSize step_size; /* append for persist compat */
+	PrecipSensitivity precip_sensitivity;
+	WeatherEventDisplay weather_event_display;
 } Settings;
 
 void settings_init(void);

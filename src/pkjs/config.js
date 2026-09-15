@@ -356,6 +356,32 @@ module.exports = [
 					{ 'label': 'Off', 'value': 4 },
 				],
 			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_PRECIP_SENSITIVITY',
+				'label': 'Rain Chart Sensitivity',
+				'description': 'Minimum precipitation probability before a rain bar is drawn.',
+				'defaultValue': 1,
+				'options': [
+					{ 'label': 'Very sensitive', 'value': 0 },
+					{ 'label': 'Sensitive', 'value': 1 },
+					{ 'label': 'Balanced', 'value': 2 },
+					{ 'label': 'Insensitive', 'value': 3 },
+					{ 'label': 'Off', 'value': 4 },
+				],
+			},
+			{
+				'type': 'select',
+				'messageKey': 'SETTING_WEATHER_EVENT_DISPLAY',
+				'label': 'Weather Events',
+				'description': 'Storm/snow/tornado markers under the rain chart. None hides them and expands the rain chart.',
+				'defaultValue': 0,
+				'options': [
+					{ 'label': 'Range + icon', 'value': 0 },
+					{ 'label': 'Icon only', 'value': 1 },
+					{ 'label': 'None', 'value': 2 },
+				],
+			},
 		],
 	},
 	{

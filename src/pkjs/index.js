@@ -2050,6 +2050,20 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		dict['SETTING_SUNLIGHT_SENSITIVITY'] = sunlightSens;
 	}
 
+	var precipSens = extractInt(rawSettings['SETTING_PRECIP_SENSITIVITY']);
+	if (isNaN(precipSens)) precipSens = 1;
+	if (precipSens >= 0 && precipSens <= 4) {
+		dict[10061] = precipSens;
+		dict['SETTING_PRECIP_SENSITIVITY'] = precipSens;
+	}
+
+	var weatherEventDisp = extractInt(rawSettings['SETTING_WEATHER_EVENT_DISPLAY']);
+	if (isNaN(weatherEventDisp)) weatherEventDisp = 0;
+	if (weatherEventDisp >= 0 && weatherEventDisp <= 2) {
+		dict[10062] = weatherEventDisp;
+		dict['SETTING_WEATHER_EVENT_DISPLAY'] = weatherEventDisp;
+	}
+
 	var clearCacheRequested = extractBool(rawSettings['SETTING_CLEAR_CACHE']) === 1;
 
 	sendToWatchWithRetry(dict);

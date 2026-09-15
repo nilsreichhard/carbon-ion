@@ -8,6 +8,7 @@
  */
 
 #include "precip_layer.h"
+#include "../modules/settings.h"
 #include "graph_common.h"
 #include <stddef.h>
 #include <stdlib.h>
@@ -60,6 +61,18 @@ static uint8_t prv_precip_category(uint8_t code) {
 	return 7;     // heavy thunderstorm (97, 98)
 }
 
+
+static int prv_precip_min_prob(PrecipSensitivity sens) {
+	switch (sens) {
+	case PRECIP_SENS_VERY: return 5;
+	case PRECIP_SENS_BALANCED: return 30;
+	case PRECIP_SENS_INSENSITIVE: return 50;
+	case PRECIP_SENS_OFF: return 101; /* never */
+	case PRECIP_SENS_SENSITIVE:
+	default: return 15;
+	}
+}
+
 static void prv_update_proc(Layer *layer, GContext *ctx) {
 	PrecipLayer *pl = *(PrecipLayer **)layer_get_data(layer);
 	GRect bounds = layer_get_bounds(layer);
@@ -80,6 +93,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int total_hours = GRAPH_HOURS;
 	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
 
+	int min_prob = prv_precip_min_prob(settings_get()->precip_sensitivity);
+
 	for (int i = 0; i < total_hours; i++) {
 		int x0 = graph_x + (long)i * graph_w / total_hours;
 		int x1 = graph_x + (long)(i + 1) * graph_w / total_hours;
@@ -87,10 +102,16 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		if (bar_w < 1)
 			bar_w = 1;
 
-		if (pl->prob[i] == 0)
+		int prob = (int)pl->prob[i];
+		if (prob < min_prob)
 			continue;
 
-		int bar_h = (pl->prob[i] * (layer_h - 2)) / 100;
+		/* Scale height from the sensitivity floor so bars still fill usefully. */
+		int span = 100 - min_prob;
+		if (span < 1) span = 1;
+		int scaled = ((prob - min_prob) * 100) / span;
+		if (scaled < 1) scaled = 1;
+		int bar_h = (scaled * (layer_h - 2)) / 100;
 
 #if defined(PBL_COLOR)
 		uint8_t cat = prv_precip_category(pl->hourly_code[i]);

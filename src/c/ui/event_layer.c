@@ -8,6 +8,7 @@
  */
 
 #include "event_layer.h"
+#include "../modules/settings.h"
 #include "../generated/icons.h"
 #include "graph_common.h"
 #include <stddef.h>
@@ -158,13 +159,18 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 		graphics_context_set_stroke_color(ctx, icon_color);
 
-		if (x_start < icon_x - icon_gap) {
+		WeatherEventDisplay mode = settings_get()->weather_event_display;
+		if (mode == WEATHER_EVENT_NONE)
+			continue;
+		bool draw_range = (mode == WEATHER_EVENT_RANGE_ICON);
+
+		if (draw_range && x_start < icon_x - icon_gap) {
 			graphics_draw_line(ctx, GPoint(x_start, center_y),
 			                   GPoint(icon_x - icon_gap, center_y));
 			graphics_draw_line(ctx, GPoint(x_start, center_y - 2),
 			                   GPoint(x_start, center_y + 2));
 		}
-		if (x_end > icon_x + icon_gap) {
+		if (draw_range && x_end > icon_x + icon_gap) {
 			graphics_draw_line(ctx, GPoint(icon_x + icon_gap, center_y),
 			                   GPoint(x_end, center_y));
 			graphics_draw_line(ctx, GPoint(x_end, center_y - 2),
