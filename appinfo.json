@@ -69,7 +69,8 @@
     "SETTING_CLOUD_DISPLAY_MODE": 10055,
     "WEATHER_CLOUD_COVER_LOW": 10056,
     "WEATHER_CLOUD_COVER_MID": 10057,
-    "WEATHER_CLOUD_COVER_HIGH": 10058
+    "WEATHER_CLOUD_COVER_HIGH": 10058,
+      "SETTING_STEP_SIZE": 10059
   },
   "resources": {
     "media": [
@@ -102,7 +103,7 @@
   "name": "carbon-ion",
   "shortName": "Carbon Ion",
   "longName": "Carbon Ion",
-  "versionLabel": "2.5.5",
+  "versionLabel": "2.5.6",
   "companyName": "Nils Reich",
   "appKeys": {
     "WEATHER_REQUEST": 10000,
@@ -160,6 +161,7 @@
     "SETTING_CLOUD_DISPLAY_MODE": 10055,
     "WEATHER_CLOUD_COVER_LOW": 10056,
     "WEATHER_CLOUD_COVER_MID": 10057,
-    "WEATHER_CLOUD_COVER_HIGH": 10058
+    "WEATHER_CLOUD_COVER_HIGH": 10058,
+      "SETTING_STEP_SIZE": 10059
   }
 }

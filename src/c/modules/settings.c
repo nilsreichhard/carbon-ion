@@ -32,6 +32,8 @@ static const Settings s_defaults = {
     .cloud_sensitivity = CLOUD_SENS_SENSITIVE,
     .sunlight_rays = false,
     .sunlight_sensitivity = SUN_SENS_OFF,
+    .cloud_display_mode = CLOUD_DISPLAY_TOTAL,
+    .step_size = STEP_SIZE_DEFAULT,
 };
 
 void settings_init(void) {
@@ -154,6 +156,15 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	if (!t) t = dict_find(iter, 10034);
 	if (t) {
 		s_settings.show_step_count = (prv_tuple_int(t) != 0);
+	}
+	t = dict_find(iter, KEY_SETTING_STEP_SIZE);
+	if (!t) t = dict_find(iter, MESSAGE_KEY_SETTING_STEP_SIZE);
+	if (t) {
+		int v = prv_tuple_int(t);
+		if (v == STEP_SIZE_LARGE)
+			s_settings.step_size = STEP_SIZE_LARGE;
+		else
+			s_settings.step_size = STEP_SIZE_DEFAULT;
 	}
 
 	t = dict_find(iter, KEY_SETTING_TIMELINE_EVENT);

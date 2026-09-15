@@ -8,6 +8,7 @@
  */
 
 #include "time_layer.h"
+#include "../modules/settings.h"
 #include "../generated/icons.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -197,6 +198,22 @@ static void prv_update_location_row(TimeLayer *tl) {
 	layer_set_hidden(text_layer_get_layer(tl->cond_label), false);
 }
 
+
+static void prv_step_metrics(StepSize size, GFont *num_font, GFont *k_font,
+                             int *num_h, int *k_h) {
+	if (size == STEP_SIZE_LARGE) {
+		*num_font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+		*k_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
+		*num_h = 22;
+		*k_h = 16;
+	} else {
+		*num_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
+		*k_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+		*num_h = 18;
+		*k_h = 14;
+	}
+}
+
 // Place the step label in the right flank between the centered time digits and
 // the watch edge, then center the number inside that flank.
 static void prv_layout_step_label(TimeLayer *tl) {
@@ -205,12 +222,17 @@ static void prv_layout_step_label(TimeLayer *tl) {
 	GRect frame = layer_get_frame(tl->container);
 	int w = frame.size.w;
 	int time_y = TL_SMALL_H - TL_TIME_PAD;
-	int num_h = 18;
-	int k_h = 14;
+	GFont num_font, k_font;
+	int num_h, k_h;
+	prv_step_metrics(settings_get()->step_size, &num_font, &k_font, &num_h, &k_h);
+	text_layer_set_font(tl->step_label, num_font);
+	text_layer_set_font(tl->step_k_label, k_font);
 	int num_k_gap = -2; // slight overlap so K sits closer under the number
 	int stack_h = num_h + num_k_gap + k_h;
 	int band_h = TL_TIME_H - TL_TIME_PAD;
 	int step_y = time_y + TL_TIME_PAD + (band_h - stack_h) / 2;
+	if (step_y < time_y)
+		step_y = time_y;
 
 	GFont time_font = fonts_get_system_font(TL_TIME_FONT_KEY);
 	const char *time_str = tl->time_buf[0] ? tl->time_buf : "00:00";
@@ -225,8 +247,9 @@ static void prv_layout_step_label(TimeLayer *tl) {
 		slot_left = w / 2;
 	int slot_right = w - edge;
 	int slot_w = slot_right - slot_left;
-	if (slot_w < 18) {
-		slot_w = 18;
+	int min_slot = (settings_get()->step_size == STEP_SIZE_LARGE) ? 24 : 18;
+	if (slot_w < min_slot) {
+		slot_w = min_slot;
 		slot_left = w - edge - slot_w;
 	}
 

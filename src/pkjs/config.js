@@ -267,6 +267,17 @@ module.exports = [
 			},
 			{
 				'type': 'select',
+				'messageKey': 'SETTING_STEP_SIZE',
+				'label': 'Step Counter Size',
+				'description': 'Default matches the current look. Large is easier to read.',
+				'defaultValue': 0,
+				'options': [
+					{ 'label': 'Default', 'value': 0 },
+					{ 'label': 'Large', 'value': 1 },
+				],
+			},
+			{
+				'type': 'select',
 				'messageKey': 'SETTING_DATE_FORMAT',
 				'label': 'Date Format',
 				'defaultValue': '%A, %b %d',

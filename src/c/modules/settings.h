@@ -67,6 +67,11 @@ typedef enum {
 	TIMELINE_EVENT_SPAN = 2,
 } TimelineEventMode;
 
+typedef enum {
+	STEP_SIZE_DEFAULT = 0, /* Gothic 18 + 14 K */
+	STEP_SIZE_LARGE = 1,   /* Gothic 24 Bold + 18 K */
+} StepSize;
+
 #define MIN_FORECAST_HOURS 12
 #define MAX_FORECAST_HOURS 48
 #define DEFAULT_FORECAST_HOURS 24
@@ -86,6 +91,7 @@ typedef enum {
 #define KEY_SETTING_SUNLIGHT_RAYS 10052
 #define KEY_SETTING_SUNLIGHT_SENSITIVITY 10054
 #define KEY_SETTING_CLOUD_DISPLAY_MODE 10055
+#define KEY_SETTING_STEP_SIZE 10059
 
 typedef struct {
 	bool temp_unit_celsius;
@@ -104,6 +110,7 @@ typedef struct {
 	bool sunlight_rays; /* legacy toggle; migrated into sunlight_sensitivity */
 	SunlightSensitivity sunlight_sensitivity;
 	CloudDisplayMode cloud_display_mode; /* append for persist compat */
+	StepSize step_size; /* append for persist compat */
 } Settings;
 
 void settings_init(void);
