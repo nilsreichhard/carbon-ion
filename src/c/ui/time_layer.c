@@ -263,7 +263,9 @@ static void prv_layout_step_label(TimeLayer *tl) {
 		content_w = 10;
 	if (content_w > flank_w)
 		content_w = flank_w;
-	int slot_left = flank_left + (flank_w - content_w) / 2;
+	int slot_left = flank_left + (flank_w - content_w) / 2 - 1;
+	if (slot_left < flank_left)
+		slot_left = flank_left;
 
 	layer_set_frame(text_layer_get_layer(tl->step_label),
 	                GRect(slot_left, step_y, content_w, num_h));
