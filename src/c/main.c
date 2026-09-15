@@ -43,9 +43,9 @@ static inline int32_t prv_tuple_int(const Tuple *t) {
 #if defined(PBL_PLATFORM_EMERY) || (defined(PBL_DISPLAY_HEIGHT) && PBL_DISPLAY_HEIGHT >= 228)
 #define DAYLIGHT_H 18
 #define CLOUD_H 14
-#define PRECIP_H 22
+#define PRECIP_H 26
 #define EVENT_H 12
-// Sums to 66
+// Sums to 70 — +4px into former gap so time stays put with TIME_BLOCK_TOP_GAP 3
 #elif defined(PBL_PLATFORM_CHALK)
 #define DAYLIGHT_H 14
 #define CLOUD_H 15
