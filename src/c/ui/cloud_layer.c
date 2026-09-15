@@ -269,8 +269,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			prv_draw_band(ctx, cl, cl->cover_low, total_hours, graph_x, graph_w,
 			              cy_low, clear_th, small_th, med_th, false, is_light, true);
 		} else {
-			/* Total: 1px lower — less empty above, 1px closer to rain. */
-			int cy = h / 2 + 2;
+			/* Total: higher toward sun-ray origin; more air below before rain. */
+			int cy = h / 2 - 1;
 			if (cy > h - 5)
 				cy = h - 5;
 			if (cy < 4)
