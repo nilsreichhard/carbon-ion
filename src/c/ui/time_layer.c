@@ -222,7 +222,7 @@ static void prv_layout_step_label(TimeLayer *tl) {
 		return;
 	GRect frame = layer_get_frame(tl->container);
 	int w = frame.size.w;
-	int time_y = TL_SMALL_H - TL_TIME_PAD;
+	int time_y = TL_SMALL_H - TL_TIME_PAD - 1;
 	GFont num_font, k_font;
 	int num_h, k_h;
 	prv_step_metrics(settings_get()->step_size, &num_font, &k_font, &num_h, &k_h);
@@ -328,7 +328,7 @@ TimeLayer *time_layer_create(GRect frame) {
 	GFont time_font = fonts_get_system_font(TL_TIME_FONT_KEY);
 	// Shift the time label up by TL_TIME_PAD so visible digits start flush with
 	// city text
-	int time_y = TL_SMALL_H - TL_TIME_PAD;
+	int time_y = TL_SMALL_H - TL_TIME_PAD - 1;
 	tl->time_label = text_layer_create(GRect(0, time_y, w, TL_TIME_H));
 	text_layer_set_background_color(tl->time_label, GColorClear);
 	text_layer_set_text_color(tl->time_label, GColorWhite);
@@ -373,7 +373,7 @@ TimeLayer *time_layer_create(GRect frame) {
 	layer_add_child(tl->container, tl->status_layer);
 
 	// Date — below time
-	int date_y = time_y + TL_TIME_H;
+	int date_y = time_y + TL_TIME_H - 1;
 	GFont date_font = fonts_get_system_font(TL_SMALL_FONT_KEY);
 	tl->date_label = text_layer_create(GRect(0, date_y, w, TL_SMALL_H));
 	text_layer_set_background_color(tl->date_label, GColorClear);

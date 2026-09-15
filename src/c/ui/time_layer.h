@@ -34,8 +34,8 @@
 #define TL_TIME_PAD 4
 #endif
 // Total visible block height used by main.c to size the layer frame.
-// Derived automatically so it can never fall out of sync with the values above.
-#define TL_TIME_BLOCK_H ((TL_SMALL_H - TL_TIME_PAD) + TL_TIME_H + TL_SMALL_H)
+// -1 on the city band (tighter under location/condition), -1 between time and date.
+#define TL_TIME_BLOCK_H ((TL_SMALL_H - TL_TIME_PAD - 1) + TL_TIME_H + (TL_SMALL_H - 1))
 
 typedef struct TimeLayer TimeLayer;
 
