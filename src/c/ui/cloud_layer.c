@@ -246,10 +246,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	/* Clouds first, then sun rays on top (overlap clouds, start at strip top). */
 	if (!clouds_off) {
 		if (split) {
-			/* Full-size lobes; tighter row pitch than earlier ~9px centers.
-			 * High band uses the same top offset as Total (Total cy = CLOUD_H/2;
-			 * Split strip is ~2× that, so cy_high = h/4). */
-			int pitch = 6;
+			/* Full-size lobes. High band matches Total top offset (cy_high = h/4).
+			 * Pitch 7: +1px between high→mid and mid→low vs prior 6. */
+			int pitch = 7;
 			if (pitch * 2 + 8 > h)
 				pitch = (h - 8) / 2;
 			if (pitch < 5)
