@@ -60,6 +60,8 @@ static inline int32_t prv_tuple_int(const Tuple *t) {
 // Sums to 56
 #endif
 #define GRAPH_LAYERS_H_BASE (DAYLIGHT_H + CLOUD_H + PRECIP_H + EVENT_H)
+/* Gap between bottom of rain/events stack and top of time block (city). */
+#define TIME_BLOCK_TOP_GAP 3
 
 #if defined(PBL_PLATFORM_EMERY)
 #define TEMP_H 56
@@ -649,8 +651,7 @@ static void prv_relayout_graph_stack(void) {
 	y += event_h;
 
 	int graph_h = prv_graph_layers_h();
-	int avail_h = (bounds.size.h - TEMP_H) - graph_h;
-	int time_y = graph_h + (avail_h - TL_TIME_BLOCK_H) / 2;
+	int time_y = graph_h + TIME_BLOCK_TOP_GAP;
 	if (time_y < graph_h)
 		time_y = graph_h;
 	int temp_y = bounds.size.h - TEMP_H;
@@ -705,8 +706,12 @@ static void prv_window_load(Window *window) {
 
 	// Time block — centered between top graphs and bottom meteogram
 	int graph_h = prv_graph_layers_h();
-	int avail_h = (bounds.size.h - TEMP_H) - graph_h;
-	int time_y = graph_h + (avail_h - TL_TIME_BLOCK_H) / 2;
+	int time_y = graph_h + TIME_BLOCK_TOP_GAP;
+	int temp_y_check = bounds.size.h - TEMP_H;
+	if (time_y + TL_TIME_BLOCK_H > temp_y_check)
+		time_y = temp_y_check - TL_TIME_BLOCK_H;
+	if (time_y < graph_h)
+		time_y = graph_h;
 	s_time_layer = time_layer_create(GRect(0, time_y, w, TL_TIME_BLOCK_H));
 	layer_add_child(root, time_layer_get_layer(s_time_layer));
 
