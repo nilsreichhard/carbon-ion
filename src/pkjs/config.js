@@ -319,6 +319,20 @@ module.exports = [
 			},
 			{
 				'type': 'select',
+				'messageKey': 'SETTING_SUNLIGHT_SENSITIVITY',
+				'label': 'Sunlight Sensitivity',
+				'description': 'Sunlight bars: angled in Total, vertical from top in Split; fixed count, length and color show strength.',
+				'defaultValue': 4,
+				'options': [
+					{ 'label': 'Very sensitive', 'value': 0 },
+					{ 'label': 'Sensitive', 'value': 1 },
+					{ 'label': 'Balanced', 'value': 2 },
+					{ 'label': 'Insensitive', 'value': 3 },
+					{ 'label': 'Off', 'value': 4 },
+				],
+			},
+			{
+				'type': 'select',
 				'messageKey': 'SETTING_CLOUD_SENSITIVITY',
 				'label': 'Cloud Coverage Sensitivity',
 				'description': 'How readily cloud lobes appear for a given cloud-cover percentage.',
@@ -340,20 +354,6 @@ module.exports = [
 				'options': [
 					{ 'label': 'Total (1 layer)', 'value': 0 },
 					{ 'label': 'Split (3 layers)', 'value': 1 },
-				],
-			},
-			{
-				'type': 'select',
-				'messageKey': 'SETTING_SUNLIGHT_SENSITIVITY',
-				'label': 'Sunlight Sensitivity',
-				'description': 'Sunlight bars: angled in Total, vertical from top in Split; fixed count, length and color show strength.',
-				'defaultValue': 4,
-				'options': [
-					{ 'label': 'Very sensitive', 'value': 0 },
-					{ 'label': 'Sensitive', 'value': 1 },
-					{ 'label': 'Balanced', 'value': 2 },
-					{ 'label': 'Insensitive', 'value': 3 },
-					{ 'label': 'Off', 'value': 4 },
 				],
 			},
 			{
