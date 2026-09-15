@@ -262,7 +262,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	/* Place current + min first, then lift max so max→current gap matches
 	 * current→min gap (was 4px overlap above vs 0px below). */
 	const int label_lift = 3;
-	const int curr_lift = 1;
+	const int curr_lift = 2; /* optical: current looked closer to min */
 	int y_curr = zone_h + (zone_h - md_h) / 2 - label_lift - curr_lift;
 	if (y_curr + md_h > 2 * zone_h)
 		y_curr = 2 * zone_h - md_h;
