@@ -246,20 +246,25 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	/* Clouds first, then sun rays on top (overlap clouds, start at strip top). */
 	if (!clouds_off) {
 		if (split) {
-			/* Full-size lobes; tighter row pitch than earlier ~9px centers. */
+			/* Full-size lobes; tighter row pitch than earlier ~9px centers.
+			 * High band uses the same top offset as Total (Total cy = CLOUD_H/2;
+			 * Split strip is ~2× that, so cy_high = h/4). */
 			int pitch = 6;
 			if (pitch * 2 + 8 > h)
 				pitch = (h - 8) / 2;
 			if (pitch < 5)
 				pitch = 5;
-			int mid = h / 2;
-			int cy_high = mid - pitch;
-			int cy_mid = mid;
-			int cy_low = mid + pitch;
+			int cy_high = h / 4;
 			if (cy_high < 4)
 				cy_high = 4;
-			if (cy_low > h - 5)
+			int cy_mid = cy_high + pitch;
+			int cy_low = cy_mid + pitch;
+			if (cy_low > h - 5) {
 				cy_low = h - 5;
+				cy_mid = cy_low - pitch;
+				if (cy_mid < cy_high + 4)
+					cy_mid = cy_high + 4;
+			}
 			/* High first (no halo). Mid/low: halo pass then fill so same-band
 			 * clouds merge; halo only shows against the band underneath. */
 			prv_draw_band(ctx, cl, cl->cover_high, total_hours, graph_x, graph_w,
