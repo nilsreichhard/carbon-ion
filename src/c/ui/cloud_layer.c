@@ -138,33 +138,30 @@ static void prv_set_cloud_fill(GContext *ctx, uint8_t code, bool is_light) {
 #endif
 }
 
-/* Theme halo then cloud fill — keeps Split band edges readable when stacked. */
-static void prv_draw_cloud_outlined(GContext *ctx, int cx, int cy, int r,
-                                    bool is_light, uint8_t code) {
-	if (r <= 0)
-		return;
-	graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
-	prv_draw_cloud_lobes(ctx, cx, cy, r + 1);
-	prv_set_cloud_fill(ctx, code, is_light);
-	prv_draw_cloud_lobes(ctx, cx, cy, r);
-}
 
+/* Pass halo=true then fill=true so same-band clouds merge; halo only
+ * remains where this band overlaps a band drawn earlier. */
 static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
                           int total_hours, int graph_x, int graph_w, int cy,
                           int clear_th, int small_th, int med_th, bool split,
-                          bool is_light, bool outline) {
+                          bool is_light, bool with_layer_halo) {
+	if (with_layer_halo) {
+		graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
+		for (int i = total_hours - 1; i >= 0; i--) {
+			int r = prv_radius_for_cover(cover[i], clear_th, small_th, med_th, split);
+			if (r <= 0)
+				continue;
+			int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
+			prv_draw_cloud_lobes(ctx, cx, cy, r + 1);
+		}
+	}
 	for (int i = total_hours - 1; i >= 0; i--) {
 		int r = prv_radius_for_cover(cover[i], clear_th, small_th, med_th, split);
 		if (r <= 0)
 			continue;
-		// Draw later hours first so sooner clouds overlap them.
 		int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
-		if (outline)
-			prv_draw_cloud_outlined(ctx, cx, cy, r, is_light, cl->hourly_code[i]);
-		else {
-			prv_set_cloud_fill(ctx, cl->hourly_code[i], is_light);
-			prv_draw_cloud(ctx, cx, cy, r);
-		}
+		prv_set_cloud_fill(ctx, cl->hourly_code[i], is_light);
+		prv_draw_cloud(ctx, cx, cy, r);
 	}
 }
 
@@ -263,9 +260,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				cy_high = 4;
 			if (cy_low > h - 5)
 				cy_low = h - 5;
-			/* High → mid → low: low altitude wins overlaps; outline separates bands. */
+			/* High first (no halo). Mid/low: halo pass then fill so same-band
+			 * clouds merge; halo only shows against the band underneath. */
 			prv_draw_band(ctx, cl, cl->cover_high, total_hours, graph_x, graph_w,
-			              cy_high, clear_th, small_th, med_th, false, is_light, true);
+			              cy_high, clear_th, small_th, med_th, false, is_light, false);
 			prv_draw_band(ctx, cl, cl->cover_mid, total_hours, graph_x, graph_w,
 			              cy_mid, clear_th, small_th, med_th, false, is_light, true);
 			prv_draw_band(ctx, cl, cl->cover_low, total_hours, graph_x, graph_w,
