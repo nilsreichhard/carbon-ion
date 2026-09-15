@@ -69,14 +69,14 @@ typedef enum {
 
 typedef enum {
 	STEP_SIZE_DEFAULT = 0, /* Gothic 18 + 14 K (Normal) */
-	STEP_SIZE_LARGE = 1,   /* Gothic 28 Bold + 18 K */
+	STEP_SIZE_LARGE = 1,   /* Bold: Gothic 18 Bold + 14 Bold */
 } StepSize;
 
-/* Clay single control: Off / Normal / Large */
+/* Clay single control: Off / Normal / Bold */
 typedef enum {
 	STEP_DISPLAY_OFF = 0,
 	STEP_DISPLAY_NORMAL = 1,
-	STEP_DISPLAY_LARGE = 2,
+	STEP_DISPLAY_LARGE = 2, /* Bold */
 } StepDisplay;
 
 #define MIN_FORECAST_HOURS 12

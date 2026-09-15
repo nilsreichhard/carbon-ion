@@ -152,7 +152,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		}
 	}
 
-	/* Unified Step Counter: Off / Normal / Large (key 10060). */
+	/* Unified Step Counter: Off / Normal / Bold (key 10060). */
 	t = dict_find(iter, KEY_SETTING_STEP_DISPLAY);
 	if (!t) t = dict_find(iter, MESSAGE_KEY_SETTING_STEP_DISPLAY);
 	if (!t) t = dict_find(iter, 10060);

@@ -262,12 +262,12 @@ module.exports = [
 				'type': 'select',
 				'messageKey': 'SETTING_STEP_DISPLAY',
 				'label': 'Step Counter',
-				'description': 'Off hides steps. Normal is the current size. Large uses a bolder font.',
+				'description': 'Off hides steps. Normal is the usual size. Bold keeps that size with heavier type.',
 				'defaultValue': 1,
 				'options': [
 					{ 'label': 'Off', 'value': 0 },
 					{ 'label': 'Normal', 'value': 1 },
-					{ 'label': 'Large', 'value': 2 },
+					{ 'label': 'Bold', 'value': 2 },
 				],
 			},
 			{

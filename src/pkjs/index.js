@@ -2005,7 +2005,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		if (legacyShow === false) {
 			stepDisplay = 0; /* Off */
 		} else if (legacySize === 1) {
-			stepDisplay = 2; /* Large */
+			stepDisplay = 2; /* Bold */
 		} else {
 			stepDisplay = 1; /* Normal */
 		}
