@@ -69,7 +69,7 @@ typedef enum {
 
 typedef enum {
 	STEP_SIZE_DEFAULT = 0, /* Gothic 18 + 14 K (Normal) */
-	STEP_SIZE_LARGE = 1,   /* Bold: Gothic 18 Bold + 14 Bold */
+	STEP_SIZE_LARGE = 1,   /* Bold: Gothic 18 Bold for number and K */
 } StepSize;
 
 /* Clay single control: Off / Normal / Bold */
