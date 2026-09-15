@@ -259,21 +259,27 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int label_x = 32;
 	GColor text_color = is_light ? GColorBlack : GColorWhite;
 	graphics_context_set_text_color(ctx, text_color);
-	/* Nudge labels up so min clears the bottom; current gets extra lift —
-	 * Gothic bold sits optically low in its box, so it looked biased toward min. */
+	/* Place current + min first, then lift max so max→current gap matches
+	 * current→min gap (was 4px overlap above vs 0px below). */
 	const int label_lift = 3;
-	const int curr_lift = 1; /* slight optical lift; 3 was too high */
-	int y_high = (zone_h - sm_h) / 2 - label_lift;
-	if (y_high < 0) y_high = 0;
-	if (y_high + sm_h > zone_h) y_high = zone_h - sm_h;
+	const int curr_lift = 1;
 	int y_curr = zone_h + (zone_h - md_h) / 2 - label_lift - curr_lift;
-	/* Mild overlap room so clamp does not pin current fully down. */
-	if (y_curr < y_high + sm_h - 4) y_curr = y_high + sm_h - 4;
-	if (y_curr + md_h > 2 * zone_h) y_curr = 2 * zone_h - md_h;
+	if (y_curr + md_h > 2 * zone_h)
+		y_curr = 2 * zone_h - md_h;
+	if (y_curr < 0)
+		y_curr = 0;
 	int y_low = 2 * zone_h + (zone_h - sm_h) / 2 - label_lift;
-	if (y_low < y_curr + md_h - 2) y_low = y_curr + md_h - 2;
-	if (y_low + sm_h > lh - 2) y_low = lh - 2 - sm_h;
-	if (y_low < 0) y_low = 0;
+	if (y_low < y_curr + md_h - 2)
+		y_low = y_curr + md_h - 2;
+	if (y_low + sm_h > lh - 2)
+		y_low = lh - 2 - sm_h;
+	if (y_low < 0)
+		y_low = 0;
+	int gap_curr_min = y_low - (y_curr + md_h); /* 0 on emery */
+	int y_high = y_curr - sm_h - gap_curr_min;
+	/* Allow slight clip above layer so the mirrored gap can fit. */
+	if (y_high + sm_h > y_curr - gap_curr_min)
+		y_high = y_curr - sm_h - gap_curr_min;
 
 	graphics_draw_text(ctx, high_buf, font_sm,
 	                   GRect(2, y_high, label_x, sm_h),
