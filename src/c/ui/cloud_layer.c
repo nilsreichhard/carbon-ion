@@ -88,13 +88,18 @@ static void prv_get_sun_thresholds(SunlightSensitivity sens, int *min_intensity,
 }
 
 
-static void prv_draw_cloud(GContext *ctx, int cx, int cy, int r) {
+static void prv_draw_cloud_lobes(GContext *ctx, int cx, int cy, int r) {
 	if (r <= 0)
 		return;
 	graphics_fill_circle(ctx, GPoint(cx, cy), r);
 	graphics_fill_circle(ctx, GPoint(cx - r, cy + r / 2), r * 2 / 3);
 	graphics_fill_circle(ctx, GPoint(cx + r, cy + r / 2), r * 2 / 3);
 }
+
+static void prv_draw_cloud(GContext *ctx, int cx, int cy, int r) {
+	prv_draw_cloud_lobes(ctx, cx, cy, r);
+}
+
 
 static int prv_radius_for_cover(uint8_t cover, int clear_th, int small_th,
                                 int med_th, bool split) {
@@ -133,18 +138,33 @@ static void prv_set_cloud_fill(GContext *ctx, uint8_t code, bool is_light) {
 #endif
 }
 
+/* Theme halo then cloud fill — keeps Split band edges readable when stacked. */
+static void prv_draw_cloud_outlined(GContext *ctx, int cx, int cy, int r,
+                                    bool is_light, uint8_t code) {
+	if (r <= 0)
+		return;
+	graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
+	prv_draw_cloud_lobes(ctx, cx, cy, r + 1);
+	prv_set_cloud_fill(ctx, code, is_light);
+	prv_draw_cloud_lobes(ctx, cx, cy, r);
+}
+
 static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
                           int total_hours, int graph_x, int graph_w, int cy,
                           int clear_th, int small_th, int med_th, bool split,
-                          bool is_light) {
+                          bool is_light, bool outline) {
 	for (int i = total_hours - 1; i >= 0; i--) {
 		int r = prv_radius_for_cover(cover[i], clear_th, small_th, med_th, split);
 		if (r <= 0)
 			continue;
-		prv_set_cloud_fill(ctx, cl->hourly_code[i], is_light);
 		// Draw later hours first so sooner clouds overlap them.
 		int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
-		prv_draw_cloud(ctx, cx, cy, r);
+		if (outline)
+			prv_draw_cloud_outlined(ctx, cx, cy, r, is_light, cl->hourly_code[i]);
+		else {
+			prv_set_cloud_fill(ctx, cl->hourly_code[i], is_light);
+			prv_draw_cloud(ctx, cx, cy, r);
+		}
 	}
 }
 
@@ -243,16 +263,17 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 				cy_high = 4;
 			if (cy_low > h - 5)
 				cy_low = h - 5;
+			/* High → mid → low: low altitude wins overlaps; outline separates bands. */
 			prv_draw_band(ctx, cl, cl->cover_high, total_hours, graph_x, graph_w,
-			              cy_high, clear_th, small_th, med_th, false, is_light);
+			              cy_high, clear_th, small_th, med_th, false, is_light, true);
 			prv_draw_band(ctx, cl, cl->cover_mid, total_hours, graph_x, graph_w,
-			              cy_mid, clear_th, small_th, med_th, false, is_light);
+			              cy_mid, clear_th, small_th, med_th, false, is_light, true);
 			prv_draw_band(ctx, cl, cl->cover_low, total_hours, graph_x, graph_w,
-			              cy_low, clear_th, small_th, med_th, false, is_light);
+			              cy_low, clear_th, small_th, med_th, false, is_light, true);
 		} else {
 			int cy = h / 2 - 2;
 			prv_draw_band(ctx, cl, cl->cover, total_hours, graph_x, graph_w, cy,
-			              clear_th, small_th, med_th, false, is_light);
+			              clear_th, small_th, med_th, false, is_light, false);
 		}
 	}
 
