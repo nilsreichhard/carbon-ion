@@ -215,8 +215,8 @@ static void prv_step_metrics(StepSize size, GFont *num_font, GFont *k_font,
 	}
 }
 
-// Place the step label in the right flank between the centered time digits and
-// the watch edge, then center the number inside that flank.
+/* Center the step stack in the flank between time digits and the right edge.
+ * Same math for Normal and Bold — do not widen/shift the slot by weight. */
 static void prv_layout_step_label(TimeLayer *tl) {
 	if (!tl || !tl->container || !tl->step_label || !tl->step_k_label)
 		return;
@@ -228,7 +228,7 @@ static void prv_layout_step_label(TimeLayer *tl) {
 	prv_step_metrics(settings_get()->step_size, &num_font, &k_font, &num_h, &k_h);
 	text_layer_set_font(tl->step_label, num_font);
 	text_layer_set_font(tl->step_k_label, k_font);
-	int num_k_gap = -2; // slight overlap so K sits closer under the number
+	int num_k_gap = -2;
 	int stack_h = num_h + num_k_gap + k_h;
 	int band_h = TL_TIME_H - TL_TIME_PAD;
 	int step_y = time_y + TL_TIME_PAD + (band_h - stack_h) / 2;
@@ -243,22 +243,33 @@ static void prv_layout_step_label(TimeLayer *tl) {
 
 	int gap = 4;
 	int edge = 2;
-	int slot_left = (w + time_size.w) / 2 + gap;
-	if (slot_left < w / 2)
-		slot_left = w / 2;
-	int slot_right = w - edge;
-	int slot_w = slot_right - slot_left;
-	int min_slot = (settings_get()->step_size == STEP_SIZE_LARGE) ? 24 : 18;
-	if (slot_w < min_slot) {
-		slot_w = min_slot;
-		slot_left = w - edge - slot_w;
-	}
+	int flank_left = (w + time_size.w) / 2 + gap;
+	if (flank_left < w / 2)
+		flank_left = w / 2;
+	int flank_right = w - edge;
+	int flank_w = flank_right - flank_left;
+	if (flank_w < 12)
+		flank_w = 12;
+
+	const char *num_str = tl->step_buf[0] ? tl->step_buf : "0";
+	GSize num_size = graphics_text_layout_get_content_size(
+	    num_str, num_font, GRect(0, 0, flank_w, num_h),
+	    GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
+	GSize k_size = graphics_text_layout_get_content_size(
+	    "K", k_font, GRect(0, 0, flank_w, k_h),
+	    GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
+	int content_w = num_size.w > k_size.w ? num_size.w : k_size.w;
+	if (content_w < 10)
+		content_w = 10;
+	if (content_w > flank_w)
+		content_w = flank_w;
+	int slot_left = flank_left + (flank_w - content_w) / 2;
 
 	layer_set_frame(text_layer_get_layer(tl->step_label),
-	                GRect(slot_left, step_y, slot_w, num_h));
+	                GRect(slot_left, step_y, content_w, num_h));
 	text_layer_set_text_alignment(tl->step_label, GTextAlignmentCenter);
 	layer_set_frame(text_layer_get_layer(tl->step_k_label),
-	                GRect(slot_left, step_y + num_h + num_k_gap, slot_w, k_h));
+	                GRect(slot_left, step_y + num_h + num_k_gap, content_w, k_h));
 	text_layer_set_text_alignment(tl->step_k_label, GTextAlignmentCenter);
 }
 
