@@ -525,6 +525,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 	struct tm *now_stm = localtime(&now_s);
 	if (now_stm) {
 		time_layer_update(s_time_layer, now_stm, settings_get());
+		prv_update_steps();
 		prv_push_weather_to_layers(now_stm);
 	}
 

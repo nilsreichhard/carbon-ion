@@ -202,10 +202,10 @@ static void prv_update_location_row(TimeLayer *tl) {
 static void prv_step_metrics(StepSize size, GFont *num_font, GFont *k_font,
                              int *num_h, int *k_h) {
 	if (size == STEP_SIZE_LARGE) {
-		*num_font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
-		*k_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
-		*num_h = 22;
-		*k_h = 16;
+		*num_font = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
+		*k_font = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+		*num_h = 26;
+		*k_h = 18;
 	} else {
 		*num_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
 		*k_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);

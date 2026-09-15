@@ -259,21 +259,15 @@ module.exports = [
 				'defaultValue': true,
 			},
 			{
-				'type': 'toggle',
-				'messageKey': 'SETTING_SHOW_STEP_COUNT',
-				'label': 'Show Step Counter',
-				'description': 'Display daily step count to the right of the time.',
-				'defaultValue': true,
-			},
-			{
 				'type': 'select',
-				'messageKey': 'SETTING_STEP_SIZE',
-				'label': 'Step Counter Size',
-				'description': 'Default matches the current look. Large is easier to read.',
-				'defaultValue': 0,
+				'messageKey': 'SETTING_STEP_DISPLAY',
+				'label': 'Step Counter',
+				'description': 'Off hides steps. Normal is the current size. Large uses a bolder font.',
+				'defaultValue': 1,
 				'options': [
-					{ 'label': 'Default', 'value': 0 },
-					{ 'label': 'Large', 'value': 1 },
+					{ 'label': 'Off', 'value': 0 },
+					{ 'label': 'Normal', 'value': 1 },
+					{ 'label': 'Large', 'value': 2 },
 				],
 			},
 			{

@@ -1997,11 +1997,27 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		dict['SETTING_SHOW_SILENT_MODE'] = showSilentMode;
 	}
 
-	var showStepCount = extractBool(rawSettings['SETTING_SHOW_STEP_COUNT']);
-	if (showStepCount !== null) {
-		dict[10034] = showStepCount;
-		dict['SETTING_SHOW_STEP_COUNT'] = showStepCount;
+	var stepDisplay = extractInt(rawSettings['SETTING_STEP_DISPLAY']);
+	if (isNaN(stepDisplay)) {
+		/* Migrate old toggle + size (0 default / 1 large) */
+		var legacyShow = extractBool(rawSettings['SETTING_SHOW_STEP_COUNT']);
+		var legacySize = extractInt(rawSettings['SETTING_STEP_SIZE']);
+		if (legacyShow === false) {
+			stepDisplay = 0; /* Off */
+		} else if (legacySize === 1) {
+			stepDisplay = 2; /* Large */
+		} else {
+			stepDisplay = 1; /* Normal */
+		}
 	}
+	if (stepDisplay < 0 || stepDisplay > 2) stepDisplay = 1;
+	dict[10060] = stepDisplay;
+	dict['SETTING_STEP_DISPLAY'] = stepDisplay;
+	/* Keep legacy keys in sync for older firmwares */
+	dict[10034] = stepDisplay !== 0;
+	dict['SETTING_SHOW_STEP_COUNT'] = stepDisplay !== 0;
+	dict[10059] = (stepDisplay === 2) ? 1 : 0;
+	dict['SETTING_STEP_SIZE'] = (stepDisplay === 2) ? 1 : 0;
 
 	var timelineEvent = extractInt(rawSettings['SETTING_TIMELINE_EVENT']);
 	if (!isNaN(timelineEvent) && timelineEvent >= 0 && timelineEvent <= 2) {

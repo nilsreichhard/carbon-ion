@@ -68,9 +68,16 @@ typedef enum {
 } TimelineEventMode;
 
 typedef enum {
-	STEP_SIZE_DEFAULT = 0, /* Gothic 18 + 14 K */
-	STEP_SIZE_LARGE = 1,   /* Gothic 24 Bold + 18 K */
+	STEP_SIZE_DEFAULT = 0, /* Gothic 18 + 14 K (Normal) */
+	STEP_SIZE_LARGE = 1,   /* Gothic 28 Bold + 18 K */
 } StepSize;
+
+/* Clay single control: Off / Normal / Large */
+typedef enum {
+	STEP_DISPLAY_OFF = 0,
+	STEP_DISPLAY_NORMAL = 1,
+	STEP_DISPLAY_LARGE = 2,
+} StepDisplay;
 
 #define MIN_FORECAST_HOURS 12
 #define MAX_FORECAST_HOURS 48
@@ -92,6 +99,7 @@ typedef enum {
 #define KEY_SETTING_SUNLIGHT_SENSITIVITY 10054
 #define KEY_SETTING_CLOUD_DISPLAY_MODE 10055
 #define KEY_SETTING_STEP_SIZE 10059
+#define KEY_SETTING_STEP_DISPLAY 10060
 
 typedef struct {
 	bool temp_unit_celsius;

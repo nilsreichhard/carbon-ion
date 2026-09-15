@@ -152,19 +152,35 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		}
 	}
 
-	t = dict_find(iter, KEY_SETTING_SHOW_STEP_COUNT);
-	if (!t) t = dict_find(iter, 10034);
-	if (t) {
-		s_settings.show_step_count = (prv_tuple_int(t) != 0);
-	}
-	t = dict_find(iter, KEY_SETTING_STEP_SIZE);
-	if (!t) t = dict_find(iter, MESSAGE_KEY_SETTING_STEP_SIZE);
+	/* Unified Step Counter: Off / Normal / Large (key 10060). */
+	t = dict_find(iter, KEY_SETTING_STEP_DISPLAY);
+	if (!t) t = dict_find(iter, MESSAGE_KEY_SETTING_STEP_DISPLAY);
+	if (!t) t = dict_find(iter, 10060);
 	if (t) {
 		int v = prv_tuple_int(t);
-		if (v == STEP_SIZE_LARGE)
+		if (v == STEP_DISPLAY_OFF) {
+			s_settings.show_step_count = false;
+		} else if (v == STEP_DISPLAY_LARGE) {
+			s_settings.show_step_count = true;
 			s_settings.step_size = STEP_SIZE_LARGE;
-		else
+		} else {
+			s_settings.show_step_count = true;
 			s_settings.step_size = STEP_SIZE_DEFAULT;
+		}
+	} else {
+		/* Legacy: separate toggle + old size 0/1 */
+		t = dict_find(iter, KEY_SETTING_SHOW_STEP_COUNT);
+		if (!t) t = dict_find(iter, 10034);
+		if (t) {
+			s_settings.show_step_count = (prv_tuple_int(t) != 0);
+		}
+		t = dict_find(iter, KEY_SETTING_STEP_SIZE);
+		if (!t) t = dict_find(iter, MESSAGE_KEY_SETTING_STEP_SIZE);
+		if (t) {
+			int v = prv_tuple_int(t);
+			s_settings.step_size =
+			    (v == 1) ? STEP_SIZE_LARGE : STEP_SIZE_DEFAULT;
+		}
 	}
 
 	t = dict_find(iter, KEY_SETTING_TIMELINE_EVENT);
