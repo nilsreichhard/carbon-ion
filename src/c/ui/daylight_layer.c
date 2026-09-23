@@ -25,6 +25,10 @@ struct DaylightLayer {
 	uint8_t current_minute;
 	uint8_t battery_percent;
 	bool battery_charging;
+	/* When percent/charging last changed — ETA anchors here so coarse
+	 * 10% battery steps don't slide the markers forward every minute. */
+	time_t battery_anchor_sec;
+	uint8_t battery_anchor_percent;
 	bool sunrise_approx;
 	bool sunset_approx;
 	TimelineEvent events[MAX_TIMELINE_EVENTS];
@@ -281,71 +285,65 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 	}
 
-	// 6. Battery life depletion markers directly on the timeline bar
+	// 6. Battery life depletion markers directly on the timeline bar.
+	// Drain model: ~5% per 4h (full charge ≈ 80h). ETA is anchored when the
+	// reported percent bucket changes so coarse 10% OS steps don't slide the
+	// wall-clock prediction forward every minute.
 	TimelineBatteryMode tb_mode = settings_get()->timeline_battery;
-	if (tb_mode != TIMELINE_BATT_NONE && !dl->battery_charging && dl->battery_percent < 100) {
-		// 20% Yellow Marker (Option 1: 20% yellow, 10% orange, 0% red)
-		if (tb_mode == TIMELINE_BATT_20_10_0 && dl->battery_percent > 20) {
-			int hrs_to_20 = (int)(dl->battery_percent - 20) * 4 / 5;
-			if (hrs_to_20 >= 0 && hrs_to_20 <= forecast_hours) {
-				int col20 = past_hours + hrs_to_20;
-				int x20 = graph_x + col20 * graph_w / total_hours;
-				graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
-				graphics_fill_circle(ctx, GPoint(x20, line_y), 6);
+	if (tb_mode != TIMELINE_BATT_NONE && !dl->battery_charging &&
+	    dl->battery_percent < 100 && dl->battery_anchor_sec != 0) {
+		uint8_t ap = dl->battery_anchor_percent;
+		time_t anchor = dl->battery_anchor_sec;
+		long window_end_sec = (long)forecast_hours * 3600L;
+
+		/* Draw one milestone icon at an absolute ETA (seconds from now). */
+		#define DRAW_BATT_MARK(hrs_from_anchor, stroke_col, fill_w)                      \
+			do {                                                                         \
+				long eta_diff = (long)(anchor - now_sec) + (long)(hrs_from_anchor) * 3600L; \
+				if (eta_diff < 0 || eta_diff > window_end_sec)                               \
+					break;                                                                   \
+				int bx = prv_x_from_now_diff(eta_diff, x_now_mark, graph_w, total_hours);   \
+				if (bx < graph_x || bx > graph_x + graph_w)                                 \
+					break;                                                                   \
+				graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack); \
+				graphics_fill_circle(ctx, GPoint(bx, line_y), 6);                            \
+				graphics_context_set_stroke_color(ctx, stroke_col);                          \
+				graphics_context_set_fill_color(ctx, stroke_col);                            \
+				graphics_context_set_stroke_width(ctx, 1);                                   \
+				graphics_draw_round_rect(ctx, GRect(bx - 4, line_y - 3, 8, 6), 1);           \
+				graphics_fill_rect(ctx, GRect(bx + 4, line_y - 1, 1, 3), 0, GCornerNone);    \
+				if ((fill_w) > 0)                                                           \
+					graphics_fill_rect(ctx, GRect(bx - 3, line_y - 2, (fill_w), 4), 0,         \
+					                   GCornerNone);                                          \
+			} while (0)
+
 #if defined(PBL_COLOR)
-				graphics_context_set_stroke_color(ctx, GColorYellow);
-				graphics_context_set_fill_color(ctx, GColorYellow);
+		GColor batt_y = GColorYellow;
+		GColor batt_o = GColorOrange;
+		GColor batt_r = GColorRed;
 #else
-				graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
-				graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
+		GColor batt_y = is_light ? GColorBlack : GColorWhite;
+		GColor batt_o = is_light ? GColorBlack : GColorWhite;
+		GColor batt_r = is_light ? GColorBlack : GColorWhite;
 #endif
-				graphics_context_set_stroke_width(ctx, 1);
-				graphics_draw_round_rect(ctx, GRect(x20 - 4, line_y - 3, 8, 6), 1);
-				graphics_fill_rect(ctx, GRect(x20 + 4, line_y - 1, 1, 3), 0, GCornerNone);
-				graphics_fill_rect(ctx, GRect(x20 - 3, line_y - 2, 4, 4), 0, GCornerNone);
-			}
+
+		if (tb_mode == TIMELINE_BATT_20_10_0 && ap > 20) {
+			int hrs_to_20 = (int)(ap - 20) * 4 / 5;
+			DRAW_BATT_MARK(hrs_to_20, batt_y, 4);
 		}
 
-		// 10% Orange Marker (Option 1 and Option 2: 10% orange)
-		if ((tb_mode == TIMELINE_BATT_20_10_0 || tb_mode == TIMELINE_BATT_10_0) && dl->battery_percent > 10) {
-			int hrs_to_10 = (int)(dl->battery_percent - 10) * 4 / 5;
-			if (hrs_to_10 >= 0 && hrs_to_10 <= forecast_hours) {
-				int col10 = past_hours + hrs_to_10;
-				int x10 = graph_x + col10 * graph_w / total_hours;
-				graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
-				graphics_fill_circle(ctx, GPoint(x10, line_y), 6);
-#if defined(PBL_COLOR)
-				graphics_context_set_stroke_color(ctx, GColorOrange);
-				graphics_context_set_fill_color(ctx, GColorOrange);
-#else
-				graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
-				graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
-#endif
-				graphics_context_set_stroke_width(ctx, 1);
-				graphics_draw_round_rect(ctx, GRect(x10 - 4, line_y - 3, 8, 6), 1);
-				graphics_fill_rect(ctx, GRect(x10 + 4, line_y - 1, 1, 3), 0, GCornerNone);
-				graphics_fill_rect(ctx, GRect(x10 - 3, line_y - 2, 2, 4), 0, GCornerNone);
-			}
+		if ((tb_mode == TIMELINE_BATT_20_10_0 || tb_mode == TIMELINE_BATT_10_0) &&
+		    ap > 10) {
+			int hrs_to_10 = (int)(ap - 10) * 4 / 5;
+			DRAW_BATT_MARK(hrs_to_10, batt_o, 2);
 		}
 
-		// 0% Red Marker (Option 1, Option 2, and Option 3: 0% red)
-		int hrs_to_0 = (int)dl->battery_percent * 4 / 5;
-		if (hrs_to_0 >= 0 && hrs_to_0 <= forecast_hours) {
-			int col0 = past_hours + hrs_to_0;
-			int x0 = graph_x + col0 * graph_w / total_hours;
-			graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
-			graphics_fill_circle(ctx, GPoint(x0, line_y), 6);
-#if defined(PBL_COLOR)
-			graphics_context_set_stroke_color(ctx, GColorRed);
-			graphics_context_set_fill_color(ctx, GColorRed);
-#else
-			graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
-			graphics_context_set_fill_color(ctx, is_light ? GColorBlack : GColorWhite);
-#endif
-			graphics_context_set_stroke_width(ctx, 1);
-			graphics_draw_round_rect(ctx, GRect(x0 - 4, line_y - 3, 8, 6), 1);
-			graphics_fill_rect(ctx, GRect(x0 + 4, line_y - 1, 1, 3), 0, GCornerNone);
+		{
+			int hrs_to_0 = (int)ap * 4 / 5;
+			DRAW_BATT_MARK(hrs_to_0, batt_r, 0);
 		}
+
+		#undef DRAW_BATT_MARK
 	}
 
 	// Calendar events (after icons; needle drawn after this)
@@ -407,6 +405,8 @@ DaylightLayer *daylight_layer_create(GRect frame) {
 	dl->current_minute = 0;
 	dl->battery_percent = 100;
 	dl->battery_charging = false;
+	dl->battery_anchor_sec = 0;
+	dl->battery_anchor_percent = 100;
 	dl->sunrise_approx = true;
 	dl->sunset_approx = true;
 	dl->event_count = 0;
@@ -420,8 +420,14 @@ DaylightLayer *daylight_layer_create(GRect frame) {
 void daylight_layer_set_battery(DaylightLayer *layer, uint8_t percent, bool charging) {
 	if (!layer)
 		return;
+	bool changed = (percent != layer->battery_percent) || (charging != layer->battery_charging);
 	layer->battery_percent = percent;
 	layer->battery_charging = charging;
+	if (changed || layer->battery_anchor_sec == 0) {
+		/* Re-anchor drain ETA when the OS reports a new bucket (or first sample). */
+		layer->battery_anchor_sec = time(NULL);
+		layer->battery_anchor_percent = percent;
+	}
 	layer_mark_dirty(layer->layer);
 }
 
