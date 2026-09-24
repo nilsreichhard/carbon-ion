@@ -25,10 +25,10 @@ typedef enum {
 } NeedleMode;
 
 typedef enum {
-	TIMELINE_BATT_20_10_0 = 0, // 20% yellow, 10% orange, 0% red
-	TIMELINE_BATT_10_0 = 1,    // 10% orange, 0% red (default)
+	TIMELINE_BATT_20_10_0 = 0, // 20% yellow, 10% orange, 0% red (default)
+	TIMELINE_BATT_10_0 = 1,    // 10% orange, 0% red
 	TIMELINE_BATT_0 = 2,       // 0% red
-	TIMELINE_BATT_NONE = 3,    // None
+	TIMELINE_BATT_NONE = 3,    // None (legacy; kept for persisted values)
 } TimelineBatteryMode;
 
 typedef enum {

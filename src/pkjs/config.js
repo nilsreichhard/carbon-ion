@@ -68,12 +68,11 @@ module.exports = [
 				'messageKey': 'SETTING_TIMELINE_BATTERY',
 				'label': 'Timeline Battery Markers',
 				'description': 'Battery depletion milestones projected onto timeline.',
-				'defaultValue': 1,
+				'defaultValue': 0,
 				'options': [
-					{ 'label': '20% yellow, 10% orange, 0% red', 'value': 0 },
-					{ 'label': '10% orange, 0% red', 'value': 1 },
-					{ 'label': '0% red', 'value': 2 },
-					{ 'label': 'None', 'value': 3 },
+					{ 'label': '20% / 10% / 0%', 'value': 0 },
+					{ 'label': '10% / 0%', 'value': 1 },
+					{ 'label': '0% only', 'value': 2 },
 				],
 			},
 			{

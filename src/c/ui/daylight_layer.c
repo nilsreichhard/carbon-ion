@@ -12,8 +12,27 @@
 #include "../modules/settings.h"
 #include "graph_common.h"
 #include <stddef.h>
+#include <string.h>
 
 #define MAX_TIMELINE_EVENTS 6
+
+/* Discharge history for usage-based battery ETA (persisted). */
+#define STORAGE_KEY_BATT_HIST 1
+#define BATT_HIST_MAX 12
+#define BATT_HIST_WINDOW_SEC (24L * 3600L)
+/* Legacy fixed model: ~5% per 4h → 2880 seconds per percent. */
+#define BATT_FIXED_SECS_PER_PCT 2880L
+/* Reject absurd measured rates (≈0.25–2.0 h/% ⇒ ~25–200h full pack). */
+#define BATT_SECS_PER_PCT_MIN 900L
+#define BATT_SECS_PER_PCT_MAX 7200L
+/* Need a useful window before trusting measured drain. */
+#define BATT_RATE_MIN_SPAN_SEC 3600L
+#define BATT_RATE_MIN_DROP_PCT 5
+
+typedef struct {
+	uint32_t sec;
+	uint8_t percent;
+} BattHistSample;
 
 struct DaylightLayer {
 	Layer *layer;
@@ -29,11 +48,116 @@ struct DaylightLayer {
 	 * 10% battery steps don't slide the markers forward every minute. */
 	time_t battery_anchor_sec;
 	uint8_t battery_anchor_percent;
+	/* Compact chronological discharge samples (oldest → newest). */
+	BattHistSample batt_hist[BATT_HIST_MAX];
+	uint8_t batt_hist_count;
 	bool sunrise_approx;
 	bool sunset_approx;
 	TimelineEvent events[MAX_TIMELINE_EVENTS];
 	uint8_t event_count;
 };
+
+
+static void prv_batt_hist_save(const DaylightLayer *dl) {
+	/* Packed blob: count + samples[BATT_HIST_MAX] (sec, percent). */
+	uint8_t blob[1 + BATT_HIST_MAX * 5];
+	blob[0] = dl->batt_hist_count;
+	for (uint8_t i = 0; i < BATT_HIST_MAX; i++) {
+		uint8_t *p = &blob[1 + i * 5];
+		uint32_t sec = (i < dl->batt_hist_count) ? dl->batt_hist[i].sec : 0;
+		p[0] = (uint8_t)(sec & 0xFFu);
+		p[1] = (uint8_t)((sec >> 8) & 0xFFu);
+		p[2] = (uint8_t)((sec >> 16) & 0xFFu);
+		p[3] = (uint8_t)((sec >> 24) & 0xFFu);
+		p[4] = (i < dl->batt_hist_count) ? dl->batt_hist[i].percent : 0;
+	}
+	persist_write_data(STORAGE_KEY_BATT_HIST, blob, sizeof(blob));
+}
+
+static void prv_batt_hist_load(DaylightLayer *dl) {
+	dl->batt_hist_count = 0;
+	memset(dl->batt_hist, 0, sizeof(dl->batt_hist));
+	if (!persist_exists(STORAGE_KEY_BATT_HIST))
+		return;
+	uint8_t blob[1 + BATT_HIST_MAX * 5];
+	int n = persist_read_data(STORAGE_KEY_BATT_HIST, blob, sizeof(blob));
+	if (n < 1)
+		return;
+	uint8_t count = blob[0];
+	if (count > BATT_HIST_MAX)
+		count = BATT_HIST_MAX;
+	int need = 1 + (int)count * 5;
+	if (n < need)
+		count = (uint8_t)((n > 1) ? (n - 1) / 5 : 0);
+	for (uint8_t i = 0; i < count; i++) {
+		const uint8_t *p = &blob[1 + i * 5];
+		dl->batt_hist[i].sec = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+		                       ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+		dl->batt_hist[i].percent = p[4];
+	}
+	dl->batt_hist_count = count;
+}
+
+static void prv_batt_hist_clear(DaylightLayer *dl) {
+	dl->batt_hist_count = 0;
+	memset(dl->batt_hist, 0, sizeof(dl->batt_hist));
+}
+
+static void prv_batt_hist_prune(DaylightLayer *dl, time_t now) {
+	uint8_t drop = 0;
+	while (drop < dl->batt_hist_count) {
+		long age = (long)now - (long)dl->batt_hist[drop].sec;
+		if (age <= BATT_HIST_WINDOW_SEC)
+			break;
+		drop++;
+	}
+	if (drop == 0)
+		return;
+	uint8_t remain = (uint8_t)(dl->batt_hist_count - drop);
+	if (remain > 0) {
+		memmove(&dl->batt_hist[0], &dl->batt_hist[drop],
+		        remain * sizeof(BattHistSample));
+	}
+	dl->batt_hist_count = remain;
+}
+
+static void prv_batt_hist_push(DaylightLayer *dl, time_t now, uint8_t percent) {
+	prv_batt_hist_prune(dl, now);
+	if (dl->batt_hist_count > 0) {
+		BattHistSample *last = &dl->batt_hist[dl->batt_hist_count - 1];
+		if (last->percent == percent) {
+			/* Same coarse bucket — keep the earlier timestamp as anchor. */
+			return;
+		}
+	}
+	if (dl->batt_hist_count == BATT_HIST_MAX) {
+		memmove(&dl->batt_hist[0], &dl->batt_hist[1],
+		        (BATT_HIST_MAX - 1) * sizeof(BattHistSample));
+		dl->batt_hist_count = BATT_HIST_MAX - 1;
+	}
+	dl->batt_hist[dl->batt_hist_count].sec = (uint32_t)now;
+	dl->batt_hist[dl->batt_hist_count].percent = percent;
+	dl->batt_hist_count++;
+}
+
+/* Seconds of wall time per 1% drain from recent samples, or fixed fallback. */
+static long prv_batt_secs_per_pct(DaylightLayer *dl, time_t now) {
+	prv_batt_hist_prune(dl, now);
+	if (dl->batt_hist_count < 2)
+		return BATT_FIXED_SECS_PER_PCT;
+	const BattHistSample *oldest = &dl->batt_hist[0];
+	const BattHistSample *newest = &dl->batt_hist[dl->batt_hist_count - 1];
+	if (newest->percent >= oldest->percent)
+		return BATT_FIXED_SECS_PER_PCT;
+	long dsec = (long)newest->sec - (long)oldest->sec;
+	int dpct = (int)oldest->percent - (int)newest->percent;
+	if (dsec < BATT_RATE_MIN_SPAN_SEC || dpct < BATT_RATE_MIN_DROP_PCT)
+		return BATT_FIXED_SECS_PER_PCT;
+	long spp = dsec / (long)dpct;
+	if (spp < BATT_SECS_PER_PCT_MIN || spp > BATT_SECS_PER_PCT_MAX)
+		return BATT_FIXED_SECS_PER_PCT;
+	return spp;
+}
 
 // Calculate the moon phase at a specific timestamp (0=new, 1=wax crescent, 2=first quarter,
 // 3=wax gibbous, 4=full, 5=wan gibbous, 6=last quarter, 7=wan crescent).
@@ -286,20 +410,21 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 
 	// 6. Battery life depletion markers directly on the timeline bar.
-	// Drain model: ~5% per 4h (full charge ≈ 80h). ETA is anchored when the
-	// reported percent bucket changes so coarse 10% OS steps don't slide the
-	// wall-clock prediction forward every minute.
+	// Drain rate: measured %/time over the last ~24h of discharge samples when
+	// available; otherwise the legacy fixed ~5% per 4h (2880 s/%). ETA stays
+	// anchored on the percent-bucket change so coarse 10% OS steps don't slide.
 	TimelineBatteryMode tb_mode = settings_get()->timeline_battery;
 	if (tb_mode != TIMELINE_BATT_NONE && !dl->battery_charging &&
 	    dl->battery_percent < 100 && dl->battery_anchor_sec != 0) {
 		uint8_t ap = dl->battery_anchor_percent;
 		time_t anchor = dl->battery_anchor_sec;
 		long window_end_sec = (long)forecast_hours * 3600L;
+		long secs_per_pct = prv_batt_secs_per_pct(dl, now_sec);
 
 		/* Draw one milestone icon at an absolute ETA (seconds from now). */
-		#define DRAW_BATT_MARK(hrs_from_anchor, stroke_col, fill_w)                      \
+		#define DRAW_BATT_MARK(secs_from_anchor, stroke_col, fill_w)                    \
 			do {                                                                         \
-				long eta_diff = (long)(anchor - now_sec) + (long)(hrs_from_anchor) * 3600L; \
+				long eta_diff = (long)(anchor - now_sec) + (long)(secs_from_anchor);       \
 				if (eta_diff < 0 || eta_diff > window_end_sec)                               \
 					break;                                                                   \
 				int bx = prv_x_from_now_diff(eta_diff, x_now_mark, graph_w, total_hours);   \
@@ -328,19 +453,19 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #endif
 
 		if (tb_mode == TIMELINE_BATT_20_10_0 && ap > 20) {
-			int hrs_to_20 = (int)(ap - 20) * 4 / 5;
-			DRAW_BATT_MARK(hrs_to_20, batt_y, 4);
+			long secs_to_20 = (long)(ap - 20) * secs_per_pct;
+			DRAW_BATT_MARK(secs_to_20, batt_y, 4);
 		}
 
 		if ((tb_mode == TIMELINE_BATT_20_10_0 || tb_mode == TIMELINE_BATT_10_0) &&
 		    ap > 10) {
-			int hrs_to_10 = (int)(ap - 10) * 4 / 5;
-			DRAW_BATT_MARK(hrs_to_10, batt_o, 2);
+			long secs_to_10 = (long)(ap - 10) * secs_per_pct;
+			DRAW_BATT_MARK(secs_to_10, batt_o, 2);
 		}
 
 		{
-			int hrs_to_0 = (int)ap * 4 / 5;
-			DRAW_BATT_MARK(hrs_to_0, batt_r, 0);
+			long secs_to_0 = (long)ap * secs_per_pct;
+			DRAW_BATT_MARK(secs_to_0, batt_r, 0);
 		}
 
 		#undef DRAW_BATT_MARK
@@ -407,6 +532,9 @@ DaylightLayer *daylight_layer_create(GRect frame) {
 	dl->battery_charging = false;
 	dl->battery_anchor_sec = 0;
 	dl->battery_anchor_percent = 100;
+	dl->batt_hist_count = 0;
+	memset(dl->batt_hist, 0, sizeof(dl->batt_hist));
+	prv_batt_hist_load(dl);
 	dl->sunrise_approx = true;
 	dl->sunset_approx = true;
 	dl->event_count = 0;
@@ -420,12 +548,59 @@ DaylightLayer *daylight_layer_create(GRect frame) {
 void daylight_layer_set_battery(DaylightLayer *layer, uint8_t percent, bool charging) {
 	if (!layer)
 		return;
-	bool changed = (percent != layer->battery_percent) || (charging != layer->battery_charging);
+	bool was_charging = layer->battery_charging;
+	uint8_t was_percent = layer->battery_percent;
+	bool changed = (percent != was_percent) || (charging != was_charging);
+	time_t now = time(NULL);
+	bool hist_dirty = false;
+
+	if (charging) {
+		/* Charging (or still on charger): discard discharge model. */
+		if (layer->batt_hist_count > 0) {
+			prv_batt_hist_clear(layer);
+			hist_dirty = true;
+		}
+	} else if (was_charging) {
+		/* Fresh unplug — start a new discharge window at this percent. */
+		prv_batt_hist_clear(layer);
+		prv_batt_hist_push(layer, now, percent);
+		hist_dirty = true;
+	} else if (layer->battery_anchor_sec != 0 && percent > was_percent) {
+		/* Percent rose while "not charging" — treat as charge/reset. */
+		prv_batt_hist_clear(layer);
+		prv_batt_hist_push(layer, now, percent);
+		hist_dirty = true;
+	} else if (percent != was_percent || layer->battery_anchor_sec == 0) {
+		/* Record bucket changes (and the first sample after create). */
+		uint8_t before = layer->batt_hist_count;
+		prv_batt_hist_push(layer, now, percent);
+		if (layer->batt_hist_count != before)
+			hist_dirty = true;
+	}
+
+	if (hist_dirty)
+		prv_batt_hist_save(layer);
+
 	layer->battery_percent = percent;
 	layer->battery_charging = charging;
-	if (changed || layer->battery_anchor_sec == 0) {
-		/* Re-anchor drain ETA when the OS reports a new bucket (or first sample). */
-		layer->battery_anchor_sec = time(NULL);
+
+	if (layer->battery_anchor_sec == 0) {
+		/* First sample after create: reuse persisted bucket entry time so a
+		 * restart mid-bucket does not shove milestones forward. */
+		if (!charging && layer->batt_hist_count > 0) {
+			BattHistSample *last = &layer->batt_hist[layer->batt_hist_count - 1];
+			if (last->percent == percent) {
+				layer->battery_anchor_sec = (time_t)last->sec;
+				layer->battery_anchor_percent = percent;
+			}
+		}
+		if (layer->battery_anchor_sec == 0) {
+			layer->battery_anchor_sec = now;
+			layer->battery_anchor_percent = percent;
+		}
+	} else if (changed) {
+		/* Re-anchor drain ETA when the OS reports a new bucket. */
+		layer->battery_anchor_sec = now;
 		layer->battery_anchor_percent = percent;
 	}
 	layer_mark_dirty(layer->layer);
