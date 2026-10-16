@@ -13,6 +13,7 @@ module.exports = {
 	GEONAME_CACHE_KEY: 'carbon.geoname.v1',
 	GEONAME_TTL_MS: 24 * 60 * 60 * 1000,
 	GEONAME_COORD_PRECISION: 2,
+	STALE_CACHE_MAX_AGE_S: 24 * 3600, // never resend a fallback cache older than this
 	CACHE_TTL_MARGIN_MS: 2 * 60 * 1000, // Interval-minus-margin avoids alternating cache hits.
 	XHR_TIMEOUT_MS: 10 * 1000, // Fail fast enough to allow retries.
 	FORECAST_HOURS: 72,
@@ -28,4 +29,5 @@ module.exports = {
 	LOG_KEY_CUR: 'carbon.eventlog.cur',
 	LOG_KEY_PREV: 'carbon.eventlog.prev',
 	MAX_LOG_ENTRIES: 60,
+	MAX_TIMELINE_EVENTS: 12, // Must match MAX_TIMELINE_EVENTS in src/c/ui/daylight_layer.h.
 };

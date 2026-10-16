@@ -29,16 +29,16 @@
 #define GRAPH_OFFSET_X 0
 
 // Number of hourly slots displayed across all graph layers:
-// User configurable: min 12h future (+3h past = 15h) to max 48h future (+12h past = 60h).
-// Fixed needle is always at 1/5 of the total window width.
+// Forecast 12/18/24/36/48h (Clay value, or tapped override); past = forecast/4
+// (integer, so 18h → 4h past, 22h total). Needle sits at past/total of the
+// width — exactly 1/5 except at 18h — use graph_now_x() everywhere.
 #include "../modules/settings.h"
 
 static inline int graph_get_forecast_hours(void) {
-	Settings *s = settings_get();
-	if (!s || s->forecast_hours < MIN_FORECAST_HOURS || s->forecast_hours > MAX_FORECAST_HOURS) {
+	int fh = settings_effective_forecast_hours();
+	if (fh < MIN_FORECAST_HOURS || fh > MAX_FORECAST_HOURS)
 		return DEFAULT_FORECAST_HOURS;
-	}
-	return s->forecast_hours;
+	return fh;
 }
 
 static inline int graph_get_past_hours(void) {
@@ -46,7 +46,13 @@ static inline int graph_get_past_hours(void) {
 }
 
 static inline int graph_get_total_hours(void) {
-	return graph_get_forecast_hours() * 5 / 4;
+	int fh = graph_get_forecast_hours();
+	return fh + fh / 4;
+}
+
+/* X of the "now" needle: same column grid as hourly data (col = past). */
+static inline int graph_now_x(int graph_x, int graph_w) {
+	return graph_x + graph_w * graph_get_past_hours() / graph_get_total_hours();
 }
 
 #define GRAPH_HOURS (graph_get_total_hours())
@@ -79,7 +85,9 @@ static inline void graph_draw_separator(GContext *ctx, int graph_x,
                                         int layer_h) {
 	graphics_context_set_stroke_width(ctx, 1);
 #if defined(PBL_COLOR)
-	graphics_context_set_stroke_color(ctx, GColorDarkGray);
+	graphics_context_set_stroke_color(
+	    ctx, !g_high_contrast ? GColorDarkGray
+	                          : (settings_get()->light_theme ? GColorBlack : GColorLightGray));
 	graphics_draw_line(ctx, GPoint(graph_x - 1, 0),
 	                   GPoint(graph_x - 1, layer_h - 1));
 #else

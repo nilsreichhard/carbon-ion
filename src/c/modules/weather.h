@@ -60,7 +60,11 @@ typedef struct {
 	uint8_t cloud_cover_low[WEATHER_HOURLY_COUNT];  /* append for persist */
 	uint8_t cloud_cover_mid[WEATHER_HOURLY_COUNT];
 	uint8_t cloud_cover_high[WEATHER_HOURLY_COUNT];
+	uint8_t fog_bits[(WEATHER_HOURLY_COUNT + 7) / 8]; /* 2.8.0: bit i = fog in hour i */
+	uint8_t wx_flags;                                  /* 2.8.0: WX_FLAG_* */
 } WeatherData;
+
+#define WX_FLAG_NO_CLOUD_LAYERS 0x01 /* provider has no low/mid/high cloud cover */
 
 _Static_assert(sizeof(WeatherData) <= (PERSIST_DATA_MAX_LENGTH * 3),
                "WeatherData exceeds 768 bytes");

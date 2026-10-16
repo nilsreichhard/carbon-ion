@@ -252,9 +252,23 @@ static void prv_layout_step_label(TimeLayer *tl) {
 		flank_w = 12;
 
 	const char *num_str = tl->step_buf[0] ? tl->step_buf : "0";
+	/* 2.8.3: never ellipsize. Measure unconstrained; if the count is wider
+	 * than the flank, first use the 2 px edge margin, then drop the number to
+	 * the 14 px face of the same weight (e.g. Bold "15" over "K"). */
 	GSize num_size = graphics_text_layout_get_content_size(
-	    num_str, num_font, GRect(0, 0, flank_w, num_h),
-	    GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
+	    num_str, num_font, GRect(0, 0, 100, num_h),
+	    GTextOverflowModeWordWrap, GTextAlignmentLeft);
+	if (num_size.w > flank_w) {
+		flank_w += edge;
+	}
+	if (num_size.w > flank_w) {
+		bool bold = settings_get()->step_size == STEP_SIZE_LARGE;
+		num_font = fonts_get_system_font(bold ? FONT_KEY_GOTHIC_14_BOLD : FONT_KEY_GOTHIC_14);
+		text_layer_set_font(tl->step_label, num_font);
+		num_size = graphics_text_layout_get_content_size(
+		    num_str, num_font, GRect(0, 0, 100, num_h),
+		    GTextOverflowModeWordWrap, GTextAlignmentLeft);
+	}
 	GSize k_size = graphics_text_layout_get_content_size(
 	    "K", k_font, GRect(0, 0, flank_w, k_h),
 	    GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
@@ -446,7 +460,8 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 		return;
 
 	GColor text_color = settings->light_theme ? GColorBlack : GColorWhite;
-	GColor sub_color = settings->light_theme ? GColorDarkGray : GColorLightGray;
+	GColor sub_color = settings->light_theme ? (g_high_contrast ? GColorBlack : GColorDarkGray)
+	                                          : (g_high_contrast ? GColorWhite : GColorLightGray);
 	layer->light_theme = settings->light_theme;
 	layer->show_bt_alert = settings->show_bt_alert;
 	layer->show_silent_mode = settings->show_silent_mode;
@@ -492,6 +507,16 @@ void time_layer_set_steps(TimeLayer *layer, int steps) {
 		steps = 0;
 	int thousands = steps / 1000;
 	bool show = settings_get()->show_step_count && thousands >= 1;
+	/* 2.8.5: health events fire often; only touch the layers (and so redraw
+	 * the face, incl. the gabbro arc warp) when what is shown changes. */
+	static int s_last_k = -1;
+	static int8_t s_last_show = -1, s_last_size = -1;
+	int8_t size = (int8_t)settings_get()->step_size;
+	if (thousands == s_last_k && (int8_t)show == s_last_show && size == s_last_size)
+		return;
+	s_last_k = thousands;
+	s_last_show = (int8_t)show;
+	s_last_size = size;
 	if (show) {
 		snprintf(layer->step_buf, sizeof(layer->step_buf), "%d", thousands);
 	} else {

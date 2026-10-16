@@ -19,6 +19,9 @@ typedef struct {
 	uint8_t place;       // 0=on track, 1=above, 2=below
 } TimelineEvent;
 
+/* Max calendar events kept on the watch; JS MAX_TIMELINE_EVENTS must match. */
+#define MAX_TIMELINE_EVENTS 12
+
 DaylightLayer *daylight_layer_create(GRect frame);
 void daylight_layer_destroy(DaylightLayer *layer);
 Layer *daylight_layer_get_layer(DaylightLayer *layer);
@@ -34,9 +37,16 @@ void daylight_layer_set_data(DaylightLayer *layer, uint8_t sunrise_hour,
 // Set current time for the small red current-time indicator line on the daylight track
 void daylight_layer_set_current_time(DaylightLayer *layer, uint8_t hour, uint8_t minute);
 
-// Set battery state for timeline depletion indicators (yellow at 10%, red when expected to die)
-void daylight_layer_set_battery(DaylightLayer *layer, uint8_t percent, bool charging);
+// Set battery state for timeline depletion markers (Clay 20/10/4/0).
+// Pass both is_charging and is_plugged from BatteryChargeState — plugged-but-not-
+// charging (typical at 100%) must not be treated as discharging.
+void daylight_layer_set_battery(DaylightLayer *layer, uint8_t percent, bool charging,
+                                bool plugged);
 
-// Upcoming calendar events (up to 6) shown on the daylight timeline
+// Upcoming calendar events (up to MAX_TIMELINE_EVENTS) shown on the daylight timeline
+#if defined(PBL_ROUND)
+/* Gabbro: draw the timeline markers at native size after the arc warp. */
+void daylight_layer_draw_marks_mapped(DaylightLayer *layer, GContext *ctx);
+#endif
 void daylight_layer_set_events(DaylightLayer *layer, const TimelineEvent *events,
                                uint8_t count);

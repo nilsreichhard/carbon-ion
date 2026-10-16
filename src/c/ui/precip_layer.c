@@ -23,6 +23,7 @@ struct PrecipLayer {
 // Categorize a WMO code for bar coloring.
 // Returns: 0=none/clear, 1=light rain, 2=heavy rain, 3=sleet/freezing,
 //          4=light snow, 5=heavy snow, 6=storm, 7=severe storm
+#if defined(PBL_COLOR)
 static uint8_t prv_precip_category(uint8_t code) {
 	if (code == 0)
 		return 0; // clear
@@ -60,6 +61,7 @@ static uint8_t prv_precip_category(uint8_t code) {
 		return 8; // severe thunderstorm with hail
 	return 7;     // heavy thunderstorm (97, 98)
 }
+#endif
 
 
 static int prv_precip_min_prob(PrecipSensitivity sens) {

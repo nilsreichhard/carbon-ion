@@ -25,15 +25,16 @@ typedef enum {
 } NeedleMode;
 
 typedef enum {
-	TIMELINE_BATT_20_10_0 = 0, // 20% yellow, 10% orange, 0% red (default)
-	TIMELINE_BATT_10_0 = 1,    // 10% orange, 0% red
-	TIMELINE_BATT_0 = 2,       // 0% red
-	TIMELINE_BATT_NONE = 3,    // None (legacy; kept for persisted values)
+	TIMELINE_BATT_20_10_4_0 = 0, // 20% yellow, 10% orange, 4% red (battery-save), 0% deep red (default)
+	TIMELINE_BATT_10_4_0 = 1,    // 10%, 4%, 0%
+	TIMELINE_BATT_4_0 = 2,       // 4%, 0%
+	TIMELINE_BATT_NONE = 3,      // None (legacy; kept for persisted values)
+	TIMELINE_BATT_10_4 = 4,      // 10%, 4%
 } TimelineBatteryMode;
 
 typedef enum {
 	TIMELINE_WINDOW_12H = 12, // 12h future + 3h past = 15h total
-	TIMELINE_WINDOW_18H = 18, // 18h future + 4.5h past = 22.5h total
+	TIMELINE_WINDOW_18H = 18, // 18h future + 4h past = 22h total (integer /4)
 	TIMELINE_WINDOW_24H = 24, // 24h future + 6h past = 30h total (default)
 	TIMELINE_WINDOW_36H = 36, // 36h future + 9h past = 45h total
 	TIMELINE_WINDOW_48H = 48, // 48h future + 12h past = 60h total
@@ -116,6 +117,32 @@ typedef enum {
 #define KEY_SETTING_STEP_DISPLAY 10060
 #define KEY_SETTING_PRECIP_SENSITIVITY 10061
 #define KEY_SETTING_WEATHER_EVENT_DISPLAY 10062
+#define KEY_SETTING_ALARM_ROWS 10066       /* int32: byte i = row i (bit7 alarm, bits4-5 place, bits0-3 color) */
+#define KEY_SETTING_BACKLIGHT_COLORS 10067
+#define KEY_SETTING_TAP_CYCLE 10068 /* touch builds only (CARBON_TOUCH_ENABLED) */
+#define KEY_SETTING_WRIST_FLICK 10069
+#define KEY_SETTING_FOG_INDICATOR 10073
+#define KEY_SETTING_FLICK_ACTION 10074
+
+typedef enum {
+	FLICK_ACTION_RANGE = 0,  /* cycle timeline range (default) */
+	FLICK_ACTION_CLOUDS = 1, /* toggle 1/3 cloud layers (Total <-> Split) */
+} FlickAction;
+
+#define ALARM_ROW_COUNT 3
+#define ALARM_ROW_ON 0x80
+
+/* Platforms whose watchfaces use the SDK 4.33 touch/backlight/alarm services. */
+#if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_GABBRO) || defined(PBL_PLATFORM_FLINT)
+#define CARBON_MODERN_SERVICES 1
+#endif
+
+/* Watchface touch (double-tap range cycle). Off: stock PebbleOS does not
+ * deliver touch to watchfaces yet. Build with -DCARBON_WATCHFACE_TOUCH=1 to
+ * re-enable once firmware supports it (also restore the Clay toggle). */
+#if defined(CARBON_MODERN_SERVICES) && defined(CARBON_WATCHFACE_TOUCH) && CARBON_WATCHFACE_TOUCH
+#define CARBON_TOUCH_ENABLED 1
+#endif
 
 typedef struct {
 	bool temp_unit_celsius;
@@ -124,7 +151,7 @@ typedef struct {
 	uint8_t fetch_interval_min;
 	InfillMode infill_mode;
 	NeedleMode needle_mode;
-	uint8_t forecast_hours; // 12, 24, 36, or 48 (default 24)
+	uint8_t forecast_hours; // 12, 18, 24, 36, or 48 (default 24)
 	bool show_bt_alert;
 	bool show_silent_mode;
 	TimelineBatteryMode timeline_battery;
@@ -137,9 +164,39 @@ typedef struct {
 	StepSize step_size; /* append for persist compat */
 	PrecipSensitivity precip_sensitivity;
 	WeatherEventDisplay weather_event_display;
+	uint8_t alarm_rows[ALARM_ROW_COUNT]; /* 2.7.0: calendar row shows next alarm */
+	bool backlight_colors;               /* 2.7.0: high contrast while lit */
+	bool tap_cycle;                      /* touch builds only; kept for persist layout */
+	bool wrist_flick;                    /* 2.7.1: wrist flick cycles range (default off) */
+	bool fog_indicator;                  /* 2.8.1: fog weather event (default on) */
+	uint8_t flick_action;                /* 2.8.0: FlickAction (flick / double-tap) */
 } Settings;
+
+/* 2.8.0: false when the weather provider has no low/mid/high cloud layers;
+ * the cloud strip then always uses the 1-layer (Total) view. */
+extern bool g_cloud_layers_available;
+/* 2.8.1: forecast hours the provider really covers ahead of now (255 = all). */
+extern uint8_t g_wx_horizon_h;
+
+/* Cloud mode actually drawn: provider capability > flicked override > Clay. */
+CloudDisplayMode settings_effective_cloud_mode(void);
+/* Flick/double-tap "Toggle 1/3 cloud layers": false if layers unavailable. */
+bool settings_toggle_cloud_mode(void);
+
+/* Runtime-only: true while backlight is on and backlight_colors is enabled. */
+extern bool g_high_contrast;
+
+/* Flicked range override (own persist key 7; 0 = Clay forecast_hours).
+ * Cleared when Forecast Horizon changes or wrist flick is turned off.
+ * Cycle 12→18→24→36→48→12; persist is debounced ~5s, flush on exit. */
+void settings_cycle_forecast(void);
+uint8_t settings_effective_forecast_hours(void);
+void settings_flush(void);
 
 void settings_init(void);
 Settings *settings_get(void);
 void settings_save(void);
 void settings_apply_from_message(DictionaryIterator *iter);
+
+/* Integer tuple only (INT/UINT, length 1/2/4); anything else reads as 0. */
+int settings_tuple_int(const Tuple *t);

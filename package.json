@@ -5,7 +5,7 @@
     "name": "Nils Reich",
     "url": "https://github.com/nilsreichhard/carbon-ion"
   },
-  "version": "2.6.4",
+  "version": "2.9.0",
   "keywords": [
     "pebble-app"
   ],
@@ -16,7 +16,9 @@
     "sdkVersion": "3",
     "enableMultiJS": true,
     "targetPlatforms": [
-      "emery"
+      "emery",
+      "gabbro",
+      "flint"
     ],
     "watchapp": {
       "watchface": true
@@ -85,7 +87,23 @@
       "SETTING_STEP_SIZE": 10059,
       "SETTING_STEP_DISPLAY": 10060,
       "SETTING_PRECIP_SENSITIVITY": 10061,
-      "SETTING_WEATHER_EVENT_DISPLAY": 10062
+      "SETTING_WEATHER_EVENT_DISPLAY": 10062,
+      "SETTING_CALENDAR_SOURCE_1": 10063,
+      "SETTING_CALENDAR_SOURCE_2": 10064,
+      "SETTING_CALENDAR_SOURCE_3": 10065,
+      "SETTING_ALARM_ROWS": 10066,
+      "SETTING_BACKLIGHT_COLORS": 10067,
+      "SETTING_WRIST_FLICK": 10069,
+      "WEATHER_FOG": 10070,
+      "WEATHER_FLAGS": 10071,
+      "WEATHER_VALID_HOURS": 10072,
+      "SETTING_FOG_INDICATOR": 10073,
+      "SETTING_FLICK_ACTION": 10074,
+      "SETTING_WEATHER_PROVIDER": 10075,
+      "SETTING_WEATHER_API_KEY": 10076,
+      "SETTING_METEOSWISS": 10077,
+      "SETTING_OM_MODEL": 10078,
+      "SETTING_OWM_ONECALL": 10079
     },
     "resources": {
       "media": [

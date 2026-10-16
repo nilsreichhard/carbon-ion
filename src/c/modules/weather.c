@@ -25,7 +25,8 @@ WeatherCondition weather_code_to_condition(uint8_t wmo_code) {
   if (wmo_code == 3)
     return WEATHER_CONDITION_CLOUDY; // overcast
   if (wmo_code <= 5)
-    return WEATHER_CONDITION_FOG; // smoke/haze
+    return WEATHER_CONDITION_CLOUDY; // smoke/haze: not fog (2.8.2); fog
+                                     // needs codes 10-12/40-49 or vis < 1 km
   if (wmo_code <= 9)
     return WEATHER_CONDITION_WINDY; // dust/sandstorm
   if (wmo_code <= 12)

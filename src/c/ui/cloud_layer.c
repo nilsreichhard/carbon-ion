@@ -7,6 +7,8 @@
  * @link      https://github.com/nilsreichhard/carbon-ion
  */
 
+#include "glyph.h"
+#include "arc.h"
 #include "cloud_layer.h"
 #include "../modules/settings.h"
 #include "graph_common.h"
@@ -21,6 +23,7 @@ struct CloudLayer {
 	uint8_t cover_high[MAX_GRAPH_HOURS];
 	uint8_t hourly_code[MAX_GRAPH_HOURS];
 	uint8_t shortwave[MAX_GRAPH_HOURS]; // packed W/m² / 4 (0–255)
+	uint8_t fog[MAX_GRAPH_HOURS];       // 1 = fog hour (2.8.0)
 	uint8_t current_hour;
 };
 
@@ -88,12 +91,28 @@ static void prv_get_sun_thresholds(SunlightSensitivity sens, int *min_intensity,
 }
 
 
+/* 2.8.4: lobes and rays go through a glyph transform so gabbro can draw
+ * them at native size after the arc warp (identity on rect). */
+#if defined(PBL_ROUND)
+static bool s_mapped;
+static GPoint s_org;
+#endif
+
+static GlyphXf prv_xf(int x, int y) {
+#if defined(PBL_ROUND)
+	if (s_mapped)
+		return arc_glyph_xf_top(s_org.x + x, s_org.y + y);
+#endif
+	return gx_identity(x, y);
+}
+
 static void prv_draw_cloud_lobes(GContext *ctx, int cx, int cy, int r) {
 	if (r <= 0)
 		return;
-	graphics_fill_circle(ctx, GPoint(cx, cy), r);
-	graphics_fill_circle(ctx, GPoint(cx - r, cy + r / 2), r * 2 / 3);
-	graphics_fill_circle(ctx, GPoint(cx + r, cy + r / 2), r * 2 / 3);
+	GlyphXf t = prv_xf(cx, cy);
+	graphics_fill_circle(ctx, gx_pt(&t, 0, 0), r);
+	graphics_fill_circle(ctx, gx_pt(&t, -r, r / 2), r * 2 / 3);
+	graphics_fill_circle(ctx, gx_pt(&t, r, r / 2), r * 2 / 3);
 }
 
 static void prv_draw_cloud(GContext *ctx, int cx, int cy, int r) {
@@ -193,10 +212,11 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
 
 	/* Always start at the top of the cloud strip; drawn after clouds (above). */
 	int y0 = 0;
+	GlyphXf t = prv_xf(cx, y0);
 	if (vertical) {
 		for (int r = 0; r < ray_count; r++) {
-			int ox = cx - 2 + r * 2; /* spaced like earlier look */
-			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox, y0 + dy));
+			int ox = -2 + r * 2; /* spaced like earlier look */
+			graphics_draw_line(ctx, gx_pt(&t, ox, 0), gx_pt(&t, ox, dy));
 		}
 	} else {
 		int dx = dy;
@@ -205,8 +225,8 @@ static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
 		if (dy > strip_h)
 			dy = strip_h;
 		for (int r = 0; r < ray_count; r++) {
-			int ox = cx - 2 + r * 2; /* spaced like earlier look */
-			graphics_draw_line(ctx, GPoint(ox, y0), GPoint(ox + dx, y0 + dy));
+			int ox = -2 + r * 2; /* spaced like earlier look */
+			graphics_draw_line(ctx, gx_pt(&t, ox, 0), gx_pt(&t, ox + dx, dy));
 		}
 	}
 }
@@ -219,9 +239,8 @@ static int prv_ray_intensity_for_cover(int base_intensity, uint8_t cover) {
 	return (base_intensity * open) / 100;
 }
 
-static void prv_update_proc(Layer *layer, GContext *ctx) {
-	CloudLayer *cl = *(CloudLayer **)layer_get_data(layer);
-	GRect bounds = layer_get_bounds(layer);
+static void prv_draw(CloudLayer *cl, GContext *ctx) {
+	GRect bounds = layer_get_bounds(cl->layer);
 	int graph_x = GRAPH_OFFSET_X;
 	int graph_w = bounds.size.w - graph_x;
 	int h = bounds.size.h;
@@ -239,7 +258,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	                       &rays_off);
 	bool draw_rays = !rays_off;
 	bool is_light = settings->light_theme;
-	bool split = (settings->cloud_display_mode == CLOUD_DISPLAY_SPLIT);
+	bool split = (settings_effective_cloud_mode() == CLOUD_DISPLAY_SPLIT);
 
 	graphics_context_set_antialiased(ctx, false);
 
@@ -295,6 +314,28 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 }
 
+static void prv_update_proc(Layer *layer, GContext *ctx) {
+#if defined(PBL_ROUND)
+	/* Gabbro: drawn after the warp by cloud_layer_draw_mapped(). */
+	(void)layer;
+	(void)ctx;
+#else
+	prv_draw(*(CloudLayer **)layer_get_data(layer), ctx);
+#endif
+}
+
+#if defined(PBL_ROUND)
+void cloud_layer_draw_mapped(CloudLayer *cl, GContext *ctx) {
+	if (!cl)
+		return;
+	s_mapped = true;
+	s_org = layer_get_frame(cl->layer).origin;
+	prv_draw(cl, ctx);
+	s_mapped = false;
+	graphics_context_set_antialiased(ctx, true);
+}
+#endif
+
 CloudLayer *cloud_layer_create(GRect frame) {
 	CloudLayer *cl = malloc(sizeof(CloudLayer));
 	if (!cl)
@@ -305,6 +346,7 @@ CloudLayer *cloud_layer_create(GRect frame) {
 	memset(cl->cover_high, 0, sizeof(cl->cover_high));
 	memset(cl->hourly_code, 0, sizeof(cl->hourly_code));
 	memset(cl->shortwave, 0, sizeof(cl->shortwave));
+	memset(cl->fog, 0, sizeof(cl->fog));
 	cl->current_hour = 0;
 
 	cl->layer = layer_create_with_data(frame, sizeof(CloudLayer *));
@@ -327,7 +369,8 @@ Layer *cloud_layer_get_layer(CloudLayer *layer) {
 void cloud_layer_set_data(CloudLayer *layer, const uint8_t *cover,
                           const uint8_t *hourly_code, const uint8_t *shortwave,
                           const uint8_t *cover_low, const uint8_t *cover_mid,
-                          const uint8_t *cover_high, uint8_t current_hour) {
+                          const uint8_t *cover_high, const uint8_t *fog,
+                          uint8_t current_hour) {
 	if (!layer)
 		return;
 	int total_hours = GRAPH_HOURS;
@@ -354,6 +397,10 @@ void cloud_layer_set_data(CloudLayer *layer, const uint8_t *cover,
 	} else {
 		memset(layer->shortwave, 0, sizeof(layer->shortwave));
 	}
+	if (fog)
+		memcpy(layer->fog, fog, total_hours);
+	else
+		memset(layer->fog, 0, sizeof(layer->fog));
 	layer->current_hour = current_hour;
 	layer_mark_dirty(layer->layer);
 }

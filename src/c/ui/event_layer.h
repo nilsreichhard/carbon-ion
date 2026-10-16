@@ -9,6 +9,7 @@
 
 #pragma once
 #include <pebble.h>
+#include "arc.h"
 
 typedef struct EventLayer EventLayer;
 
@@ -20,5 +21,12 @@ Layer *event_layer_get_layer(EventLayer *layer);
 // hours_remaining: how many of those 24 entries contain valid data.
 //   Entries at index >= hours_remaining are drawn as a missing-data span
 //   marked with ICON_CONNECTION_SIGNAL__OFF.
+// fog: per-hour fog flags (may be NULL); shown as a low-priority fog event
+//   when the Fog indicator setting is on.
 void event_layer_set_data(EventLayer *layer, const uint8_t *hourly_code,
-                          uint8_t hours_remaining);
+                          const uint8_t *fog, uint8_t hours_remaining);
+#if defined(PBL_ROUND)
+// Round arc mode: draw the span glyphs upright at map(screen-src x, y).
+void event_layer_draw_icons_mapped(EventLayer *layer, GContext *ctx,
+                                   ArcMapFn map);
+#endif

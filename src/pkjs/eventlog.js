@@ -84,7 +84,13 @@ function read() {
 	};
 }
 
+function clear() {
+	try { localStorage.removeItem(LOG_KEY_CUR); } catch (e) { }
+	try { localStorage.removeItem(LOG_KEY_PREV); } catch (e) { }
+}
+
 module.exports = {
+	clear: clear,
 	log: log,
 	aggregate: aggregate,
 	read: read,

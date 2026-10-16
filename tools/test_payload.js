@@ -1,0 +1,133 @@
+/* Host test (2.8.2): TZ=Europe/Zurich node tools/test_payload.js
+ * OWM free 2.5 forecast, haze ≠ fog, per-provider refresh minimum, settings
+ * dict + migration, MET User-Agent drop log, Clay keys, and the worst-case
+ * AppMessage sizes against the watch inbox (app_message_open(2048, 256)). */
+var store = {};
+global.localStorage = { getItem: function (k) { return k in store ? store[k] : null; }, setItem: function (k, v) { store[k] = String(v); }, removeItem: function (k) { delete store[k]; } };
+global.Pebble = { getActiveWatchInfo: function () { return { language: 'de_CH' }; } };
+global.navigator = { language: 'de-CH' };
+var W = require('../src/pkjs/weather/index.js');
+var P = require('../src/pkjs/weather/provider.js');
+var settings = require('../src/pkjs/settings.js');
+var wxsend = require('../src/pkjs/wxsend.js');
+var pkg = require('../package.json');
+var fails = 0, n = 0;
+function check(name, got, want) {
+	n++; var ok = JSON.stringify(got) === JSON.stringify(want);
+	if (!ok) fails++;
+	console.log((ok ? 'PASS ' : 'FAIL ') + name + (ok ? '' : '\n   got  ' + JSON.stringify(got) + '\n   want ' + JSON.stringify(want)));
+}
+var NOW = Date.UTC(2026, 9, 15, 16, 20) / 1000, CTX = { now: NOW, lat: 46.3, lon: 7.0 };
+
+/* ---- OWM 2.5 (free) ---- */
+var O = W.PROVIDERS.owm;
+check('OWM default URL = free 2.5 forecast', /data\/2\.5\/forecast\?/.test(O.buildUrl(1, 2, { apiKey: 'K' })), true);
+check('OWM One Call only when enabled', /data\/3\.0\/onecall/.test(O.buildUrl(1, 2, { apiKey: 'K', owmOneCall: true })), true);
+var t0 = Date.UTC(2026, 9, 15, 18) / 1000;
+var list = []; for (var i = 0; i < 40; i++) list.push({ dt: t0 + i * 10800, main: { temp: 10 + (i % 2) * 3, feels_like: 9 }, pop: 0.3, clouds: { all: 60 }, visibility: 10000,
+	rain: i === 1 ? { '3h': 3 } : undefined, weather: [{ id: i === 2 ? 741 : i === 3 ? 721 : 803 }] });
+var g = O.parse({ list: list, city: { sunrise: t0 - 40000, sunset: t0 - 1000 } }, CTX);
+var s18 = P.slot(g, t0);
+check('OWM 2.5 interpolates 3h → 1h (10, 11, 12, 13)', [g.temp[s18], g.temp[s18 + 1], g.temp[s18 + 2], g.temp[s18 + 3]], [10, 11, 12, 13]);
+check('OWM 2.5 rain 3h → per hour', g.precip[s18 + 3], 1);
+check('OWM 741 = fog; 721 haze ≠ fog', [g.fog[s18 + 6], g.fog[s18 + 9], g.wmo_code[s18 + 9]], [1, 0, 3]);
+check('OWM 2.5 horizon ~54 h of grid (valid ≥ 66 slots)', g.valid_hours >= 66, true);
+
+/* ---- refresh minimum per provider ---- */
+check('effectiveInterval: meteoblue ≥ 60, metno ≥ 30, openmeteo 15', [W.effectiveInterval('meteoblue', 15), W.effectiveInterval('metno', 15), W.effectiveInterval('openmeteo', 15), W.effectiveInterval('tomorrow', 60)], [60, 30, 15, 60]);
+var d = settings.buildSettingsDict({ SETTING_WEATHER_PROVIDER: 'meteoblue', SETTING_FETCH_INTERVAL: '15' });
+check('Settings dict enforces Meteoblue 60 min', d['SETTING_FETCH_INTERVAL'], 60);
+d = settings.buildSettingsDict({ SETTING_FETCH_INTERVAL: { value: '15' } });
+check('Settings dict keeps 15 min for Open-Meteo', d['SETTING_FETCH_INTERVAL'], 15);
+
+/* ---- migration of old saved settings (2.6.x) ---- */
+d = settings.buildSettingsDict({ SETTING_SHOW_STEP_COUNT: { value: true }, SETTING_STEP_SIZE: '1', SETTING_SUNLIGHT_RAYS: { value: true } });
+check('Legacy steps (size 1) → Bold; legacy rays → Sensitive', [d['SETTING_STEP_DISPLAY'], d['SETTING_SUNLIGHT_SENSITIVITY']], [2, 1]);
+store['clay-settings'] = JSON.stringify({ SETTING_METEOSWISS: true, SETTING_FORECAST_HOURS: '36' });
+settings.sanitizeClaySettingsStorage();
+check('MeteoSwiss toggle → ICON-CH1 model, other keys kept', [JSON.parse(store['clay-settings']).SETTING_OM_MODEL, JSON.parse(store['clay-settings']).SETTING_FORECAST_HOURS], ['meteoswiss_icon_ch1', '36']);
+
+/* ---- MET Norway User-Agent refused ---- */
+var logs = [];
+W.fetchWeather({ provider: 'metno', lat: 46.3, lon: 7, now: NOW, unit: 'celsius', fogOn: true }, {
+	store: { get: function () { return null; }, set: function () { } }, log: function (c, x) { logs.push(c + ' ' + x); },
+	get: function (url, o, cb) { cb('HTTP 403 for api.met.no', null, { status: 403, droppedHeaders: ['User-Agent'], header: function () { return null; } }); },
+}, function () { });
+check('MET UA drop logged', logs.some(function (l) { return /wx_met_ua/.test(l); }), true);
+
+/* ---- Clay: every messageKey is declared ---- */
+var keys = []; (function walk(a) { a.forEach(function (it) { if (it.messageKey) keys.push(it.messageKey); if (it.items) walk(it.items); }); })(require('../src/pkjs/config.js'));
+check('All Clay keys in package.json messageKeys', keys.filter(function (k) { return !(k in pkg.pebble.messageKeys); }), []);
+var labels = []; (function walk(a) { a.forEach(function (it) { if (it.label) labels.push(it.label); if (it.items) walk(it.items); }); })(require('../src/pkjs/config.js'));
+var PROPER = /^(ICS|API|One|Call|Quiet|Time|OWM)$/;
+check('Clay labels are sentence case', labels.filter(function (l) { return l.split(' ').slice(1).some(function (w) { return /^[A-Z][a-z]/.test(w) && !PROPER.test(w); }); }), []);
+
+/* ---- worst-case AppMessage size ---- */
+function dictBytes(dict) {
+	var mk = pkg.pebble.messageKeys, seen = {}, total = 1;
+	Object.keys(dict).forEach(function (k) {
+		var id = isNaN(Number(k)) ? mk[k] : Number(k);
+		if (id === undefined) throw new Error('unknown key ' + k);
+		if (seen[id]) return; seen[id] = 1;
+		var v = dict[k], len;
+		if (Array.isArray(v)) len = v.length;
+		else if (typeof v === 'string') len = unescape(encodeURIComponent(v)).length + 1;
+		else len = 4;
+		total += 7 + len;
+	});
+	return total;
+}
+function arr(v) { var a = []; for (var i = 0; i < 72; i++) a.push(v); return a; }
+var evs = []; for (var e = 0; e < 20; e++) evs.push({ start: 4e9, end: 4e9, color: 15, place: 3 });
+var worst = { precip_prob: arr(100), temp_hourly: arr(-40), apparent_temp_hourly: arr(-40), cloud_cover: arr(100), cloud_cover_low: arr(100),
+	cloud_cover_mid: arr(100), cloud_cover_high: arr(100), hourly_weather_code: arr(99), shortwave_radiation: arr(1000),
+	city_name: 'Ünterwäldnerstrassenbürg-Långnamn', temp_unit: 'fahrenheit', current_temp: -40, high_temp: 120, low_temp: -40,
+	weather_code: 99, sunrise_hour: 6, sunset_hour: 20, sunrise_minute: 59, sunset_minute: 59, fetch_time: 4e9,
+	fog_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], wx_flags: 1, valid_hours: 72, timeline_events: evs };
+var wb = dictBytes(wxsend.buildWeatherDict(worst));
+console.log('   weather dict worst case = ' + wb + ' bytes');
+check('Worst-case weather dict fits 2048-byte inbox (with 10% headroom)', wb <= 2048 * 0.9, true);
+var all = {}; keys.forEach(function (k) { all[k] = '1'; }); all.SETTING_DATE_FORMAT = '%A, %b %d';
+var sb = dictBytes(settings.buildSettingsDict(all));
+console.log('   settings dict worst case = ' + sb + ' bytes');
+check('Settings dict fits inbox', sb <= 2048, true);
+
+/* ---- 2.8.5: weather without a current temperature ---- */
+var noT = { precip_prob: arr(10), temp_hourly: arr(12), hourly_weather_code: arr(2), valid_hours: 60, fetch_time: 1760540400 };
+var dn = wxsend.buildWeatherDict(noT);
+check('No current temp: WEATHER_TEMP omitted, fetch time + hourly still sent', ['WEATHER_TEMP' in dn, dn.WEATHER_FETCH_TIME, dn.WEATHER_TEMP_HOURLY.length], [false, 1760540400, 72]);
+delete noT.fetch_time;
+check('fetch time is always sent (falls back to now)', typeof wxsend.buildWeatherDict(noT).WEATHER_FETCH_TIME, 'number');
+var mainC = require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8');
+var inbox = mainC.slice(mainC.indexOf('static void prv_inbox_received'), mainC.indexOf('static void prv_inbox_dropped'));
+check('Watch treats hourly arrays / fetch time as weather (not only WEATHER_TEMP)',
+	[/memcpy\(arrs\[i\]\.dst[\s\S]{0,40}got_weather = true/.test(inbox), /if \(ft\)\s*got_weather = true/.test(inbox), /if \(!got_temp\)\s*s_weather\.current_temp = WEATHER_TEMP_INVALID/.test(inbox)], [true, true, true]);
+check('Weather dict has no duplicate numeric keys', Object.keys(dn).filter(function (k) { return !isNaN(Number(k)); }), []);
+
+/* ---- 2.8.5: cache timeout follows the provider minimum ---- */
+check('cacheTtlMs: meteoblue 15→60 min, metno 15→30, openmeteo 15, tomorrow 60 (minus 2 min margin)',
+	[wxsend.cacheTtlMs('meteoblue', 15), wxsend.cacheTtlMs('metno', 15), wxsend.cacheTtlMs('openmeteo', 15), wxsend.cacheTtlMs('tomorrow', 60)].map(function (v) { return v / 60000; }),
+	[58, 28, 13, 58]);
+store['clay-settings'] = JSON.stringify({ SETTING_WEATHER_PROVIDER: 'meteoblue', SETTING_FETCH_INTERVAL: '15' });
+var t0w = Date.now(); wxsend.writeCache({ fetch_time: 1 });
+var ttl = JSON.parse(store[require('../src/pkjs/constants').CACHE_KEY]).expiresAt - t0w;
+check('writeCache uses the saved provider (Meteoblue: ~58 min, not 13)', Math.round(ttl / 60000), 58);
+check('Fallback cache only within 24 h', [wxsend.cacheUsable({ fetch_time: 1000 }, 1000 + 86400, 86400), wxsend.cacheUsable({ fetch_time: 1000 }, 1001 + 86400, 86400), wxsend.cacheUsable({}, 5, 86400)], [true, false, false]);
+
+/* ---- 2.8.7 ---- */
+var d7 = settings.buildSettingsDict({ SETTING_TEMP_UNIT: '0', SETTING_FETCH_INTERVAL: '30', SETTING_LIGHT_THEME: '1', SETTING_WRIST_FLICK: true });
+check('Settings dict uses named keys only (no numeric duplicates)', Object.keys(d7).filter(function (k) { return /^\d+$/.test(k); }), []);
+check('Settings dict still carries the values', [d7.SETTING_TEMP_UNIT, d7.SETTING_FETCH_INTERVAL, d7.SETTING_LIGHT_THEME], [0, 30, 1]);
+var base7 = { SETTING_WEATHER_PROVIDER: 'openmeteo', SETTING_LIGHT_THEME: '0', SETTING_STATIC_LAT: '47.3' };
+function with7(o) { var r = JSON.parse(JSON.stringify(base7)); for (var k in o) r[k] = o[k]; return r; }
+check('Theme-only save keeps the weather cache', settings.weatherSettingsChanged(base7, with7({ SETTING_LIGHT_THEME: '1', SETTING_FORECAST_HOURS: '36' })), false);
+check('Provider / API key / model / location / unit / fog changes refetch',
+	[{ SETTING_WEATHER_PROVIDER: 'metno' }, { SETTING_WEATHER_API_KEY: 'k' }, { SETTING_OM_MODEL: 'icon_d2' }, { SETTING_STATIC_LAT: '48' }, { SETTING_TEMP_UNIT: '1' }, { SETTING_FOG_INDICATOR: false }].map(function (o) { return settings.weatherSettingsChanged(base7, with7(o)); }),
+	[true, true, true, true, true, true]);
+check('Clay {value} wrappers compare by value', settings.weatherSettingsChanged({ SETTING_WEATHER_PROVIDER: 'metno' }, { SETTING_WEATHER_PROVIDER: { value: 'metno' } }), false);
+var wd7 = wxsend.buildWeatherDict({ temp_unit: 'fahrenheit', fetch_time: 5 });
+check('Weather dict: no high/low keys when missing (watch resets them)', ['WEATHER_TEMP_HIGH', 'WEATHER_TEMP_LOW', 'WEATHER_TEMP'].filter(function (k) { return k in wd7; }), []);
+check('Weather dict keeps SETTING_TEMP_UNIT (watch learns the locale unit before any settings save)', wd7.SETTING_TEMP_UNIT, 1);
+
+console.log((n - fails) + '/' + n + ' passed');
+process.exit(fails ? 1 : 0);
