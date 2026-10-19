@@ -81,7 +81,7 @@ function fetchRaw(prov, o, deps, cb) {
 
 function finish(g, o, deps, cb) {
 	writeJson(deps.store, PREV_GRID, { lat: o.lat, lon: o.lon, grid: g });
-	var p = P.toPayload(g, o.unit, o.fogOn, o.now);
+	var p = P.toPayload(g, o.unit, o.fogOn, o.now, o.windKmh, o.fogVis);
 	var pv = PROVIDERS[g.provider];
 	p.attribution = pv ? (pv.attributionFor ? pv.attributionFor(o) : pv.attribution) : '';
 	cb(null, p, g);
@@ -97,6 +97,8 @@ function blend(g, om) {
 		['pop', 'wmo_code', 'fog'].forEach(function (f) { if (g[f][i] === null) g[f][i] = om[f][j]; });
 		if (g.feels[i] === null) g.feels[i] = om.feels[j] === null ? null : om.feels[j] + (g.temp[i] - om.temp[j]);
 		if (g.precip[i] === null) g.precip[i] = om.precip[j];
+		if (om.cape) { if (!g.cape) g.cape = P.nulls(); if (g.cape[i] === null) g.cape[i] = om.cape[j]; }
+		if (om.gust) { if (!g.gust) g.gust = P.nulls(); if (g.gust[i] === null) g.gust[i] = om.gust[j]; }
 		if (om.visibility_m) { if (!g.visibility_m) g.visibility_m = P.nulls(); g.visibility_m[i] = om.visibility_m[j]; }
 	}
 	['sunrise', 'sunset', 'sunriseLocal', 'sunsetLocal', 'utcOffsetS', 'current_code'].forEach(function (k) { if (g[k] === null || g[k] === undefined) g[k] = om[k]; });
@@ -139,7 +141,7 @@ function run(prov, o, deps, cb) {
 }
 
 /**
- * @param {Object} o {provider, apiKey, model, lat, lon, now, unit, fogOn}
+ * @param {Object} o {provider, apiKey, model, lat, lon, now, unit, fogOn, fogVis, windKmh}
  * @param {Object} deps
  * @param {Function} cb (err, payload, grid)
  */

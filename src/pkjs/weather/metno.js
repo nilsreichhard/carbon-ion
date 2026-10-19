@@ -53,8 +53,10 @@ function parse(json, ctx) {
 		P.setAt(g, 'cloud_low', i, P.num(d.cloud_area_fraction_low));
 		P.setAt(g, 'cloud_mid', i, P.num(d.cloud_area_fraction_medium));
 		P.setAt(g, 'cloud_high', i, P.num(d.cloud_area_fraction_high));
+		P.setAt(g, 'gust', i, P.msToKmh(P.num(d.wind_speed_of_gust)));
 		var nd = n1.details || {};
 		P.setAt(g, 'precip', i, P.num(nd.precipitation_amount));
+		P.setAt(g, 'thunder_prob', i, P.num(nd.probability_of_thunder)); /* 2.9.4 */
 		var pop = P.num(nd.probability_of_precipitation);
 		if (pop === null) { /* not provided outside the Nordics: derive from amount */
 			var mm = P.num(nd.precipitation_amount) || 0, mx = P.num(nd.precipitation_amount_max);

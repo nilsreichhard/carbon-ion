@@ -22,6 +22,8 @@ struct EventLayer {
 	GFont icon_font;
 	uint8_t hourly_code[MAX_GRAPH_HOURS];
 	uint8_t fog[MAX_GRAPH_HOURS]; // 1 = fog hour (2.8.1: fog is an event)
+	uint8_t wind[MAX_GRAPH_HOURS]; // 1 = gusts over the threshold (2.9.3)
+	uint8_t storm[MAX_GRAPH_HOURS]; // 1 = strong thunderstorm hour (2.9.4)
 	uint8_t hours_remaining;
 };
 
@@ -32,6 +34,7 @@ typedef enum {
 	EVENT_KIND_TORNADO,
 	EVENT_KIND_MISSING,
 	EVENT_KIND_FOG,
+	EVENT_KIND_WIND, /* 2.9.3: strong gusts */
 } EventKind;
 
 // Represents a consecutive span of the same event type
@@ -45,19 +48,37 @@ typedef struct {
 
 // Returns the icon string and its display color for notable WMO codes.
 // Returns NULL for codes that don't warrant a special icon.
-static const char *prv_event_icon(uint8_t code, GColor *out_color,
+/* 2.9.4: snow codes per level (0 any, 1 moderate and heavy, 2 heavy only). */
+static bool prv_snow_at_level(uint8_t code, int level) {
+	if (level >= 2)
+		return code == 75 || code == 86;
+	if (level == 1)
+		return code == 73 || code == 75 || code == 86;
+	return code == 71 || code == 73 || code == 75 || code == 77 || code == 85 || code == 86;
+}
+
+static const char *prv_event_icon(uint8_t code, bool strong, GColor *out_color,
                                   EventKind *out_kind) {
-	if (code == 19 || code == 99) {
+	/* Per-event Clay settings (2.9.3 toggles, 2.9.4 levels); a hidden kind
+	 * leaves the hour to the next priority (wind, fog) like an unmarked hour. */
+	uint8_t ev = settings_get()->event_hide;
+	bool tornado_on = !(ev & EVENT_HIDE_TORNADO);
+	if ((code == 19 || code == 99) && tornado_on) {
 		*out_color = GColorOrange;
 		*out_kind = EVENT_KIND_TORNADO;
 		return ICON_TORNADO;
 	}
-	if (code >= 95 && code <= 98) {
+	/* Thunder 95-98; 99 (storm with heavy hail) too when tornado is off.
+	 * "Strong only": hail codes 96-99 or the phone's strong-storm bit. */
+	if (((code >= 95 && code <= 98) || (code == 99 && !tornado_on)) &&
+	    !(ev & EVENT_HIDE_THUNDER) &&
+	    (!(ev & EVENT_THUNDER_STRONG) || code >= 96 || strong)) {
 		*out_color = GColorYellow;
 		*out_kind = EVENT_KIND_STORM;
 		return ICON_LIGHTNING;
 	}
-	if (code == 75 || code == 77 || code == 85 || code == 86) {
+	if (!(ev & EVENT_HIDE_SNOW) &&
+	    prv_snow_at_level(code, (ev & EVENT_SNOW_LVL_MASK) >> EVENT_SNOW_LVL_SHIFT)) {
 		*out_color = GColorCyan;
 		*out_kind = EVENT_KIND_SNOW;
 		return ICON_SNOWFLAKE;
@@ -69,15 +90,21 @@ static const char *prv_event_icon(uint8_t code, GColor *out_color,
 // Scan hourly_code to identify consecutive runs of the same event type.
 // Also appends a single MISSING span for hours >= hours_remaining.
 // Returns the number of spans found and populates the spans array.
-/* Fog is the lowest-priority event: thunder/tornado/snow codes win an hour,
- * so collisions resolve exactly like the existing kinds (one span per run). */
+/* Priority per hour: tornado > thunder > snow (WMO codes) > wind (gust
+ * bits, 2.9.3) > fog. Collisions resolve to one span per run. */
 static bool prv_fog_on(void) { return settings_get()->fog_indicator; }
 
-static const char *prv_hour_event(const uint8_t *codes, const uint8_t *fog, int i,
+static const char *prv_hour_event(const uint8_t *codes, const uint8_t *fog,
+                                  const uint8_t *wind, const uint8_t *storm, int i,
                                   GColor *out_color, EventKind *out_kind) {
-	const char *icon = prv_event_icon(codes[i], out_color, out_kind);
+	const char *icon = prv_event_icon(codes[i], storm && storm[i], out_color, out_kind);
 	if (icon)
 		return icon;
+	if (wind && wind[i]) {
+		*out_color = GColorPurple;
+		*out_kind = EVENT_KIND_WIND;
+		return ""; /* drawn as a bit mask, not a glyph */
+	}
 	if (fog && fog[i] && prv_fog_on()) {
 		*out_color = GColorLightGray;
 		*out_kind = EVENT_KIND_FOG;
@@ -87,7 +114,7 @@ static const char *prv_hour_event(const uint8_t *codes, const uint8_t *fog, int 
 }
 
 static int prv_find_spans(const uint8_t hourly_code[MAX_GRAPH_HOURS],
-                          const uint8_t *fog,
+                          const uint8_t *fog, const uint8_t *wind, const uint8_t *storm,
                           uint8_t hours_remaining, EventSpan spans[MAX_GRAPH_HOURS]) {
 	int span_count = 0;
 	int i = 0;
@@ -97,7 +124,7 @@ static int prv_find_spans(const uint8_t hourly_code[MAX_GRAPH_HOURS],
 	while (i < (int)hours_remaining && i < total_hours) {
 		GColor color;
 		EventKind kind;
-		const char *icon = prv_hour_event(hourly_code, fog, i, &color, &kind);
+		const char *icon = prv_hour_event(hourly_code, fog, wind, storm, i, &color, &kind);
 		if (!icon) {
 			i++;
 			continue;
@@ -108,7 +135,7 @@ static int prv_find_spans(const uint8_t hourly_code[MAX_GRAPH_HOURS],
 		while (i < (int)hours_remaining && i < total_hours) {
 			GColor next_color;
 			EventKind next_kind;
-			if (!prv_hour_event(hourly_code, fog, i, &next_color, &next_kind) ||
+			if (!prv_hour_event(hourly_code, fog, wind, storm, i, &next_color, &next_kind) ||
 			    next_kind != kind) {
 				break;
 			}
@@ -137,33 +164,33 @@ static int prv_find_spans(const uint8_t hourly_code[MAX_GRAPH_HOURS],
 	return span_count;
 }
 
-/* Fog glyph: three stacked sine waves, 11 x 9 px (2.8.3: shrunk to the
- * footprint of the bolt/snow glyphs, bottom row on the bolt's baseline). */
+/* Fog glyph: two stacked sine waves, 11 px wide (2.9.2: was three rows).
+ * The rows sit at -2/+2 around the old middle row, so the icon keeps the
+ * 2.8.3 centre and stays inside its old 11 x 9 footprint (7 px tall). */
 #define FOG_W 11
-#define FOG_ROW_DY 3
 #define FOG_CY_OFS 1
+static const int8_t s_fog_row_dy[2] = {-2, 2};
 static void prv_draw_fog_icon(GContext *ctx, int cx, int cy, GColor col, int32_t angle) {
 	static const int8_t wave[FOG_W] = {0, -1, -1, 0, 1, 1, 0, -1, -1, 0, 1};
 	cy += FOG_CY_OFS;
 	graphics_context_set_stroke_color(ctx, col);
 	if (angle != 0) {
 		/* Tilted (gabbro arc, 2.8.4): inverse-sample the upright pixel set so
-		 * the rotated glyph keeps its 11 x 9 size with crisp 1 px waves. */
+		 * the rotated glyph keeps its size with crisp 1 px waves. */
 		GlyphXf t = {(int16_t)cx, (int16_t)cy, cos_lookup(angle), sin_lookup(angle)};
-		uint16_t mask[3 * FOG_ROW_DY + 3] = {0}; /* rows -4..+4 (index +4) */
-		for (int row = -1; row <= 1; row++) {
+		uint16_t mask[9] = {0}; /* rows -4..+4 (index +4) */
+		for (int r = 0; r < 2; r++) {
 			for (int k = 0; k < FOG_W; k++) {
-				int y = row * FOG_ROW_DY + wave[k] + 4;
-				mask[y] |= (uint16_t)(1u << k);
+				mask[s_fog_row_dy[r] + wave[k] + 4] |= (uint16_t)(1u << k);
 				if (k < FOG_W - 1 && wave[k + 1] != wave[k])
-					mask[row * FOG_ROW_DY + wave[k + 1] + 4] |= (uint16_t)(1u << k);
+					mask[s_fog_row_dy[r] + wave[k + 1] + 4] |= (uint16_t)(1u << k);
 			}
 		}
 		gx_mask(ctx, &t, mask, FOG_W, 9, -(FOG_W / 2), -4, col);
 		return;
 	}
-	for (int row = -1; row <= 1; row++) {
-		int y = cy + row * FOG_ROW_DY;
+	for (int r = 0; r < 2; r++) {
+		int y = cy + s_fog_row_dy[r];
 		for (int k = 0; k < FOG_W; k++) {
 			graphics_draw_pixel(ctx, GPoint(cx - FOG_W / 2 + k, y + wave[k]));
 			if (k < FOG_W - 1 && wave[k + 1] != wave[k])
@@ -182,6 +209,15 @@ static void prv_draw_bolt_icon(GContext *ctx, int cx, int cy, GColor col, int32_
 	gx_mask(ctx, &t, s_mask_bolt, 9, 13, -4, -6, col);
 }
 
+/* Wind (2.9.3): two gust lines with curled ends and a short middle line,
+ * 10 x 9 px (the fog/snow footprint). Row y, bit x. */
+static const uint16_t s_mask_wind[9] = {0x1c0, 0x200, 0x1ff, 0x000, 0x07f, 0x000, 0x1ff, 0x200, 0x1c0};
+
+static void prv_draw_wind_icon(GContext *ctx, int cx, int cy, GColor col, int32_t angle) {
+	GlyphXf t = {(int16_t)cx, (int16_t)cy, cos_lookup(angle), sin_lookup(angle)};
+	gx_mask(ctx, &t, s_mask_wind, 10, 9, -5, -4, col);
+}
+
 #if defined(PBL_PLATFORM_EMERY)
 #define EVENT_ICON_LIFT 1
 #else
@@ -192,8 +228,12 @@ static GColor prv_span_color(const EventSpan *span) {
 #if defined(PBL_COLOR)
 	bool light = settings_get()->light_theme;
 	/* Light theme needs darker inks: yellow/cyan/light grey vanish on white. */
+	/* 2.9.2/2.9.3: fog icon and its range bracket are dark grey in both themes. */
 	if (span->kind == EVENT_KIND_FOG)
-		return light ? GColorBlack : GColorLightGray;
+		return GColorDarkGray;
+	/* 2.9.3: wind is violet, apart from thunder tan, snow blue, tornado orange. */
+	if (span->kind == EVENT_KIND_WIND)
+		return light ? GColorPurple : GColorLavenderIndigo;
 	if (span->kind == EVENT_KIND_STORM)
 		return light ? GColorWindsorTan : GColorYellow; /* dark amber */
 	if (span->kind == EVENT_KIND_SNOW)
@@ -216,6 +256,10 @@ static bool prv_draw_span_icon(GContext *ctx, EventLayer *el, const EventSpan *s
 	}
 	if (span->kind == EVENT_KIND_STORM) {
 		prv_draw_bolt_icon(ctx, icon_x, center_y, c, angle);
+		return true;
+	}
+	if (span->kind == EVENT_KIND_WIND) {
+		prv_draw_wind_icon(ctx, icon_x, center_y, c, angle);
 		return true;
 	}
 	if (!span->icon)
@@ -242,7 +286,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	// Find all event spans in the hourly data
 	EventSpan spans[MAX_GRAPH_HOURS];
 	int span_count =
-	    prv_find_spans(el->hourly_code, el->fog, el->hours_remaining, spans);
+	    prv_find_spans(el->hourly_code, el->fog, el->wind, el->storm, el->hours_remaining, spans);
 
 	// Draw each span in reverse order so earlier spans are on top of later ones
 	// in case of overlap.
@@ -314,6 +358,8 @@ static bool prv_draw_mask_icon(GContext *ctx, const EventSpan *span, GPoint p, i
 		m = s_mask_snow; w = 9; h = 9; ox = -4; oy = -4;
 	} else if (span->kind == EVENT_KIND_TORNADO) {
 		m = s_mask_tornado; w = 7; h = 9; ox = -3; oy = -4;
+	} else if (span->kind == EVENT_KIND_WIND) {
+		m = s_mask_wind; w = 10; h = 9; ox = -5; oy = -4;
 	} else {
 		return false;
 	}
@@ -335,7 +381,7 @@ void event_layer_draw_icons_mapped(EventLayer *el, GContext *ctx,
 	int total_hours = GRAPH_HOURS;
 	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
 	EventSpan spans[MAX_GRAPH_HOURS];
-	int n = prv_find_spans(el->hourly_code, el->fog, el->hours_remaining, spans);
+	int n = prv_find_spans(el->hourly_code, el->fog, el->wind, el->storm, el->hours_remaining, spans);
 	for (int s = n - 1; s >= 0; s--) {
 		int xs = GRAPH_OFFSET_X + (long)(spans[s].start_hour * 2 + 1) * graph_w / (total_hours * 2);
 		int xe = GRAPH_OFFSET_X + (long)(spans[s].end_hour * 2 + 1) * graph_w / (total_hours * 2);
@@ -364,6 +410,8 @@ EventLayer *event_layer_create(GRect frame) {
 		return NULL;
 	memset(el->hourly_code, 0, sizeof(el->hourly_code));
 	memset(el->fog, 0, sizeof(el->fog));
+	memset(el->wind, 0, sizeof(el->wind));
+	memset(el->storm, 0, sizeof(el->storm));
 	el->hours_remaining = GRAPH_HOURS;
 	el->icon_font = fonts_load_custom_font(
 	    resource_get_handle(RESOURCE_ID_CARBON_ICONS_12));
@@ -387,7 +435,8 @@ Layer *event_layer_get_layer(EventLayer *layer) {
 }
 
 void event_layer_set_data(EventLayer *layer, const uint8_t *hourly_code,
-                          const uint8_t *fog, uint8_t hours_remaining) {
+                          const uint8_t *fog, const uint8_t *wind,
+                          const uint8_t *storm, uint8_t hours_remaining) {
 	if (!layer)
 		return;
 	int total_hours = GRAPH_HOURS;
@@ -397,6 +446,14 @@ void event_layer_set_data(EventLayer *layer, const uint8_t *hourly_code,
 		memcpy(layer->fog, fog, total_hours);
 	else
 		memset(layer->fog, 0, sizeof(layer->fog));
+	if (wind)
+		memcpy(layer->wind, wind, total_hours);
+	else
+		memset(layer->wind, 0, sizeof(layer->wind));
+	if (storm)
+		memcpy(layer->storm, storm, total_hours);
+	else
+		memset(layer->storm, 0, sizeof(layer->storm));
 	layer->hours_remaining = hours_remaining;
 	layer_mark_dirty(layer->layer);
 }

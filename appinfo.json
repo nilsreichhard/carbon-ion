@@ -5,8 +5,7 @@
   "enableMultiJS": true,
   "targetPlatforms": [
     "emery",
-    "gabbro",
-    "flint"
+    "gabbro"
   ],
   "watchapp": {
     "watchface": true
@@ -90,8 +89,18 @@
     "SETTING_WEATHER_PROVIDER": 10075,
     "SETTING_WEATHER_API_KEY": 10076,
     "SETTING_METEOSWISS": 10077,
-      "SETTING_OM_MODEL": 10078,
-      "SETTING_OWM_ONECALL": 10079
+    "SETTING_OM_MODEL": 10078,
+    "SETTING_OWM_ONECALL": 10079,
+    "SETTING_WIND_GUST": 10080,
+    "WEATHER_WIND": 10081,
+    "SETTING_EVENT_THUNDER": 10082,
+    "SETTING_EVENT_TORNADO": 10083,
+    "SETTING_EVENT_SNOW": 10084,
+    "SETTING_EVENT_FLAGS": 10085,
+    "SETTING_THUNDER_LEVEL": 10086,
+    "SETTING_SNOW_LEVEL": 10087,
+    "SETTING_FOG_LEVEL": 10088,
+    "WEATHER_STORM": 10089
   },
   "resources": {
     "media": [
@@ -124,7 +133,7 @@
   "name": "carbon-ion",
   "shortName": "Carbon Ion",
   "longName": "Carbon Ion",
-  "versionLabel": "2.9.0",
+  "versionLabel": "2.9.5",
   "companyName": "Nils Reich",
   "appKeys": {
     "WEATHER_REQUEST": 10000,
@@ -201,6 +210,16 @@
     "SETTING_WEATHER_PROVIDER": 10075,
     "SETTING_WEATHER_API_KEY": 10076,
     "SETTING_METEOSWISS": 10077,
-      "SETTING_OM_MODEL": 10078
+    "SETTING_OM_MODEL": 10078,
+    "SETTING_WIND_GUST": 10080,
+    "WEATHER_WIND": 10081,
+    "SETTING_EVENT_THUNDER": 10082,
+    "SETTING_EVENT_TORNADO": 10083,
+    "SETTING_EVENT_SNOW": 10084,
+    "SETTING_EVENT_FLAGS": 10085,
+    "SETTING_THUNDER_LEVEL": 10086,
+    "SETTING_SNOW_LEVEL": 10087,
+    "SETTING_FOG_LEVEL": 10088,
+    "WEATHER_STORM": 10089
   }
 }

@@ -123,6 +123,14 @@ typedef enum {
 #define KEY_SETTING_WRIST_FLICK 10069
 #define KEY_SETTING_FOG_INDICATOR 10073
 #define KEY_SETTING_FLICK_ACTION 10074
+#define KEY_SETTING_EVENT_FLAGS 10085 /* 2.9.3: EVENT_HIDE_* mask */
+#define EVENT_HIDE_THUNDER 0x01
+#define EVENT_HIDE_TORNADO 0x02
+#define EVENT_HIDE_SNOW 0x04
+#define EVENT_THUNDER_STRONG 0x08 /* 2.9.4: thunder "Strong only" */
+#define EVENT_SNOW_LVL_SHIFT 4    /* 2.9.4: bits 4-5 snow minimum: 0 any, 1 moderate+, 2 heavy */
+#define EVENT_SNOW_LVL_MASK 0x30
+#define EVENT_FLAGS_MASK 0x3f
 
 typedef enum {
 	FLICK_ACTION_RANGE = 0,  /* cycle timeline range (default) */
@@ -133,7 +141,7 @@ typedef enum {
 #define ALARM_ROW_ON 0x80
 
 /* Platforms whose watchfaces use the SDK 4.33 touch/backlight/alarm services. */
-#if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_GABBRO) || defined(PBL_PLATFORM_FLINT)
+#if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_GABBRO)
 #define CARBON_MODERN_SERVICES 1
 #endif
 
@@ -170,6 +178,7 @@ typedef struct {
 	bool wrist_flick;                    /* 2.7.1: wrist flick cycles range (default off) */
 	bool fog_indicator;                  /* 2.8.1: fog weather event (default on) */
 	uint8_t flick_action;                /* 2.8.0: FlickAction (flick / double-tap) */
+	uint8_t event_hide;                  /* 2.9.3/2.9.4: EVENT_* flags (0 = defaults) */
 } Settings;
 
 /* 2.8.0: false when the weather provider has no low/mid/high cloud layers;

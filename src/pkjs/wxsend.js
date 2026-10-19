@@ -235,6 +235,14 @@ function buildWeatherDict(payload) {
 	var fogBits = (payload.fog_bits || []).slice(0, 9);
 	while (fogBits.length < 9) fogBits.push(0);
 	dict['WEATHER_FOG'] = fogBits;
+	/* 2.9.3: wind-event bitmask (gusts over the chosen threshold). */
+	var windB = (payload.wind_bits || []).slice(0, 9);
+	while (windB.length < 9) windB.push(0);
+	dict['WEATHER_WIND'] = windB;
+	/* 2.9.4: strong-thunderstorm bitmask (Thunder "Strong only" level). */
+	var stormB = (payload.storm_bits || []).slice(0, 9);
+	while (stormB.length < 9) stormB.push(0);
+	dict['WEATHER_STORM'] = stormB;
 	dict['WEATHER_FLAGS'] = (payload.wx_flags | 0) & 0xFF;
 	var validHours = payload.valid_hours ? Math.max(1, Math.min(hourlyCount, payload.valid_hours | 0)) : hourlyCount;
 	dict['WEATHER_VALID_HOURS'] = validHours;

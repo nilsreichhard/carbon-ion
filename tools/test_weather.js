@@ -257,6 +257,67 @@ check('Zurich without offset unchanged (phone clock, ~05:3x / ~21:2x)', [pZ.sunr
 var owmTz = W.PROVIDERS.owm.parse({ list: [{ dt: NOW7, main: { temp: 1, feels_like: 1 }, pop: 0, clouds: { all: 0 }, visibility: 10000, weather: [{ id: 800 }] }], city: { timezone: 32400, sunrise: NOW7 - 30000, sunset: NOW7 + 20000 } }, { now: NOW7, lat: 35, lon: 139 });
 check('OWM 2.5 city.timezone -> utcOffsetS', owmTz.utcOffsetS, 32400);
 
+/* ---- 2.9.3: wind gusts per provider (km/h) + wind bitmask ---- */
+var omG = JSON.parse(JSON.stringify(om));
+omG.hourly.wind_gusts_10m = t72.map(function (_, i) { return i === 24 ? 55 : i === 25 ? 49.9 : 20; });
+var gG = W.PROVIDERS.openmeteo.parse(omG, CTX);
+check('Gust OM wind_gusts_10m (km/h)', [gG.gust[24], gG.gust[25], gG.gust[30]], [55, 49.9, 20]);
+check('Gust OM URL asks wind_gusts_10m in km/h', [/wind_gusts_10m/.test(W.PROVIDERS.openmeteo.buildUrl(46.3, 7, {})), /wind_speed_unit=kmh/.test(W.PROVIDERS.openmeteo.buildUrl(46.3, 7, {}))], [true, true]);
+check('Wind bits >= 50 km/h (49.9 not)', P.toPayload(gG, 'celsius', true, NOW, 50).wind_bits, [0, 0, 0, 1, 0, 0, 0, 0, 0]);
+check('Wind bits off (0) / threshold 40', [P.toPayload(gG, 'celsius', true, NOW, 0).wind_bits.join(''), P.toPayload(gG, 'celsius', true, NOW, 40).wind_bits[3]], ['000000000', 3]);
+check('Wind bits: no gust data never triggers', P.windBits(P.emptyGrid('meteoblue', NOW), 40), [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+var tsG = [{ time: iso(H0 + 13 * 3600), data: { instant: { details: { air_temperature: 5, wind_speed_of_gust: 15 } }, next_1_hours: { summary: { symbol_code: 'lightsnow' }, details: { precipitation_amount: 0.3 } } } },
+	{ time: iso(H0 + 14 * 3600), data: { instant: { details: { air_temperature: 5, wind_speed_of_gust: 5 } }, next_1_hours: { summary: { symbol_code: 'snow' }, details: { precipitation_amount: 1 } } } }];
+var gmG = W.PROVIDERS.metno.parse({ properties: { timeseries: tsG } }, CTX);
+check('Gust MET wind_speed_of_gust m/s → km/h', [gmG.gust[13], gmG.gust[14]], [54, 18]);
+var gtG = W.PROVIDERS.tomorrow.parse({ timelines: { hourly: [{ time: iso(H0 + 13 * 3600), values: { temperature: 5, windGust: 20, weatherCode: 5100 } }, { time: iso(H0 + 14 * 3600), values: { temperature: 5, windGust: 1, weatherCode: 5000 } }] } }, CTX);
+check('Gust Tomorrow windGust m/s → km/h', gtG.gust[13], 72);
+var owG = W.PROVIDERS.owm.parse({ list: [{ dt: H0 + 12 * 3600, main: { temp: 5, feels_like: 3 }, pop: 0, clouds: { all: 50 }, visibility: 10000, wind: { gust: 14 }, weather: [{ id: 600 }] },
+	{ dt: H0 + 15 * 3600, main: { temp: 5, feels_like: 3 }, pop: 0, clouds: { all: 50 }, visibility: 10000, wind: { gust: 20 }, weather: [{ id: 601 }] }] }, CTX);
+check('Gust OWM 2.5 wind.gust m/s → km/h, interpolated', [owG.gust[12], owG.gust[15], Math.round(owG.gust[13] * 10) / 10], [50.4, 72, 57.6]);
+var ocG = W.PROVIDERS.owm.parse({ hourly: [{ dt: H0 + 12 * 3600, temp: 5, feels_like: 3, clouds: 50, wind_gust: 12, weather: [{ id: 800 }] }] }, CTX);
+check('Gust OWM One Call wind_gust m/s → km/h', ocG.gust[12], 43.2);
+var waG = W.PROVIDERS.weatherapi.parse({ forecast: { forecastday: [{ hour: [{ time_epoch: H0 + 13 * 3600, temp_c: 5, feelslike_c: 3, cloud: 50, gust_kph: 61, condition: { code: 1210 } }, { time_epoch: H0 + 14 * 3600, temp_c: 5, feelslike_c: 3, cloud: 50, gust_kph: 10, condition: { code: 1219 } }] }] } }, CTX);
+check('Gust WeatherAPI gust_kph', [waG.gust[13], waG.gust[14]], [61, 10]);
+var geoG = P.emptyGrid('geosphere', NOW); for (var gi = 12; gi < 40; gi++) geoG.temp[gi] = 5;
+W.blend(geoG, gG);
+check('Gust GeoSphere filled from Open-Meteo blend', [geoG.gust[24], geoG.gust[11]], [55, 20]);
+check('Gust caps: Meteoblue none, others yes', Object.keys(W.CAPS).map(function (k) { return k + ':' + W.CAPS[k].gust; }).sort(),
+	['geosphere:true', 'meteoblue:false', 'metno:true', 'openmeteo:true', 'owm:true', 'tomorrow:true', 'weatherapi:true']);
+check('Meteoblue fixture has no gusts', MB.parse(mbFix(true), CTX).gust, null);
+check('wxsend sends WEATHER_WIND (9 bytes)', require('../src/pkjs/wxsend.js').buildWeatherDict({ wind_bits: [1, 2], fetch_time: NOW }).WEATHER_WIND, [1, 2, 0, 0, 0, 0, 0, 0, 0]);
+
+/* ---- 2.9.3: light/moderate snow codes + watch snow event codes ---- */
+check('Light/moderate snow → WMO 71/73 (MET, Tomorrow, OWM, WeatherAPI)', [gmG.wmo_code[13], gmG.wmo_code[14], gtG.wmo_code[13], gtG.wmo_code[14], owG.wmo_code[12], owG.wmo_code[15], waG.wmo_code[13], waG.wmo_code[14]], [71, 73, 71, 73, 71, 73, 71, 73]);
+var evSrc = require('fs').readFileSync(__dirname + '/../src/c/ui/event_layer.c', 'utf8');
+var snowLine = (/return (code == 71[^;]*);/.exec(evSrc) || [])[1] || '';
+check('Watch snow event codes (level Any) = 71, 73, 75, 77, 85, 86', (snowLine.match(/\d+/g) || []).map(Number).sort(function (a, b) { return a - b; }), [71, 73, 75, 77, 85, 86]);
+check('Watch event priority tornado > thunder > snow > wind > fog', /return icon;\s*if \(wind && wind\[i\]\)[\s\S]*?if \(fog && fog\[i\]/.test(evSrc), true);
+
+/* ---- 2.9.4: strong storms (CAPE / MET probability) + fog visibility levels ---- */
+check('OM URL asks cape', /cape/.test(W.PROVIDERS.openmeteo.buildUrl(46.3, 7, {})), true);
+var omC = JSON.parse(JSON.stringify(om)); omC.hourly.cape = t72.map(function (_, i) { return i === 20 ? 1800 : 100; });
+var gC = W.PROVIDERS.openmeteo.parse(omC, CTX);
+check('OM cape parsed', [gC.cape[20], gC.cape[21]], [1800, 100]);
+var tsT = [{ time: iso(H0 + 13 * 3600), data: { instant: { details: { air_temperature: 15 } }, next_1_hours: { summary: { symbol_code: 'rainandthunder' }, details: { precipitation_amount: 2, probability_of_thunder: 70 } } } }];
+var gmT = W.PROVIDERS.metno.parse({ properties: { timeseries: tsT } }, CTX);
+check('MET probability_of_thunder parsed; strong bit set at 70 %', [gmT.thunder_prob[13], gmT.wmo_code[13], (P.stormBits(gmT)[1] >> 5) & 1], [70, 95, 1]);
+var geoC = P.emptyGrid('geosphere', NOW); for (var gj = 12; gj < 40; gj++) geoC.temp[gj] = 5;
+W.blend(geoC, gC);
+check('GeoSphere cape from Open-Meteo blend', geoC.cape[20], 1800);
+check('Payload carries storm_bits', P.toPayload(gC, 'celsius', true, NOW).storm_bits.length, 9);
+var gF = P.emptyGrid('openmeteo', NOW); gF.visibility_m = P.nulls();
+for (var fi = 0; fi < 72; fi++) { gF.temp[fi] = 5; gF.wmo_code[fi] = 3; }
+gF.fog[10] = 1; gF.visibility_m[10] = 800;  /* fog under 1000 m only */
+gF.fog[11] = 1; gF.visibility_m[11] = 400;  /* under 500 */
+gF.fog[12] = 1; gF.visibility_m[12] = 150;  /* under 200 */
+gF.fog[13] = 1; gF.wmo_code[13] = 45; gF.visibility_m[13] = 2000; /* fog code: every level */
+var fb = function (v) { var b = P.toPayload(gF, 'celsius', v > 0, NOW, 0, v).fog_bits; return [10, 11, 12, 13].map(function (i) { return (b[i >> 3] >> (i & 7)) & 1; }).join(''); };
+check('Fog levels: 1000 / 500 / 200 / off narrow the provider fog; codes 45/48 always', [fb(1000), fb(500), fb(200), fb(0)], ['1111', '0111', '0011', '0000']);
+check('Fog default (no level arg) = 1000 m behaviour', P.toPayload(gF, 'celsius', true, NOW, 0).fog_bits.join(','), P.toPayload(gF, 'celsius', true, NOW, 0, 1000).fog_bits.join(','));
+check('Caps strongStorm/fogVis', Object.keys(W.CAPS).map(function (k) { return k + ':' + (W.CAPS[k].strongStorm ? 1 : 0) + (W.CAPS[k].fogVis ? 1 : 0); }).sort(),
+	['geosphere:11', 'meteoblue:01', 'metno:10', 'openmeteo:11', 'owm:11', 'tomorrow:01', 'weatherapi:11']);
+
 function NOW5() { return Date.UTC(2026, 9, 15, 14) / 1000; }
 
 console.log((n - fails) + '/' + n + ' passed');

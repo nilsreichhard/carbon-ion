@@ -7,6 +7,8 @@
  *   { provider, start, time[72], temp[72] °C, feels[72] °C, pop[72] %,
  *     precip[72] mm, cloud[72] %, cloud_low/mid/high[72]|null,
  *     visibility_m[72]|null, wmo_code[72], fog[72] (0/1), shortwave[72]|null,
+ *     gust[72]|null (km/h, 2.9.3: wind event), cape[72]|null (J/kg),
+ *     thunder_prob[72]|null (%, 2.9.4: strong-storm level),
  *     sunrise, sunset (unix s), tmin, tmax, current_temp, current_code,
  *     valid_hours, has_layers }
  *
@@ -42,7 +44,7 @@ function emptyGrid(provider, nowSec) {
 		provider: provider, start: start, time: time,
 		temp: nulls(), feels: nulls(), pop: nulls(), precip: nulls(), cloud: nulls(),
 		cloud_low: null, cloud_mid: null, cloud_high: null, visibility_m: null,
-		wmo_code: nulls(), fog: nulls(), shortwave: null,
+		wmo_code: nulls(), fog: nulls(), shortwave: null, gust: null, cape: null, thunder_prob: null,
 		sunrise: null, sunset: null, tmin: null, tmax: null,
 		current_temp: null, current_code: null, valid_hours: 0, has_layers: false,
 	};
@@ -64,6 +66,40 @@ function num(v) {
 	if (v === null || v === undefined || v === '') return null;
 	var n = Number(v);
 	return isNaN(n) ? null : n;
+}
+
+/* m/s → km/h (2.9.3: gusts are kept in km/h on the grid). */
+function msToKmh(v) { return v === null || v === undefined ? null : Math.round(v * 3.6 * 10) / 10; }
+
+/* 2.9.3: wind-event bitmask (bit i = hour i) for gusts >= thresholdKmh;
+ * 0 / falsy threshold = off. Hours without gust data never trigger. */
+function windBits(g, thresholdKmh) {
+	var b = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+	if (!thresholdKmh || !g.gust) return b;
+	for (var i = 0; i < HOURS; i++) {
+		var v = g.gust[i];
+		if (v !== null && v !== undefined && v >= thresholdKmh) b[i >> 3] |= 1 << (i & 7);
+	}
+	return b;
+}
+
+/* 2.9.4: "strong" thunderstorm hours for the Thunder "Strong only" level:
+ * a thunder code (95-99) that is a hail code (96-99) or comes with
+ * CAPE >= STRONG_CAPE J/kg (Open-Meteo) or thunder probability >=
+ * STRONG_THUNDER_PROB % (MET Norway). Sent as a bitmask whatever the level,
+ * so changing the level never refetches. */
+var STRONG_CAPE = 1500;
+var STRONG_THUNDER_PROB = 50;
+function stormBits(g) {
+	var b = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+	for (var i = 0; i < HOURS; i++) {
+		var c = g.wmo_code[i];
+		if (c === null || c < 95 || c > 99) continue;
+		var cape = g.cape ? g.cape[i] : null, tp = g.thunder_prob ? g.thunder_prob[i] : null;
+		if (c >= 96 || (cape !== null && cape >= STRONG_CAPE) || (tp !== null && tp >= STRONG_THUNDER_PROB))
+			b[i >> 3] |= 1 << (i & 7);
+	}
+	return b;
 }
 
 /* Fog from WMO code or visibility (< 1000 m). */
@@ -113,7 +149,8 @@ function fillFrom(g, src, maxSlot) {
 		var j = slot(src, g.time[i]);
 		if (j < 0 || src.temp[j] === null) continue;
 		fields.forEach(function (f) { if (src[f]) g[f][i] = src[f][j]; });
-		['cloud_low', 'cloud_mid', 'cloud_high', 'visibility_m', 'shortwave'].forEach(function (f) {
+		['cloud_low', 'cloud_mid', 'cloud_high', 'visibility_m', 'shortwave', 'gust', 'cape', 'thunder_prob'].forEach(function (f) {
+			if (src[f] && !g[f] && (f === 'gust' || f === 'cape' || f === 'thunder_prob')) g[f] = nulls();
 			if (g[f] && src[f]) g[f][i] = src[f][j];
 		});
 	}
@@ -160,8 +197,12 @@ function finalize(g, nowSec, lat, lon) {
  * @param {boolean} fogOn   Fog indicator setting (promotes fog hours to WMO 45
  *                          so the weather-event strip shows them too)
  * @param {number} nowSec
+ * @param {number} [windKmh] gust threshold for the wind event (0 = off, 2.9.3)
+ * @param {number} [fogVis]  fog level: max visibility in m (1000 default, 500, 200; 2.9.4).
+ *                           Stricter levels only narrow the provider's fog hours;
+ *                           fog codes 45/48 and hours without visibility data stay fog.
  */
-function toPayload(g, unit, fogOn, nowSec) {
+function toPayload(g, unit, fogOn, nowSec, windKmh, fogVis) {
 	var f = unit === 'fahrenheit';
 	function T(v) { return v === null ? null : (f ? v * 9 / 5 + 32 : v); }
 	function arr(a, conv) {
@@ -189,7 +230,12 @@ function toPayload(g, unit, fogOn, nowSec) {
 	var fogBytes = [0, 0, 0, 0, 0, 0, 0, 0, 0];
 	var codes = arr(g.wmo_code);
 	for (var i = 0; i < HOURS; i++) {
-		if (fogOn && g.fog[i]) {
+		var fogHere = fogOn && g.fog[i];
+		if (fogHere && fogVis && fogVis < 1000) {
+			var wc = g.wmo_code[i], vm = g.visibility_m ? g.visibility_m[i] : null;
+			fogHere = wc === 45 || wc === 48 || vm === null || vm === undefined || vm < fogVis;
+		}
+		if (fogHere) {
 			fogBytes[i >> 3] |= 1 << (i & 7);
 			if (codes[i] <= 3) codes[i] = 45;
 		}
@@ -207,6 +253,8 @@ function toPayload(g, unit, fogOn, nowSec) {
 		hourly_weather_code: codes,
 		shortwave_radiation: arr(g.shortwave),
 		fog_bits: fogBytes,
+		wind_bits: windBits(g, windKmh),
+		storm_bits: stormBits(g),
 		wx_flags: g.has_layers ? 0 : 1,
 		valid_hours: Math.max(1, g.valid_hours),
 		current_temp: T(g.current_temp),
@@ -240,4 +288,5 @@ module.exports = {
 	gridStart: gridStart, emptyGrid: emptyGrid, slot: slot, setAt: setAt, num: num,
 	nulls: nulls, isFogWmo: isFogWmo, apparentTemp: apparentTemp, sunTimes: sunTimes,
 	fillFrom: fillFrom, finalize: finalize, toPayload: toPayload,
+	msToKmh: msToKmh, windBits: windBits, stormBits: stormBits, STRONG_CAPE: STRONG_CAPE, STRONG_THUNDER_PROB: STRONG_THUNDER_PROB,
 };

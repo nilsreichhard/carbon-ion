@@ -11,7 +11,7 @@ var P = require('./provider');
 var BASE = 'https://api.open-meteo.com/v1/forecast';
 var VARS = ['temperature_2m', 'apparent_temperature', 'precipitation_probability', 'precipitation',
 	'cloud_cover', 'cloud_cover_low', 'cloud_cover_mid', 'cloud_cover_high', 'weather_code',
-	'shortwave_radiation', 'visibility'];
+	'shortwave_radiation', 'visibility', 'wind_gusts_10m', 'cape'];
 /* id → { label, chain (merge order before best_match), source attribution } */
 var MODELS = {
 	best_match: { label: 'Best match', chain: [], src: '' },
@@ -43,7 +43,7 @@ function buildUrl(lat, lon, opts) {
 		'&past_hours=' + past + '&forecast_hours=' + fc +
 		(opts.pastOnly ? '' : '&daily=sunrise,sunset,temperature_2m_min,temperature_2m_max') +
 		(chain.length && !opts.pastOnly ? '&models=' + chain.concat(['best_match']).join(',') : '') +
-		'&temperature_unit=celsius&timeformat=unixtime&timezone=auto';
+		'&temperature_unit=celsius&wind_speed_unit=kmh&timeformat=unixtime&timezone=auto';
 }
 
 /* Field from a block, merging "<name>_<model>" columns in chain order, then
@@ -79,7 +79,7 @@ function parse(json, ctx) {
 	var map = { temp: 'temperature_2m', feels: 'apparent_temperature', pop: 'precipitation_probability',
 		precip: 'precipitation', cloud: 'cloud_cover', wmo_code: 'weather_code',
 		cloud_low: 'cloud_cover_low', cloud_mid: 'cloud_cover_mid', cloud_high: 'cloud_cover_high',
-		visibility_m: 'visibility', shortwave: 'shortwave_radiation' };
+		visibility_m: 'visibility', shortwave: 'shortwave_radiation', gust: 'wind_gusts_10m', cape: 'cape' };
 	var cols = {};
 	Object.keys(map).forEach(function (k) { cols[k] = col(h, map[k]); });
 	for (var n = 0; n < h.time.length; n++) {

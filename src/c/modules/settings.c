@@ -51,7 +51,14 @@ static const Settings s_defaults = {
     .wrist_flick = false,
     .fog_indicator = true,
     .flick_action = FLICK_ACTION_RANGE,
+    .event_hide = 0,
 };
+
+/* 2.9.3: event_hide is appended right where the 2.9.2 struct ended (no tail
+ * padding before it), so an older persisted blob never covers it and it
+ * keeps its default 0 = every event on. */
+_Static_assert(offsetof(Settings, event_hide) % _Alignof(Settings) == 0,
+               "event_hide must start at the old sizeof(Settings)");
 
 void settings_init(void) {
 	s_settings = s_defaults;
@@ -81,6 +88,7 @@ void settings_init(void) {
 	}
 	if (s_settings.flick_action > FLICK_ACTION_CLOUDS)
 		s_settings.flick_action = FLICK_ACTION_RANGE;
+	s_settings.event_hide &= EVENT_FLAGS_MASK;
 }
 
 CloudDisplayMode settings_effective_cloud_mode(void) {
@@ -413,6 +421,10 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	t = dict_find(iter, KEY_SETTING_FOG_INDICATOR);
 	if (t)
 		s_settings.fog_indicator = (settings_tuple_int(t) != 0);
+
+	t = dict_find(iter, KEY_SETTING_EVENT_FLAGS);
+	if (t)
+		s_settings.event_hide = (uint8_t)(settings_tuple_int(t) & EVENT_FLAGS_MASK);
 
 	t = dict_find(iter, KEY_SETTING_FLICK_ACTION);
 	if (t) {

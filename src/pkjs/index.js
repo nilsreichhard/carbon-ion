@@ -23,7 +23,7 @@ var GEOCODE_RETRY_ATTEMPTS = C.GEOCODE_RETRY_ATTEMPTS, GEOCODE_RETRY_BASE_DELAY_
 var FETCH_DEDUPE_WINDOW_MS = C.FETCH_DEDUPE_WINDOW_MS, REQ_DEDUPE_WINDOW_MS = C.REQ_DEDUPE_WINDOW_MS;
 
 var buildInfo = {
-	version: '2.9.0',
+	version: '2.9.5',
 	hash: 'custom',
 	branch: 'master',
 	dirty: false,
@@ -45,6 +45,7 @@ var geo = require('./geo');
 var weatherProviders = require('./weather/index');
 var maskUrl = net.maskUrl, maskUrlsIn = net.maskUrlsIn, xhrRequest = net.xhrRequest, retryXhr = net.retryXhr;
 var readClaySettings = settings.readClaySettings, getBoolSetting = settings.getBoolSetting;
+var getWindGustKmh = settings.getWindGustKmh;
 var getStringSetting = settings.getStringSetting, getTempUnit = settings.getTempUnit;
 var getStaticLocation = settings.getStaticLocation, getLocalityLanguage = settings.getLocalityLanguage;
 var fetchCalendarEvents = calendar.fetchCalendarEvents;
@@ -146,7 +147,9 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 		apiKey: getStringSetting(wxSettings, 'SETTING_WEATHER_API_KEY', ''),
 		/* Legacy MeteoSwiss toggle is migrated by sanitizeClaySettingsStorage. */
 		model: getStringSetting(wxSettings, 'SETTING_OM_MODEL', '') || 'best_match',
-		fogOn: getBoolSetting(wxSettings, 'SETTING_FOG_INDICATOR', true),
+		fogOn: settings.getFogVis(wxSettings) > 0,
+		fogVis: settings.getFogVis(wxSettings),
+		windKmh: getWindGustKmh(wxSettings),
 		owmOneCall: getBoolSetting(wxSettings, 'SETTING_OWM_ONECALL', false),
 		lat: lat, lon: lon, unit: tempUnit, now: Math.floor(Date.now() / 1000),
 	};

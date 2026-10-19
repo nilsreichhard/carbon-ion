@@ -62,7 +62,8 @@ function parse25(json, ctx) {
 		return { t: s.dt, temp: P.num(s.main.temp), feels: P.num(s.main.feels_like),
 			pop: s.pop !== undefined ? Math.round(Number(s.pop) * 100) : null,
 			precip: (((s.rain && s.rain['3h']) || 0) + ((s.snow && s.snow['3h']) || 0)) / 3,
-			cloud: s.clouds ? P.num(s.clouds.all) : null, vis: vis, id: id };
+			cloud: s.clouds ? P.num(s.clouds.all) : null, vis: vis, id: id,
+			gust: s.wind ? P.msToKmh(P.num(s.wind.gust)) : null };
 	}
 	var S = L.map(step);
 	function lerp(a, b, f) { return (a === null || b === null) ? (f < 0.5 ? a : b) : a + (b - a) * f; }
@@ -75,7 +76,7 @@ function parse25(json, ctx) {
 		var f = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
 		if (f < 0) f = 0; if (f > 1) f = 1;
 		var near = f < 0.5 ? a : b;
-		['temp', 'feels', 'pop', 'precip', 'cloud'].forEach(function (fl) { P.setAt(g, fl, i, lerp(a[fl], b[fl], f)); });
+		['temp', 'feels', 'pop', 'precip', 'cloud', 'gust'].forEach(function (fl) { P.setAt(g, fl, i, lerp(a[fl], b[fl], f)); });
 		P.setAt(g, 'visibility_m', i, lerp(a.vis, b.vis, f));
 		var code = idToWmo(near.id, near.vis);
 		P.setAt(g, 'wmo_code', i, code === null ? 3 : code);
@@ -103,6 +104,7 @@ function parse(json, ctx) {
 		P.setAt(g, 'pop', i, h.pop !== undefined ? Math.round(Number(h.pop) * 100) : null);
 		P.setAt(g, 'precip', i, ((h.rain && h.rain['1h']) || 0) + ((h.snow && h.snow['1h']) || 0));
 		P.setAt(g, 'cloud', i, P.num(h.clouds));
+		P.setAt(g, 'gust', i, P.msToKmh(P.num(h.wind_gust)));
 		P.setAt(g, 'visibility_m', i, vis);
 		var code = idToWmo(id, vis);
 		P.setAt(g, 'wmo_code', i, code === null ? 3 : code);

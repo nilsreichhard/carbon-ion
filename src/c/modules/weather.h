@@ -62,6 +62,8 @@ typedef struct {
 	uint8_t cloud_cover_high[WEATHER_HOURLY_COUNT];
 	uint8_t fog_bits[(WEATHER_HOURLY_COUNT + 7) / 8]; /* 2.8.0: bit i = fog in hour i */
 	uint8_t wx_flags;                                  /* 2.8.0: WX_FLAG_* */
+	uint8_t wind_bits[(WEATHER_HOURLY_COUNT + 7) / 8]; /* 2.9.3: bit i = strong gusts in hour i */
+	uint8_t storm_bits[(WEATHER_HOURLY_COUNT + 7) / 8]; /* 2.9.4: bit i = strong thunderstorm */
 } WeatherData;
 
 #define WX_FLAG_NO_CLOUD_LAYERS 0x01 /* provider has no low/mid/high cloud cover */

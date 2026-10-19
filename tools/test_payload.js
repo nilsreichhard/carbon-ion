@@ -83,7 +83,7 @@ var worst = { precip_prob: arr(100), temp_hourly: arr(-40), apparent_temp_hourly
 	cloud_cover_mid: arr(100), cloud_cover_high: arr(100), hourly_weather_code: arr(99), shortwave_radiation: arr(1000),
 	city_name: 'Ünterwäldnerstrassenbürg-Långnamn', temp_unit: 'fahrenheit', current_temp: -40, high_temp: 120, low_temp: -40,
 	weather_code: 99, sunrise_hour: 6, sunset_hour: 20, sunrise_minute: 59, sunset_minute: 59, fetch_time: 4e9,
-	fog_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], wx_flags: 1, valid_hours: 72, timeline_events: evs };
+	fog_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], wind_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], storm_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], wx_flags: 1, valid_hours: 72, timeline_events: evs };
 var wb = dictBytes(wxsend.buildWeatherDict(worst));
 console.log('   weather dict worst case = ' + wb + ' bytes');
 check('Worst-case weather dict fits 2048-byte inbox (with 10% headroom)', wb <= 2048 * 0.9, true);
@@ -91,6 +91,66 @@ var all = {}; keys.forEach(function (k) { all[k] = '1'; }); all.SETTING_DATE_FOR
 var sb = dictBytes(settings.buildSettingsDict(all));
 console.log('   settings dict worst case = ' + sb + ' bytes');
 check('Settings dict fits inbox', sb <= 2048, true);
+
+check('Worst-case weather dict carries WEATHER_WIND', 'WEATHER_WIND' in wxsend.buildWeatherDict(worst), true);
+check('Wind gust setting: default 50, Off = 0, unknown → 50', [settings.getWindGustKmh({}), settings.getWindGustKmh({ SETTING_WIND_GUST: '0' }), settings.getWindGustKmh({ SETTING_WIND_GUST: '75' }), settings.getWindGustKmh({ SETTING_WIND_GUST: '33' })], [50, 0, 75, 50]);
+check('Wind gust change refetches weather', settings.weatherSettingsChanged({ SETTING_WIND_GUST: '50' }, { SETTING_WIND_GUST: '60' }), true);
+
+/* ---- 2.9.3: per-event toggles ---- */
+check('Event flags default all on (missing keys → 0)', settings.buildSettingsDict({}).SETTING_EVENT_FLAGS, 0);
+check('Event flags: thunder off = 1, tornado off = 2, snow off = 4, all off = 7',
+	[settings.buildSettingsDict({ SETTING_EVENT_THUNDER: false }).SETTING_EVENT_FLAGS, settings.buildSettingsDict({ SETTING_EVENT_TORNADO: 'false' }).SETTING_EVENT_FLAGS,
+	 settings.buildSettingsDict({ SETTING_EVENT_SNOW: 0 }).SETTING_EVENT_FLAGS, settings.buildSettingsDict({ SETTING_EVENT_THUNDER: false, SETTING_EVENT_TORNADO: false, SETTING_EVENT_SNOW: false }).SETTING_EVENT_FLAGS], [1, 2, 4, 7]);
+check('Event toggles on → 0', settings.buildSettingsDict({ SETTING_EVENT_THUNDER: true, SETTING_EVENT_TORNADO: 1, SETTING_EVENT_SNOW: 'true' }).SETTING_EVENT_FLAGS, 0);
+check('Thunder/tornado/snow toggles do not refetch weather (watch-side)',
+	[settings.weatherSettingsChanged({ SETTING_EVENT_THUNDER: true }, { SETTING_EVENT_THUNDER: false }), settings.weatherSettingsChanged({ SETTING_EVENT_SNOW: true }, { SETTING_EVENT_SNOW: false }), settings.weatherSettingsChanged({ SETTING_EVENT_TORNADO: true }, { SETTING_EVENT_TORNADO: false })], [false, false, false]);
+check('Fog and wind still refetch (phone-side)', [settings.weatherSettingsChanged({ SETTING_FOG_INDICATOR: true }, { SETTING_FOG_INDICATOR: false }), settings.weatherSettingsChanged({ SETTING_WIND_GUST: '50' }, { SETTING_WIND_GUST: '0' })], [true, true]);
+var capsT = require('../src/pkjs/weather/caps.js');
+check('Tornado toggle shown only for providers reporting WMO 19/99', Object.keys(capsT).filter(function (k) { return capsT[k].tornado; }).sort(), ['geosphere', 'openmeteo', 'owm']);
+var setSrc = require('fs').readFileSync(__dirname + '/../src/c/modules/settings.h', 'utf8');
+check('Settings struct: event_hide appended last (upgrade keeps default 0)', /uint8_t event_hide;[^\n]*\n\} Settings;/.test(setSrc), true);
+check('Watch event-flag key matches package.json', Number((/KEY_SETTING_EVENT_FLAGS (\d+)/.exec(setSrc) || [])[1]), pkg.pebble.messageKeys.SETTING_EVENT_FLAGS);
+
+/* ---- 2.9.4: event sensitivity levels ---- */
+var F = function (o) { return settings.buildSettingsDict(o).SETTING_EVENT_FLAGS; };
+check('Levels default (no keys) → flags 0, fog on at 1000 m', [F({}), settings.buildSettingsDict({}).SETTING_FOG_INDICATOR, settings.getFogVis({})], [0, 1, 1000]);
+check('Thunder: Any 0, Strong only 8, Off 1', [F({ SETTING_THUNDER_LEVEL: '0' }), F({ SETTING_THUNDER_LEVEL: '1' }), F({ SETTING_THUNDER_LEVEL: '2' })], [0, 8, 1]);
+check('Snow: Any 0, Moderate+ 16, Heavy 32, Off 4', [F({ SETTING_SNOW_LEVEL: '0' }), F({ SETTING_SNOW_LEVEL: '1' }), F({ SETTING_SNOW_LEVEL: '2' }), F({ SETTING_SNOW_LEVEL: '3' })], [0, 16, 32, 4]);
+check('Fog level → visibility 1000/500/200/off and watch flag', [0, 1, 2, 3].map(function (l) { var o = { SETTING_FOG_LEVEL: String(l) }; return settings.getFogVis(o) + '/' + settings.buildSettingsDict(o).SETTING_FOG_INDICATOR; }), ['1000/1', '500/1', '200/1', '0/0']);
+check('Migration: old toggles off → Off, on → default level',
+	[F({ SETTING_EVENT_THUNDER: false, SETTING_EVENT_SNOW: 'false' }), F({ SETTING_EVENT_THUNDER: true, SETTING_EVENT_SNOW: 1 }), settings.getFogVis({ SETTING_FOG_INDICATOR: false }), settings.getFogVis({ SETTING_FOG_INDICATOR: true })], [5, 0, 0, 1000]);
+check('New level wins over a stale old toggle; junk level → default', [F({ SETTING_EVENT_SNOW: false, SETTING_SNOW_LEVEL: '2' }), F({ SETTING_THUNDER_LEVEL: '9' }), F({ SETTING_SNOW_LEVEL: 'x' })], [32, 0, 0]);
+check('Tornado toggle unchanged (off = 2), combined with levels', F({ SETTING_EVENT_TORNADO: false, SETTING_THUNDER_LEVEL: '1', SETTING_SNOW_LEVEL: '2' }), 2 | 8 | 32);
+check('Thunder/snow level changes do not refetch; fog level does',
+	[settings.weatherSettingsChanged({ SETTING_THUNDER_LEVEL: '0' }, { SETTING_THUNDER_LEVEL: '1' }), settings.weatherSettingsChanged({ SETTING_SNOW_LEVEL: '0' }, { SETTING_SNOW_LEVEL: '2' }), settings.weatherSettingsChanged({ SETTING_FOG_LEVEL: '0' }, { SETTING_FOG_LEVEL: '2' })], [false, false, true]);
+check('Settings dict worst case still small with level keys', sb < 400, true);
+var gS = { wmo_code: arr(0), cape: arr(null), thunder_prob: arr(null) };
+gS.wmo_code[0] = 95; gS.wmo_code[1] = 95; gS.cape[1] = 1600; gS.wmo_code[2] = 95; gS.thunder_prob[2] = 60; gS.wmo_code[3] = 96; gS.wmo_code[4] = 95; gS.cape[4] = 900; gS.thunder_prob[4] = 30; gS.wmo_code[9] = 99; gS.cape[10] = 3000;
+check('Storm bits: 95 plain no; CAPE ≥1500, thunder prob ≥50, hail 96/99 yes; CAPE without storm no', P.stormBits(gS), [2 | 4 | 8, 2, 0, 0, 0, 0, 0, 0, 0]);
+check('Strong thresholds', [P.STRONG_CAPE, P.STRONG_THUNDER_PROB], [1500, 50]);
+var capsL = require('../src/pkjs/weather/caps.js');
+check('Strong only hidden for providers without strength data', Object.keys(capsL).filter(function (k) { return capsL[k].strongStorm === false || !capsL[k].strongStorm; }).sort(), ['meteoblue', 'tomorrow']);
+check('Stricter fog levels hidden without visibility data', Object.keys(capsL).filter(function (k) { return !capsL[k].fogVis; }).sort(), ['metno']);
+check('Worst-case weather dict carries WEATHER_STORM (9 bytes)', wxsend.buildWeatherDict(worst).WEATHER_STORM.length, 9);
+check('Default weather dict sends zero storm bits when absent', wxsend.buildWeatherDict(noTstorm()).WEATHER_STORM, [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+function noTstorm() { return { precip_prob: arr(10), temp_hourly: arr(12), hourly_weather_code: arr(2), valid_hours: 60, fetch_time: 1760540400 }; }
+var cfgItems = []; (function walk(a) { a.forEach(function (it) { if (it.messageKey) cfgItems.push(it); if (it.items) walk(it.items); }); })(require('../src/pkjs/config.js'));
+var byKey = {}; cfgItems.forEach(function (it) { byKey[it.messageKey] = it; });
+check('Clay: thunder/snow/fog are selects with Off last, default 0; toggles gone; tornado toggle kept',
+	[byKey.SETTING_THUNDER_LEVEL.type, byKey.SETTING_SNOW_LEVEL.type, byKey.SETTING_FOG_LEVEL.type,
+	 byKey.SETTING_THUNDER_LEVEL.options.slice(-1)[0].label, byKey.SETTING_SNOW_LEVEL.options.slice(-1)[0].label, byKey.SETTING_FOG_LEVEL.options.slice(-1)[0].label,
+	 byKey.SETTING_THUNDER_LEVEL.defaultValue + byKey.SETTING_SNOW_LEVEL.defaultValue + byKey.SETTING_FOG_LEVEL.defaultValue,
+	 !!byKey.SETTING_EVENT_THUNDER, !!byKey.SETTING_EVENT_SNOW, !!byKey.SETTING_FOG_INDICATOR, byKey.SETTING_EVENT_TORNADO.type],
+	['select', 'select', 'select', 'Off', 'Off', 'Off', 0, false, false, false, 'toggle']);
+check('Level option counts: thunder 3, snow 4, fog 4', [byKey.SETTING_THUNDER_LEVEL.options.length, byKey.SETTING_SNOW_LEVEL.options.length, byKey.SETTING_FOG_LEVEL.options.length], [3, 4, 4]);
+check('New message keys 10086-10089 in package.json and appinfo.json',
+	['SETTING_THUNDER_LEVEL', 'SETTING_SNOW_LEVEL', 'SETTING_FOG_LEVEL', 'WEATHER_STORM'].map(function (k) { return pkg.pebble.messageKeys[k] + '/' + require('../appinfo.json').appKeys[k]; }),
+	['10086/10086', '10087/10087', '10088/10088', '10089/10089']);
+var evC = require('fs').readFileSync(__dirname + '/../src/c/ui/event_layer.c', 'utf8');
+check('Watch: snow levels any/moderate+/heavy code sets', [/level >= 2\)\s*return code == 75 \|\| code == 86;/.test(evC), /level == 1\)\s*return code == 73 \|\| code == 75 \|\| code == 86;/.test(evC)], [true, true]);
+check('Watch: Strong only = hail code or storm bit', /EVENT_THUNDER_STRONG\)\s*\|\|\s*code >= 96 \|\| strong/.test(evC), true);
+check('Watch flag bits match phone packing', [/EVENT_THUNDER_STRONG 0x08/.test(setSrc), /EVENT_SNOW_LVL_SHIFT 4/.test(setSrc), /EVENT_SNOW_LVL_MASK 0x30/.test(setSrc), /EVENT_FLAGS_MASK 0x3f/.test(setSrc)], [true, true, true, true]);
+check('Weather persist version bumped for storm_bits', /WEATHER_PERSIST_VERSION 5/.test(require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8')), true);
 
 /* ---- 2.8.5: weather without a current temperature ---- */
 var noT = { precip_prob: arr(10), temp_hourly: arr(12), hourly_weather_code: arr(2), valid_hours: 60, fetch_time: 1760540400 };
@@ -128,6 +188,15 @@ check('Clay {value} wrappers compare by value', settings.weatherSettingsChanged(
 var wd7 = wxsend.buildWeatherDict({ temp_unit: 'fahrenheit', fetch_time: 5 });
 check('Weather dict: no high/low keys when missing (watch resets them)', ['WEATHER_TEMP_HIGH', 'WEATHER_TEMP_LOW', 'WEATHER_TEMP'].filter(function (k) { return k in wd7; }), []);
 check('Weather dict keeps SETTING_TEMP_UNIT (watch learns the locale unit before any settings save)', wd7.SETTING_TEMP_UNIT, 1);
+
+/* ---- 2.9.5: status icons share one footprint ---- */
+var tlSrc = require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8');
+function bitsOf(name) { var m = new RegExp(name + '\\[STATUS_ICON_H\\] = \\{([\\s\\S]*?)\\};').exec(tlSrc); return m ? (m[1].match(/"[^"]*"/g) || []).map(function (r) { return r.slice(1, -1); }) : []; }
+var bBt = bitsOf('s_bt_off_bits'), bQt = bitsOf('s_quiet_bits');
+check('Status icons: both 15x17 maps', [bBt.length, bQt.length, bBt.every(function (r) { return r.length === 15; }), bQt.every(function (r) { return r.length === 15; })], [17, 17, true, true]);
+check('Status icons: identical badge outline (same drawn pixels)', bBt.map(function (r) { return r.replace(/[#.]/g, 'x'); }), bQt.map(function (r) { return r.replace(/[#.]/g, 'x'); }));
+check('Status icons: same slash diagonal (1,2)-(13,14) in both', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].every(function (i) { return bBt[i + 1][i] === '.'; }) && [1, 2, 3, 13].every(function (i) { return bQt[i + 1][i] === '.'; }), true);
+check('Version 2.9.5 everywhere', [pkg.version, require('../appinfo.json').versionLabel, /version: '2\.9\.5'/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['2.9.5', '2.9.5', true]);
 
 console.log((n - fails) + '/' + n + ' passed');
 process.exit(fails ? 1 : 0);

@@ -37,29 +37,73 @@ struct TimeLayer {
 	char date_buf[32];
 };
 
-static void prv_draw_silent_bell(GContext *ctx, GPoint origin, GColor color) {
-	graphics_context_set_stroke_color(ctx, color);
-	graphics_context_set_stroke_width(ctx, 1);
-	int ox = origin.x;
-	int oy = origin.y;
+/* 2.9.5: both status icons are solid rounded badges with an identical
+ * 15x17 footprint, drawn from pixel maps so their size, edges and centre
+ * match exactly ('#' = icon colour, '.' = background knock-out, ' ' = not
+ * drawn). The "off" slash runs along the same diagonal in both. */
+#define STATUS_ICON_W 15
+#define STATUS_ICON_H 17
+#define STATUS_ICON_X 5   /* left edge inside the status layer (2.9.4 badge x) */
+#define STATUS_ICON_GAP 6 /* vertical gap between the two badges */
 
-	// Bell top finial / loop
-	graphics_draw_line(ctx, GPoint(ox + 6, oy + 1), GPoint(ox + 7, oy + 1));
+static const char *const s_bt_off_bits[STATUS_ICON_H] = {
+	"  ###########  ",
+	" ############# ",
+	"#.#####.#######",
+	"##.####..######",
+	"###.###.#.#####",
+	"####.##.##.####",
+	"#####.#.#.#####",
+	"######...######",
+	"#######.#######",
+	"######...######",
+	"#####.#.#.#####",
+	"####.##.##.####",
+	"#######.#.#.###",
+	"#######..###.##",
+	"#######.#####.#",
+	" ############# ",
+	"  ###########  ",
+};
 
-	// Bell dome & flared body
-	graphics_draw_line(ctx, GPoint(ox + 5, oy + 3), GPoint(ox + 8, oy + 3));
-	graphics_draw_line(ctx, GPoint(ox + 5, oy + 3), GPoint(ox + 3, oy + 8));
-	graphics_draw_line(ctx, GPoint(ox + 8, oy + 3), GPoint(ox + 10, oy + 8));
+static const char *const s_quiet_bits[STATUS_ICON_H] = {
+	"  ###########  ",
+	" ############# ",
+	"#.#############",
+	"##.####.#######",
+	"###.##...######",
+	"####......#####",
+	"######....#####",
+	"#####.#...#####",
+	"####...#...####",
+	"####....#..####",
+	"###......#..###",
+	"##........#..##",
+	"###########.###",
+	"######...###.##",
+	"#############.#",
+	" ############# ",
+	"  ###########  ",
+};
 
-	// Bell rim / lip
-	graphics_draw_line(ctx, GPoint(ox + 2, oy + 9), GPoint(ox + 11, oy + 9));
-
-	// Bell clapper
-	graphics_draw_line(ctx, GPoint(ox + 6, oy + 10), GPoint(ox + 7, oy + 10));
-
-	// Diagonal slash across the bell (silent mode indicator)
-	graphics_context_set_stroke_width(ctx, 1);
-	graphics_draw_line(ctx, GPoint(ox + 1, oy + 1), GPoint(ox + 12, oy + 12));
+/* Draws one pixel map as horizontal runs (crisp, no anti-aliasing). */
+static void prv_draw_status_icon(GContext *ctx, const char *const *bits, int ox, int oy,
+                                 GColor color, GColor bg) {
+	for (int y = 0; y < STATUS_ICON_H; y++) {
+		const char *row = bits[y];
+		int x = 0;
+		while (x < STATUS_ICON_W) {
+			char c = row[x];
+			int x2 = x;
+			while (x2 < STATUS_ICON_W && row[x2] == c)
+				x2++;
+			if (c != ' ') {
+				graphics_context_set_fill_color(ctx, c == '#' ? color : bg);
+				graphics_fill_rect(ctx, GRect(ox + x, oy + y, x2 - x, 1), 0, GCornerNone);
+			}
+			x = x2;
+		}
+	}
 }
 
 static void prv_status_update_proc(Layer *layer, GContext *ctx) {
@@ -74,58 +118,27 @@ static void prv_status_update_proc(Layer *layer, GContext *ctx) {
 		return;
 
 	GRect bounds = layer_get_bounds(layer);
-	int icon_size = 18;
-#if PBL_DISPLAY_HEIGHT >= 228
-	icon_size = 18;
+	GColor bg = tl->light_theme ? GColorWhite : GColorBlack;
+#if defined(PBL_COLOR)
+	GColor bt_col = tl->light_theme ? GColorRed : GColorSunsetOrange;
+	GColor quiet_col = tl->light_theme ? GColorCobaltBlue : GColorPictonBlue;
 #else
-	icon_size = 14;
+	GColor bt_col = tl->light_theme ? GColorBlack : GColorWhite;
+	GColor quiet_col = bt_col;
 #endif
 
-	int ox = 3;
-
-	if (show_bt && show_quiet) {
-		int half_h = bounds.size.h / 2;
-		int y_bt = (half_h - icon_size) / 2;
-		int y_qm = half_h + (half_h - 14) / 2;
-
-#if defined(PBL_COLOR)
-		graphics_context_set_text_color(ctx, tl->light_theme ? GColorRed : GColorSunsetOrange);
-#else
-		graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlack : GColorWhite);
-#endif
-		graphics_draw_text(ctx, ICON_BLUETOOTH__OFF, tl->icon_font,
-		                   GRect(ox, y_bt, icon_size + 4, icon_size),
-		                   GTextOverflowModeTrailingEllipsis,
-		                   GTextAlignmentLeft, NULL);
-
-#if defined(PBL_COLOR)
-		GColor quiet_col = tl->light_theme ? GColorCobaltBlue : GColorPictonBlue;
-#else
-		GColor quiet_col = tl->light_theme ? GColorBlack : GColorWhite;
-#endif
-		prv_draw_silent_bell(ctx, GPoint(ox, y_qm), quiet_col);
-	} else {
-		if (show_bt) {
-			int y = (bounds.size.h - icon_size) / 2;
-#if defined(PBL_COLOR)
-			graphics_context_set_text_color(ctx, tl->light_theme ? GColorRed : GColorSunsetOrange);
-#else
-			graphics_context_set_text_color(ctx, tl->light_theme ? GColorBlack : GColorWhite);
-#endif
-			graphics_draw_text(ctx, ICON_BLUETOOTH__OFF, tl->icon_font,
-			                   GRect(ox, y, icon_size + 4, icon_size),
-			                   GTextOverflowModeTrailingEllipsis,
-			                   GTextAlignmentLeft, NULL);
-		} else {
-			int y = (bounds.size.h - 14) / 2;
-#if defined(PBL_COLOR)
-			GColor quiet_col = tl->light_theme ? GColorCobaltBlue : GColorPictonBlue;
-#else
-			GColor quiet_col = tl->light_theme ? GColorBlack : GColorWhite;
-#endif
-			prv_draw_silent_bell(ctx, GPoint(ox, y), quiet_col);
-		}
+	/* One badge, or two stacked with a fixed gap: the group is centred on
+	 * the time digits' ink (which starts 1 px below the layer top), so a lone
+	 * icon sits exactly where the pair's centre is. */
+	int n = (show_bt ? 1 : 0) + (show_quiet ? 1 : 0);
+	int group_h = n * STATUS_ICON_H + (n - 1) * STATUS_ICON_GAP;
+	int y = (bounds.size.h - group_h) / 2 + 1;
+	if (show_bt) {
+		prv_draw_status_icon(ctx, s_bt_off_bits, STATUS_ICON_X, y, bt_col, bg);
+		y += STATUS_ICON_H + STATUS_ICON_GAP;
 	}
+	if (show_quiet)
+		prv_draw_status_icon(ctx, s_quiet_bits, STATUS_ICON_X, y, quiet_col, bg);
 }
 
 static void prv_remove_leading_zero(char *buf, size_t len) {

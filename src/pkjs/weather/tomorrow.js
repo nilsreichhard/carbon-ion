@@ -39,6 +39,7 @@ function parse(json, ctx) {
 			(P.num(v.sleetIntensity) || 0) + (P.num(v.freezingRainIntensity) || 0);
 		P.setAt(g, 'precip', i, mm);
 		P.setAt(g, 'cloud', i, P.num(v.cloudCover));
+		P.setAt(g, 'gust', i, P.msToKmh(P.num(v.windGust))); /* units=metric: m/s */
 		var vis = P.num(v.visibility);
 		P.setAt(g, 'visibility_m', i, vis === null ? null : vis * 1000);
 		var code = codeToWmo(v.weatherCode);

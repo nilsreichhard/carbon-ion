@@ -414,14 +414,114 @@ module.exports = [
 						"value": 2
 					}
 				],
-				"description": "Thunder, snow, tornado and fog markers."
+				"description": "Thunder, snow, tornado, wind and fog markers."
+			},
+			{
+				"type": "select",
+				"messageKey": "SETTING_THUNDER_LEVEL",
+				"label": "Thunder",
+				"defaultValue": 0,
+				"options": [
+					{
+						"label": "Any storm",
+						"value": 0
+					},
+					{
+						"label": "Strong only",
+						"value": 1
+					},
+					{
+						"label": "Off",
+						"value": 2
+					}
+				],
+				"description": "Strong storms: hail, high instability (CAPE) or a high thunder probability, where the provider reports it."
 			},
 			{
 				"type": "toggle",
-				"messageKey": "SETTING_FOG_INDICATOR",
-				"label": "Fog",
+				"messageKey": "SETTING_EVENT_TORNADO",
+				"label": "Tornado",
 				"defaultValue": true,
-				"description": "Fog codes or visibility under 1 km, shown as wavy lines."
+				"description": "Funnel clouds and severe hail storms."
+			},
+			{
+				"type": "select",
+				"messageKey": "SETTING_SNOW_LEVEL",
+				"label": "Snow",
+				"defaultValue": 0,
+				"options": [
+					{
+						"label": "Any",
+						"value": 0
+					},
+					{
+						"label": "Moderate and heavy",
+						"value": 1
+					},
+					{
+						"label": "Heavy only",
+						"value": 2
+					},
+					{
+						"label": "Off",
+						"value": 3
+					}
+				],
+				"description": "Which snowfall hours get a snowflake."
+			},
+			{
+				"type": "select",
+				"messageKey": "SETTING_FOG_LEVEL",
+				"label": "Fog",
+				"defaultValue": 0,
+				"options": [
+					{
+						"label": "Visibility under 1000 m",
+						"value": 0
+					},
+					{
+						"label": "Visibility under 500 m",
+						"value": 1
+					},
+					{
+						"label": "Visibility under 200 m",
+						"value": 2
+					},
+					{
+						"label": "Off",
+						"value": 3
+					}
+				],
+				"description": "Fog codes always count; stricter levels need lower visibility. Shown as wavy lines."
+			},
+			{
+				"type": "select",
+				"messageKey": "SETTING_WIND_GUST",
+				"label": "Wind gusts",
+				"defaultValue": "50",
+				"options": [
+					{
+						"label": "Off",
+						"value": "0"
+					},
+					{
+						"label": "40 km/h and above",
+						"value": "40"
+					},
+					{
+						"label": "50 km/h and above (Beaufort 7)",
+						"value": "50"
+					},
+					{
+						"label": "60 km/h and above",
+						"value": "60"
+					},
+					{
+						"label": "75 km/h and above (Beaufort 9)",
+						"value": "75"
+					}
+				],
+				"description": "Marks hours with strong gusts as a wind event."
 			},
 			{
 				"type": "select",

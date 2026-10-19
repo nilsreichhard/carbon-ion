@@ -158,6 +158,16 @@ function sanitizeClaySettingsStorage() {
 				? 'meteoswiss_icon_ch1' : 'best_match';
 		}
 
+		/* 2.9.4: event toggles → level dropdowns (on → default level 0, off → Off). */
+		function lvl(newKey, oldKey, offVal) {
+			if (flatSettings[newKey] !== undefined && flatSettings[newKey] !== '') return;
+			if (flatSettings[oldKey] === undefined) return;
+			flatSettings[newKey] = extractBool(flatSettings[oldKey]) === 0 ? offVal : 0;
+		}
+		lvl('SETTING_THUNDER_LEVEL', 'SETTING_EVENT_THUNDER', THUNDER_OFF);
+		lvl('SETTING_SNOW_LEVEL', 'SETTING_EVENT_SNOW', SNOW_OFF);
+		lvl('SETTING_FOG_LEVEL', 'SETTING_FOG_INDICATOR', FOG_OFF);
+
 		if (JSON.stringify(flatSettings) !== raw) {
 			localStorage.setItem('clay-settings', JSON.stringify(flatSettings));
 		}
@@ -209,6 +219,33 @@ function getStringSetting(settings, key, defaultValue) {
 	}
 	var str = String(value);
 	return str === '[object Object]' ? defaultValue : str;
+}
+
+/* 2.9.4 event levels (Clay values; Off is the last option, like the cloud /
+ * sun / rain sensitivity selects). */
+var THUNDER_OFF = 2; /* 0 any storm, 1 strong only, 2 off */
+var SNOW_OFF = 3;    /* 0 any, 1 moderate+, 2 heavy only, 3 off */
+var FOG_OFF = 3;     /* 0 vis < 1000 m, 1 < 500 m, 2 < 200 m, 3 off */
+var FOG_VIS = [1000, 500, 200, 0];
+
+/* Level from the new dropdown, else migrated from the pre-2.9.4 toggle. */
+function eventLevel(s, newKey, oldKey, offVal) {
+	s = s || {};
+	var v = extractInt(s[newKey]);
+	if (v !== null && v !== undefined && !isNaN(v) && v >= 0 && v <= offVal) return v;
+	if (s[oldKey] !== undefined && s[oldKey] !== null && extractBool(s[oldKey]) === 0) return offVal;
+	return 0;
+}
+function getThunderLevel(s) { return eventLevel(s, 'SETTING_THUNDER_LEVEL', 'SETTING_EVENT_THUNDER', THUNDER_OFF); }
+function getSnowLevel(s) { return eventLevel(s, 'SETTING_SNOW_LEVEL', 'SETTING_EVENT_SNOW', SNOW_OFF); }
+/** Fog level as max visibility in m (0 = off). */
+function getFogVis(s) { return FOG_VIS[eventLevel(s || readClaySettings(), 'SETTING_FOG_LEVEL', 'SETTING_FOG_INDICATOR', FOG_OFF)]; }
+
+/** Wind-event gust threshold in km/h (2.9.3): 0 = off, default 50. */
+var WIND_GUST_CHOICES = [0, 40, 50, 60, 75];
+function getWindGustKmh(settings) {
+	var v = parseInt(getStringSetting(settings || readClaySettings(), 'SETTING_WIND_GUST', '50'), 10);
+	return WIND_GUST_CHOICES.indexOf(v) >= 0 ? v : 50;
 }
 
 /**
@@ -423,8 +460,16 @@ function buildSettingsDict(rawSettings) {
 	dict['SETTING_BACKLIGHT_COLORS'] = backlightColors ? 1 : 0;
 	var wristFlick = extractBool(rawSettings['SETTING_WRIST_FLICK']);
 	dict['SETTING_WRIST_FLICK'] = wristFlick ? 1 : 0;
-	var fogInd = rawSettings['SETTING_FOG_INDICATOR'] === undefined ? 1 : extractBool(rawSettings['SETTING_FOG_INDICATOR']);
-	dict['SETTING_FOG_INDICATOR'] = fogInd ? 1 : 0;
+	/* 2.9.4: the watch keeps its fog on/off flag; the level is applied phone-side. */
+	dict['SETTING_FOG_INDICATOR'] = getFogVis(rawSettings) > 0 ? 1 : 0;
+	/* Event levels packed into one mask for the watch (2.9.3/2.9.4), applied
+	 * there so changing them never refetches weather:
+	 * bit0 thunder off, bit1 tornado off, bit2 snow off, bit3 thunder strong
+	 * only, bits4-5 snow minimum (0 any, 1 moderate+, 2 heavy only). 0 = defaults. */
+	function evOn(k) { return rawSettings[k] === undefined || rawSettings[k] === null ? true : !!extractBool(rawSettings[k]); }
+	var thL = getThunderLevel(rawSettings), snL = getSnowLevel(rawSettings);
+	dict['SETTING_EVENT_FLAGS'] = (thL === THUNDER_OFF ? 1 : 0) | (evOn('SETTING_EVENT_TORNADO') ? 0 : 2) |
+		(snL === SNOW_OFF ? 4 : 0) | (thL === 1 ? 8 : 0) | (snL > 0 && snL < SNOW_OFF ? snL << 4 : 0);
 	var flickAction = extractInt(rawSettings['SETTING_FLICK_ACTION']);
 	dict['SETTING_FLICK_ACTION'] = flickAction === 1 ? 1 : 0;
 	/* 2.8.2: never refresh faster than the provider allows (quota/cadence). */
@@ -435,11 +480,13 @@ function buildSettingsDict(rawSettings) {
 }
 
 /* Settings whose change makes the cached weather payload wrong (2.8.7):
- * provider/key/model, location (incl. city label), unit, fog indicator. */
+ * provider/key/model, location (incl. city label), unit, fog indicator,
+ * wind gust threshold (2.9.3). */
 var WEATHER_SETTING_KEYS = [
 	'SETTING_WEATHER_PROVIDER', 'SETTING_WEATHER_API_KEY', 'SETTING_OM_MODEL', 'SETTING_METEOSWISS',
 	'SETTING_OWM_ONECALL', 'SETTING_USE_STATIC_LOCATION', 'SETTING_STATIC_LAT', 'SETTING_STATIC_LON',
-	'SETTING_LOCATION_OVERRIDE', 'SETTING_GEOCODE_ENABLED', 'SETTING_TEMP_UNIT', 'SETTING_FOG_INDICATOR',
+	'SETTING_LOCATION_OVERRIDE', 'SETTING_GEOCODE_ENABLED', 'SETTING_TEMP_UNIT', 'SETTING_FOG_INDICATOR', 'SETTING_FOG_LEVEL',
+	'SETTING_WIND_GUST',
 ];
 
 /** True when a weather-relevant setting differs between two flat/raw settings objects. */
@@ -461,5 +508,6 @@ module.exports = {
 	getBoolSetting: getBoolSetting, getStringSetting: getStringSetting,
 	getStaticLocation: getStaticLocation, getForecastHoursFromSettings: getForecastHoursFromSettings,
 	extractInt: extractInt, extractBool: extractBool, extractString: extractString,
-	buildSettingsDict: buildSettingsDict,
+	buildSettingsDict: buildSettingsDict, getWindGustKmh: getWindGustKmh,
+	getThunderLevel: getThunderLevel, getSnowLevel: getSnowLevel, getFogVis: getFogVis,
 };

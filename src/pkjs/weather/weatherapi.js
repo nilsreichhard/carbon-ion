@@ -49,6 +49,7 @@ function parse(json, ctx) {
 			P.setAt(g, 'pop', i, Math.max(P.num(h.chance_of_rain) || 0, P.num(h.chance_of_snow) || 0));
 			P.setAt(g, 'precip', i, P.num(h.precip_mm));
 			P.setAt(g, 'cloud', i, P.num(h.cloud));
+			P.setAt(g, 'gust', i, P.num(h.gust_kph));
 			P.setAt(g, 'visibility_m', i, visKm === null ? null : visKm * 1000);
 			var w = codeToWmo(code, visKm);
 			P.setAt(g, 'wmo_code', i, w === null ? 3 : w);

@@ -118,7 +118,7 @@ Then install it on the emulator of your choice:
 pebble install --emulator emery --logs
 
 # Pebble 2 Duo (rectangular, 144×168)
-pebble install --emulator flint --logs
+pebble install --emulator gabbro --logs
 ```
 
 Note that adding/removing `messageKeys` in package.json will require a `pebble clean` before the next build to avoid stale generated code.

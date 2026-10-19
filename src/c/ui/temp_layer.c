@@ -87,7 +87,7 @@ static void prv_draw_labels(GContext *ctx, int lh, int graph_x, int graph_w, int
 	GColor text_color = is_light ? GColorBlack : GColorWhite;
 	graphics_context_set_text_color(ctx, text_color);
 
-	/* Narrow rows (flint 144 px, gabbro's inset meteogram): the needle sits
+	/* Narrow rows (gabbro's inset meteogram): the needle sits
 	 * at ~29 px, through the right-aligned labels. Put them just right of the
 	 * needle instead; if three stacked labels don't fit the height, show
 	 * current on top and "low-high" below. Emery (200 px) is unchanged. */

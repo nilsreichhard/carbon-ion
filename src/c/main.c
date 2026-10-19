@@ -30,7 +30,7 @@
 /* Weather header {version, size, fetch_time}: fetch_time lives here so the
  * three data blocks are only rewritten when the forecast itself changes. */
 #define STORAGE_KEY_WEATHER_HDR 8
-#define WEATHER_PERSIST_VERSION 3 /* 3: + fog_bits, wx_flags (2.8.0) */
+#define WEATHER_PERSIST_VERSION 5 /* 3: + fog_bits, wx_flags (2.8.0); 4: + wind_bits (2.9.3); 5: + storm_bits (2.9.4) */
 typedef struct {
 	uint16_t version;
 	uint16_t size;
@@ -73,9 +73,6 @@ typedef struct {
 
 #if defined(PBL_PLATFORM_EMERY)
 #define TEMP_H 56
-#elif defined(PBL_PLATFORM_FLINT)
-/* 168 px: 56 strips + 3 gap + 66 time block leaves 43 — keep the date clear. */
-#define TEMP_H 42
 #else
 #define TEMP_H 48
 #endif
@@ -290,6 +287,18 @@ static void prv_push_weather_to_layers(struct tm *now) {
 		int k = start_idx + i;
 		fog_view[i] = (s_weather.fog_bits[k >> 3] >> (k & 7)) & 1;
 	}
+	uint8_t wind_view[MAX_GRAPH_HOURS + 1];
+	memset(wind_view, 0, sizeof(wind_view));
+	for (int i = 0; i < copy_len; i++) {
+		int k = start_idx + i;
+		wind_view[i] = (s_weather.wind_bits[k >> 3] >> (k & 7)) & 1;
+	}
+	uint8_t storm_view[MAX_GRAPH_HOURS + 1];
+	memset(storm_view, 0, sizeof(storm_view));
+	for (int i = 0; i < copy_len; i++) {
+		int k = start_idx + i;
+		storm_view[i] = (s_weather.storm_bits[k >> 3] >> (k & 7)) & 1;
+	}
 
 	/* Providers with a shorter horizon pad the tail: draw nothing there. */
 	int valid_left = (int)s_weather.valid_hours - start_idx;
@@ -356,7 +365,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	                       cloud_low_view, cloud_mid_view, cloud_high_view,
 	                       fog_view, current_hour);
 	precip_layer_set_data(s_precip_layer, precip_view, code_view, current_hour);
-	event_layer_set_data(s_event_layer, code_view, fog_view, hours_remaining);
+	event_layer_set_data(s_event_layer, code_view, fog_view, wind_view, storm_view, hours_remaining);
 	time_layer_set_condition(s_time_layer,
 	                         stale ? WEATHER_CONDITION_UNKNOWN
 	                               : weather_code_to_condition(display_code),
@@ -763,6 +772,20 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 			int len = t->length < (int)sizeof(s_weather.fog_bits) ? t->length
 			                                                      : (int)sizeof(s_weather.fog_bits);
 			memcpy(s_weather.fog_bits, t->value->data, len);
+		}
+		t = dict_find(iter, MESSAGE_KEY_WEATHER_WIND); /* 2.9.3 */
+		memset(s_weather.wind_bits, 0, sizeof(s_weather.wind_bits));
+		if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+			int len = t->length < (int)sizeof(s_weather.wind_bits) ? t->length
+			                                                       : (int)sizeof(s_weather.wind_bits);
+			memcpy(s_weather.wind_bits, t->value->data, len);
+		}
+		t = dict_find(iter, MESSAGE_KEY_WEATHER_STORM); /* 2.9.4 */
+		memset(s_weather.storm_bits, 0, sizeof(s_weather.storm_bits));
+		if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+			int len = t->length < (int)sizeof(s_weather.storm_bits) ? t->length
+			                                                        : (int)sizeof(s_weather.storm_bits);
+			memcpy(s_weather.storm_bits, t->value->data, len);
 		}
 		t = dict_find(iter, MESSAGE_KEY_WEATHER_FLAGS);
 		s_weather.wx_flags = t ? (uint8_t)settings_tuple_int(t) : 0;

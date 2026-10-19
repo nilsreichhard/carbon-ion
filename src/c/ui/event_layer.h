@@ -23,8 +23,13 @@ Layer *event_layer_get_layer(EventLayer *layer);
 //   marked with ICON_CONNECTION_SIGNAL__OFF.
 // fog: per-hour fog flags (may be NULL); shown as a low-priority fog event
 //   when the Fog indicator setting is on.
+// wind: per-hour strong-gust flags (may be NULL, 2.9.3); the phone applies
+//   the gust threshold, so a set flag always draws a wind event.
+// storm: per-hour strong-thunderstorm flags (may be NULL, 2.9.4), used by
+//   the Thunder "Strong only" level.
 void event_layer_set_data(EventLayer *layer, const uint8_t *hourly_code,
-                          const uint8_t *fog, uint8_t hours_remaining);
+                          const uint8_t *fog, const uint8_t *wind,
+                          const uint8_t *storm, uint8_t hours_remaining);
 #if defined(PBL_ROUND)
 // Round arc mode: draw the span glyphs upright at map(screen-src x, y).
 void event_layer_draw_icons_mapped(EventLayer *layer, GContext *ctx,

@@ -142,6 +142,9 @@ module.exports = function () {
 
 		var n = [];
 		if (!c.layers) n.push('No cloud layers: clouds stay 1 row.');
+		if (c.gust === false) n.push('No wind gust data: the wind event is off.');
+		if (c.strongStorm === false) n.push('Thunder: no storm strength data, so only Any storm or Off.');
+		if (c.fogVis === false) n.push('Fog: no visibility data, so stricter fog levels are hidden.');
 		if (horizon < 48) n.push('About ' + horizon + ' h ahead: longer ranges are hidden.');
 		if ((c.minInterval || 15) > 15) n.push('Refreshes at most every ' + c.minInterval + ' min.');
 		if (c.notes && !(useOnecall && v === 'owm')) n.push(esc(c.notes));
@@ -167,6 +170,21 @@ module.exports = function () {
 		limitOptions(clayConfig.getItemByMessageKey('SETTING_CLOUD_DISPLAY_MODE'), function (m) { return c.layers || Number(m) === 0; });
 		limitOptions(clayConfig.getItemByMessageKey('SETTING_FLICK_ACTION'), function (a) { return c.layers || Number(a) === 0; });
 		limitMin(clayConfig.getItemByMessageKey('SETTING_FETCH_INTERVAL'), c.minInterval || 15);
+		/* 2.9.3: wind event needs hourly gusts from the provider. */
+		var gustItem = clayConfig.getItemByMessageKey('SETTING_WIND_GUST');
+		if (gustItem) { if (c.gust === false) gustItem.hide(); else gustItem.show(); }
+		/* 2.9.3: tornado only from providers that report funnel clouds / WMO 99. */
+		var tornItem = clayConfig.getItemByMessageKey('SETTING_EVENT_TORNADO');
+		if (tornItem) { if (c.tornado === false) tornItem.hide(); else tornItem.show(); }
+		/* 2.9.4: levels the provider can't grade are hidden (Off and the default stay). */
+		/* An unsupported level falls back to the default (0), never to Off. */
+		function limitLevel(key, allow) {
+			var it = clayConfig.getItemByMessageKey(key);
+			if (it && !allow(String(it.get()))) it.set('0');
+			limitOptions(it, allow);
+		}
+		limitLevel('SETTING_THUNDER_LEVEL', function (l) { return c.strongStorm !== false || Number(l) !== 1; });
+		limitLevel('SETTING_FOG_LEVEL', function (l) { return c.fogVis !== false || Number(l) === 0 || Number(l) === 3; });
 	}
 
 	/** Flick action only when wrist flick is on. */
