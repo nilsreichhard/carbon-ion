@@ -20,3 +20,7 @@ Thumbs.db
 
 # Release artifacts
 *.pbw
+
+# Dependencies / generated (3.0.3)
+node_modules/
+.buildinfo.json

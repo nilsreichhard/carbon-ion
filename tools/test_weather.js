@@ -54,10 +54,18 @@ ts.push({ time: iso(Date.UTC(2026, 9, 18, 6) / 1000), data: { instant: { details
 var gm = W.PROVIDERS.metno.parse({ properties: { timeseries: ts } }, CTX);
 check('MET past empty, forecast from now slot', [gm.temp[11], gm.temp[12] !== null], [null, true]);
 check('MET fog: fog_area_fraction>=50 / fog symbol', [gm.fog[15], gm.fog[17], gm.fog[16]], [1, 1, 0]);
-check('MET symbols → WMO', [gm.wmo_code[12], gm.wmo_code[17], gm.wmo_code[18], gm.wmo_code[19]], [2, 45, 97, 85]); /* 2.9.6: heavy thunder 97, not hail 96 */
+check('MET symbols → WMO', [gm.wmo_code[13], gm.wmo_code[18], gm.wmo_code[19], gm.wmo_code[20]], [2, 45, 97, 85]); /* 3.0.3: next_1_hours → slot + 1 */ /* 2.9.6: heavy thunder 97, not hail 96 */
+var capG = W.PROVIDERS.metno.parse({ properties: { timeseries: ts.map(function (e, i) {
+	if (i !== 0 || !e.data.instant.details.cloud_area_fraction) return e;
+	var c = JSON.parse(JSON.stringify(e)); var d = c.data.instant.details;
+	d.cloud_area_fraction = 5; d.cloud_area_fraction_low = 98; d.cloud_area_fraction_medium = 4; d.cloud_area_fraction_high = 60; return c;
+}) } }, CTX);
+check('3.0.3: Split layers capped at total cover (total 5: low 98 → 5, mid 4 stays, high 60 → 5)', [capG.cloud[12], capG.cloud_low[12], capG.cloud_mid[12], capG.cloud_high[12]], [5, 5, 4, 5]);
 check('MET layers + feels (Steadman)', [gm.has_layers, Math.round(gm.feels[12] * 10) / 10], [true, 7.8]);
 check('MET 6-hourly tail ignored', gm.valid_hours, 72);
-check('MET pop derived from amount (2mm → 100)', gm.pop[18], 100);
+check('MET pop derived from amount (2mm → 100)', gm.pop[19], 100); /* 3.0.3: shifted one slot */
+/* 3.0.3: MET next_1_hours (t..t+1) lands at slot t+1, as Open-Meteo labels the hour at its end. */
+check('MET amount aligned to Open-Meteo convention (window t..t+1 → slot t+1)', [gm.precip[18], gm.precip[19], gm.precip[20]], [0, 2, 0]);
 check('MET sunrise via NOAA calc', [new Date(gm.sunrise * 1000).toISOString().slice(11, 16), new Date(gm.sunset * 1000).toISOString().slice(11, 16)], ['05:49', '16:48']);
 check('MET URL ≤4 decimals', W.PROVIDERS.metno.buildUrl(46.123456, 7.987654), 'https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=46.1235&lon=7.9877');
 
@@ -267,7 +275,8 @@ check('Wind bits >= 50 km/h (49.9 not)', P.toPayload(gG, 'celsius', true, NOW, 5
 check('Wind bits off (0) / threshold 40', [P.toPayload(gG, 'celsius', true, NOW, 0).wind_bits.join(''), P.toPayload(gG, 'celsius', true, NOW, 40).wind_bits[3]], ['000000000', 3]);
 check('Wind bits: no gust data never triggers', P.windBits(P.emptyGrid('meteoblue', NOW), 40), [0, 0, 0, 0, 0, 0, 0, 0, 0]);
 var tsG = [{ time: iso(H0 + 13 * 3600), data: { instant: { details: { air_temperature: 5, wind_speed_of_gust: 15 } }, next_1_hours: { summary: { symbol_code: 'lightsnow' }, details: { precipitation_amount: 0.3 } } } },
-	{ time: iso(H0 + 14 * 3600), data: { instant: { details: { air_temperature: 5, wind_speed_of_gust: 5 } }, next_1_hours: { summary: { symbol_code: 'snow' }, details: { precipitation_amount: 1 } } } }];
+	{ time: iso(H0 + 14 * 3600), data: { instant: { details: { air_temperature: 5, wind_speed_of_gust: 5 } }, next_1_hours: { summary: { symbol_code: 'snow' }, details: { precipitation_amount: 1 } } } },
+	{ time: iso(H0 + 15 * 3600), data: { instant: { details: { air_temperature: 5 } }, next_1_hours: { summary: { symbol_code: 'cloudy' }, details: { precipitation_amount: 0 } } } }]; /* 3.0.3: trailing hourly step so the last window shifts */
 var gmG = W.PROVIDERS.metno.parse({ properties: { timeseries: tsG } }, CTX);
 check('Gust MET wind_speed_of_gust m/s → km/h', [gmG.gust[13], gmG.gust[14]], [54, 18]);
 var gtG = W.PROVIDERS.tomorrow.parse({ timelines: { hourly: [{ time: iso(H0 + 13 * 3600), values: { temperature: 5, windGust: 20, weatherCode: 5100 } }, { time: iso(H0 + 14 * 3600), values: { temperature: 5, windGust: 1, weatherCode: 5000 } }] } }, CTX);
@@ -288,20 +297,40 @@ check('Meteoblue fixture has no gusts', MB.parse(mbFix(true), CTX).gust, null);
 check('wxsend sends WEATHER_WIND (9 bytes)', require('../src/pkjs/wxsend.js').buildWeatherDict({ wind_bits: [1, 2], fetch_time: NOW }).WEATHER_WIND, [1, 2, 0, 0, 0, 0, 0, 0, 0]);
 
 /* ---- 2.9.3: light/moderate snow codes + watch snow event codes ---- */
-check('Light/moderate snow → WMO 71/73 (MET, Tomorrow, OWM, WeatherAPI)', [gmG.wmo_code[13], gmG.wmo_code[14], gtG.wmo_code[13], gtG.wmo_code[14], owG.wmo_code[12], owG.wmo_code[15], waG.wmo_code[13], waG.wmo_code[14]], [71, 73, 71, 73, 71, 73, 71, 73]);
+check('Light/moderate snow → WMO 71/73 (MET, Tomorrow, OWM, WeatherAPI)', [gmG.wmo_code[14], gmG.wmo_code[15], gtG.wmo_code[13], gtG.wmo_code[14], owG.wmo_code[12], owG.wmo_code[15], waG.wmo_code[13], waG.wmo_code[14]], [71, 73, 71, 73, 71, 73, 71, 73]);
 var evSrc = require('fs').readFileSync(__dirname + '/../src/c/ui/event_layer.c', 'utf8');
 var snowLine = (/return (code == 71[^;]*);/.exec(evSrc) || [])[1] || '';
 check('Watch snow event codes (level Any) = 71, 73, 75, 77, 85, 86', (snowLine.match(/\d+/g) || []).map(Number).sort(function (a, b) { return a - b; }), [71, 73, 75, 77, 85, 86]);
 check('Watch event priority tornado > thunder > snow > wind > fog', /return icon;\s*if \(wind && wind\[i\]\)[\s\S]*?if \(fog && fog\[i\]/.test(evSrc), true);
 
+/* ---- 3.0.3: MET shift edge cases, fixture crossing the hourly → 6-hourly switch ---- */
+(function () {
+	var t0 = H0 + 12 * 3600; /* slot 12 = the current hour (16:00 UTC) */
+	var amt = [0.4, 0, 0.7, 0, 1.0, 3.0], sym = ['lightrain', 'cloudy', 'nosuchsymbol', 'cloudy', 'rain', 'heavyrain'], cc = [50, 50, 10, 95, 50, 50];
+	var tsS = amt.map(function (a, k) {
+		return { time: iso(t0 + k * 3600), data: { instant: { details: { air_temperature: 10, cloud_area_fraction: cc[k] } },
+			next_1_hours: { summary: { symbol_code: sym[k] }, details: { precipitation_amount: a } } } };
+	});
+	[6, 12].forEach(function (h) {
+		tsS.push({ time: iso(t0 + h * 3600), data: { instant: { details: { air_temperature: 9 } }, next_6_hours: { summary: { symbol_code: 'rain' }, details: { precipitation_amount: 5 } } } });
+	});
+	var gS = W.PROVIDERS.metno.parse({ properties: { timeseries: tsS } }, CTX);
+	check('3.0.3 MET current hour takes its own window (slot 12) and the shifted one lands at 13',
+		[gS.precip[12], gS.precip[13], gS.wmo_code[12], gS.wmo_code[13], gS.pop[12] > 0], [0.4, 0.4, 61, 61, true]);
+	check('3.0.3 MET switch: last hourly window not written past the horizon, 6-hourly tail stays empty',
+		[gS.precip[16], gS.precip[17], gS.wmo_code[17], gS.precip[18], gS.temp[18], gS.wmo_code[18], gS.valid_hours], [0, 1.0, 63, null, null, null, 18]);
+	check('3.0.3 MET code fallback (unknown symbol) uses the cloud cover of the slot it lands in (95 % → 3)',
+		[gS.wmo_code[15]], [3]);
+})();
 /* ---- 2.9.4: strong storms (CAPE / MET probability) + fog visibility levels ---- */
 check('OM URL asks cape', /cape/.test(W.PROVIDERS.openmeteo.buildUrl(46.3, 7, {})), true);
 var omC = JSON.parse(JSON.stringify(om)); omC.hourly.cape = t72.map(function (_, i) { return i === 20 ? 1800 : 100; });
 var gC = W.PROVIDERS.openmeteo.parse(omC, CTX);
 check('OM cape parsed', [gC.cape[20], gC.cape[21]], [1800, 100]);
-var tsT = [{ time: iso(H0 + 13 * 3600), data: { instant: { details: { air_temperature: 15 } }, next_1_hours: { summary: { symbol_code: 'rainandthunder' }, details: { precipitation_amount: 2, probability_of_thunder: 70 } } } }];
+var tsT = [{ time: iso(H0 + 13 * 3600), data: { instant: { details: { air_temperature: 15 } }, next_1_hours: { summary: { symbol_code: 'rainandthunder' }, details: { precipitation_amount: 2, probability_of_thunder: 70 } } } },
+	{ time: iso(H0 + 14 * 3600), data: { instant: { details: { air_temperature: 15 } }, next_1_hours: { summary: { symbol_code: 'cloudy' }, details: { precipitation_amount: 0 } } } }]; /* 3.0.3 */
 var gmT = W.PROVIDERS.metno.parse({ properties: { timeseries: tsT } }, CTX);
-check('MET probability_of_thunder parsed; strong bit set at 70 %', [gmT.thunder_prob[13], gmT.wmo_code[13], (P.stormBits(gmT)[1] >> 5) & 1], [70, 95, 1]);
+check('MET probability_of_thunder parsed; strong bit set at 70 %', [gmT.thunder_prob[14], gmT.wmo_code[14], (P.stormBits(gmT)[1] >> 6) & 1], [70, 95, 1]); /* 3.0.3: shifted one slot */
 var geoC = P.emptyGrid('geosphere', NOW); for (var gj = 12; gj < 40; gj++) geoC.temp[gj] = 5;
 W.blend(geoC, gC);
 check('GeoSphere cape from Open-Meteo blend', geoC.cape[20], 1800);
@@ -355,8 +384,8 @@ check('Sun below 10 deg uses the fallback (05:00 UTC, sw 0 → not thick from th
 	[P.sunElevation(ZLAT, ZLON, Date.UTC(2026, 5, 21, 3, 30) / 1000) < 10, tg(Date.UTC(2026, 5, 21, 4) / 1000, { c: 70, sw: 0 })], [true, 2]);
 check('Night fallback with layers: low overcast thick, high only light, mixed normal',
 	[tg(NIGHT, { c: 95, sw: 0, L: [85, 40, 20] }), tg(NIGHT, { c: 50, sw: 0, L: [0, 5, 50] }), tg(NIGHT, { c: 70, sw: 0, L: [40, 50, 30] }), tg(NIGHT, { c: 85, sw: 0, L: [80, 0, 0] })], [3, 1, 2, 2]);
-check('Fallback without layers: cover < 40 light, else normal; rain thick',
-	[tg(NIGHT, { c: 30 }), tg(NIGHT, { c: 40 }), tg(NIGHT, { c: 90 }), tg(NIGHT, { c: 90, mm: 1.2 })], [1, 2, 2, 3]);
+check('Fallback without layers (OWM/WeatherAPI): any cover normal (3.0.3, no light from cover alone); rain thick',
+	[tg(NIGHT, { c: 30 }), tg(NIGHT, { c: 40 }), tg(NIGHT, { c: 90 }), tg(NIGHT, { c: 90, mm: 1.2 })], [2, 2, 2, 3]);
 check('Tomorrow.io cloud base: < 1 km with cover >= 85 thick; high base or low cover not',
 	[tg(NIGHT, { c: 90, base: 600 }), tg(NIGHT, { c: 90, base: 2500 }), tg(NIGHT, { c: 70, base: 600 }), tg(JUN, { c: 90, base: 600, sw: 0.8 * cs })], [3, 2, 2, 1]);
 check('No cover data → 0 (drawn normal); no location → fallback',
@@ -366,7 +395,7 @@ check('Polar: 78 N midnight sun uses the ratio, polar night falls back',
 var pk = { time: [0, 0, 0, 0, 0], cloud: [30, 50, 50, null, 30], precip: [0, 0, 5, 0, 0], shortwave: null, lat: null, has_layers: false };
 for (var q = 5; q < 72; q++) { pk.time.push(0); pk.cloud.push(null); pk.precip.push(null); }
 var tb = P.thickBits(pk);
-check('Thickness packing: 18 bytes, 2 bits/hour, hour 0 in the low bits', [tb.length, tb[0], tb[1], tb[17]], [18, 1 | 2 << 2 | 3 << 4 | 0 << 6, 1, 0]);
+check('Thickness packing: 18 bytes, 2 bits/hour, hour 0 in the low bits', [tb.length, tb[0], tb[1], tb[17]], [18, 2 | 2 << 2 | 3 << 4 | 0 << 6, 2, 0]);
 check('Payload carries cloud_thick (OM fixture, 18 bytes, values 0-3)', [p.cloud_thick.length, p.cloud_thick.every(function (b) { return b >= 0 && b <= 255; })], [18, true]);
 var tmr = W.PROVIDERS.tomorrow.parse({ timelines: { hourly: [{ time: iso(NOW - 1200), values: { temperature: 10, cloudCover: 95, cloudBase: 0.4, weatherCode: 1001 } }] } }, CTX);
 check('Tomorrow.io cloudBase km → m on the grid', tmr.cloud_base[P.slot(tmr, NOW - 1200)], 400);

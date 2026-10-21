@@ -10,9 +10,7 @@
 #include "settings.h"
 #include <stddef.h>
 
-#define STORAGE_KEY_SETTINGS 0
-#define STORAGE_KEY_CLOUD_OVERRIDE 9 /* uint8 1+CloudDisplayMode; absent = Clay value */
-#define STORAGE_KEY_TAP_RANGE 7 /* uint8 tapped forecast hours; 0/absent = Clay value */
+#include "storage_keys.h"
 #define TAP_SAVE_DELAY_MS 5000
 
 static Settings s_settings;
@@ -54,6 +52,7 @@ static const Settings s_defaults = {
     .event_hide = 0,
     .rain_height = RAIN_HEIGHT_PROBABILITY,
     .cloud_thick = CLOUD_THICKNESS_ON,
+    .leading_zero = LEADING_ZERO_AUTO,
 };
 
 /* 2.9.3: event_hide is appended right where the 2.9.2 struct ended (no tail
@@ -64,7 +63,7 @@ _Static_assert(offsetof(Settings, event_hide) % _Alignof(Settings) == 0,
 
 /* 2.9.6/3.0.0: rain_height and cloud_thick may sit in an older blob's tail
  * padding (persisted as zeros), so their defaults must be 0. */
-_Static_assert(RAIN_HEIGHT_PROBABILITY == 0 && CLOUD_THICKNESS_ON == 0,
+_Static_assert(RAIN_HEIGHT_PROBABILITY == 0 && CLOUD_THICKNESS_ON == 0 && LEADING_ZERO_AUTO == 0,
                "fields in old tail padding must default to 0");
 
 void settings_init(void) {
@@ -96,6 +95,8 @@ void settings_init(void) {
 	if (s_settings.flick_action > FLICK_ACTION_CLOUDS)
 		s_settings.flick_action = FLICK_ACTION_RANGE;
 	s_settings.event_hide &= EVENT_FLAGS_MASK;
+	if (s_settings.leading_zero > LEADING_ZERO_OFF)
+		s_settings.leading_zero = LEADING_ZERO_AUTO;
 }
 
 CloudDisplayMode settings_effective_cloud_mode(void) {
@@ -437,6 +438,12 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	if (t) {
 		int v = settings_tuple_int(t);
 		s_settings.rain_height = (v == RAIN_HEIGHT_AMOUNT) ? RAIN_HEIGHT_AMOUNT : RAIN_HEIGHT_PROBABILITY;
+	}
+
+	t = dict_find(iter, KEY_SETTING_LEADING_ZERO); /* 3.0.3 */
+	if (t) {
+		int v = settings_tuple_int(t);
+		s_settings.leading_zero = (v == LEADING_ZERO_ON || v == LEADING_ZERO_OFF) ? (uint8_t)v : LEADING_ZERO_AUTO;
 	}
 
 	t = dict_find(iter, KEY_SETTING_CLOUD_THICK);

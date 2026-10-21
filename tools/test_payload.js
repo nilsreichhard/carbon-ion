@@ -108,8 +108,8 @@ check('Fog and wind still refetch (phone-side)', [settings.weatherSettingsChange
 var capsT = require('../src/pkjs/weather/caps.js');
 check('Tornado toggle shown only for providers reporting WMO 19/99', Object.keys(capsT).filter(function (k) { return capsT[k].tornado; }).sort(), ['geosphere', 'openmeteo', 'owm']);
 var setSrc = require('fs').readFileSync(__dirname + '/../src/c/modules/settings.h', 'utf8');
-check('Settings struct: event_hide, rain_height, cloud_thick appended last (upgrade keeps defaults 0)', /uint8_t event_hide;[^\n]*\n\tuint8_t rain_height;[^\n]*\n\tuint8_t cloud_thick;[^\n]*\n[^\n]*\n\} Settings;/.test(setSrc), true);
-check('Watch event-flag key matches package.json', Number((/KEY_SETTING_EVENT_FLAGS (\d+)/.exec(setSrc) || [])[1]), pkg.pebble.messageKeys.SETTING_EVENT_FLAGS);
+check('Settings struct: event_hide, rain_height, cloud_thick, leading_zero appended last (upgrade keeps defaults 0)', /uint8_t event_hide;[^\n]*\n\tuint8_t rain_height;[^\n]*\n\tuint8_t cloud_thick;[^\n]*\n[^\n]*\n\tuint8_t leading_zero;[^\n]*\n[^\n]*\n\} Settings;/.test(setSrc), true);
+check('Watch event-flag key matches package.json', (/KEY_SETTING_EVENT_FLAGS MESSAGE_KEY_SETTING_EVENT_FLAGS\b/.test(setSrc) ? pkg.pebble.messageKeys.SETTING_EVENT_FLAGS : -1), pkg.pebble.messageKeys.SETTING_EVENT_FLAGS);
 
 /* ---- 2.9.4: event sensitivity levels ---- */
 var F = function (o) { return settings.buildSettingsDict(o).SETTING_EVENT_FLAGS; };
@@ -159,9 +159,9 @@ check('No current temp: WEATHER_TEMP omitted, fetch time + hourly still sent', [
 delete noT.fetch_time;
 check('fetch time is always sent (falls back to now)', typeof wxsend.buildWeatherDict(noT).WEATHER_FETCH_TIME, 'number');
 var mainC = require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8');
-var inbox = mainC.slice(mainC.indexOf('static void prv_inbox_received'), mainC.indexOf('static void prv_inbox_dropped'));
+var inbox = mainC.slice(mainC.indexOf('/* 3.0.3: prv_inbox_received split'), mainC.indexOf('static void prv_inbox_dropped')); /* 3.0.3: incl. helpers */
 check('Watch treats hourly arrays / fetch time as weather (not only WEATHER_TEMP)',
-	[/memcpy\(arrs\[i\]\.dst[\s\S]{0,40}got_weather = true/.test(inbox), /if \(ft\)\s*got_weather = true/.test(inbox), /if \(!got_temp\)\s*s_weather\.current_temp = WEATHER_TEMP_INVALID/.test(inbox)], [true, true, true]);
+	[/memcpy\(arrs\[i\]\.dst[\s\S]{0,40}got_weather = true/.test(inbox), /if \(ft\)\s*got_weather = true/.test(inbox), /if \(!g->temp\)\s*s_weather\.current_temp = WEATHER_TEMP_INVALID/.test(inbox) && /if \(prv_inbox_hourly_arrays\(iter\)\)\s*got_weather = true/.test(inbox)], [true, true, true]);
 check('Weather dict has no duplicate numeric keys', Object.keys(dn).filter(function (k) { return !isNaN(Number(k)); }), []);
 
 /* ---- 2.8.5: cache timeout follows the provider minimum ---- */
@@ -196,7 +196,7 @@ var bBt = bitsOf('s_bt_off_bits'), bQt = bitsOf('s_quiet_bits');
 check('Status icons: both 15x17 maps', [bBt.length, bQt.length, bBt.every(function (r) { return r.length === 15; }), bQt.every(function (r) { return r.length === 15; })], [17, 17, true, true]);
 check('Status icons: identical badge outline (same drawn pixels)', bBt.map(function (r) { return r.replace(/[#.]/g, 'x'); }), bQt.map(function (r) { return r.replace(/[#.]/g, 'x'); }));
 check('Status icons: same slash diagonal (1,2)-(13,14) in both', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].every(function (i) { return bBt[i + 1][i] === '.'; }) && [1, 2, 3, 13].every(function (i) { return bQt[i + 1][i] === '.'; }), true);
-check('Version 3.0.2 everywhere', [pkg.version, require('../appinfo.json').versionLabel, /version: '3\.0\.2'/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['3.0.2', '3.0.2', true]);
+check('Version 3.1.0 everywhere', [pkg.version, require('../appinfo.json').versionLabel, require('../src/pkjs/constants').APP_VERSION === '3.1.0' && /version: C\.APP_VERSION/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['3.1.0', '3.1.0', true]);
 
 /* ---- 2.9.6: rain bar height + hourly mm ---- */
 var mainSrc = require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8');
@@ -204,10 +204,10 @@ var wxH = require('fs').readFileSync(__dirname + '/../src/c/modules/weather.h', 
 check('Worst-case weather dict carries WEATHER_PRECIP_MM (72 bytes, capped 255)', [wxsend.buildWeatherDict(worst).WEATHER_PRECIP_MM.length, Math.max.apply(null, wxsend.buildWeatherDict(worst).WEATHER_PRECIP_MM)], [72, 255]);
 check('Rain bar height: default Probability 0, Amount 1, junk → 0', [settings.buildSettingsDict({}).SETTING_RAIN_HEIGHT, settings.buildSettingsDict({ SETTING_RAIN_HEIGHT: '1' }).SETTING_RAIN_HEIGHT, settings.buildSettingsDict({ SETTING_RAIN_HEIGHT: { value: 1 } }).SETTING_RAIN_HEIGHT, settings.buildSettingsDict({ SETTING_RAIN_HEIGHT: '7' }).SETTING_RAIN_HEIGHT], [0, 1, 1, 0]);
 check('Rain bar height change does not refetch weather', settings.weatherSettingsChanged({ SETTING_RAIN_HEIGHT: '0' }, { SETTING_RAIN_HEIGHT: '1' }), false);
-check('Watch rain-height + mm keys match package.json', [Number((/KEY_SETTING_RAIN_HEIGHT (\d+)/.exec(setSrc) || [])[1]), pkg.pebble.messageKeys.WEATHER_PRECIP_MM], [pkg.pebble.messageKeys.SETTING_RAIN_HEIGHT, 10091]);
+check('Watch rain-height + mm keys match package.json', [(/KEY_SETTING_RAIN_HEIGHT MESSAGE_KEY_SETTING_RAIN_HEIGHT\b/.test(setSrc) ? pkg.pebble.messageKeys.SETTING_RAIN_HEIGHT : -1), pkg.pebble.messageKeys.WEATHER_PRECIP_MM], [pkg.pebble.messageKeys.SETTING_RAIN_HEIGHT, 10091]);
 check('appinfo.json carries the new keys', [require('../appinfo.json').appKeys ? 1 : 1, JSON.stringify(require('../appinfo.json')).indexOf('WEATHER_PRECIP_MM') > 0], [1, true]);
 check('Watch reads WEATHER_PRECIP_MM into precip_mm; HAS_MM flag 0x02', [/MESSAGE_KEY_WEATHER_PRECIP_MM, s_weather\.precip_mm/.test(mainSrc), /WX_FLAG_HAS_MM 0x02/.test(wxH)], [true, true]);
-check('WeatherData persisted in 4 blocks (new key 10)', [/WEATHER_BLOCKS 4/.test(mainSrc), /STORAGE_KEY_WEATHER_PART4 10/.test(mainSrc), /PERSIST_DATA_MAX_LENGTH \* 4/.test(wxH)], [true, true, true]);
+check('WeatherData persisted in 4 blocks (new key 10)', [/WEATHER_BLOCKS 4/.test(mainSrc), /STORAGE_KEY_WEATHER_PART4 10 /.test(require('fs').readFileSync(__dirname + '/../src/c/modules/storage_keys.h', 'utf8')), /PERSIST_DATA_MAX_LENGTH \* 4/.test(wxH)], [true, true, true]);
 var rh = null; (function walk(a) { a.forEach(function (it) { if (it.messageKey === 'SETTING_RAIN_HEIGHT') rh = it; if (it.items) walk(it.items); }); })(require('../src/pkjs/config.js'));
 check('Clay "Rain bar height": Probability (default) / Amount', [rh && rh.defaultValue, rh && rh.options.map(function (o) { return o.label + '=' + o.value; }).join(',')], [0, 'Probability=0,Amount=1']);
 check('Clay hides Amount without mm (custom.js)', /c\.mm === false/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/config/custom.js', 'utf8')), true);
@@ -224,17 +224,61 @@ var wdT = wxsend.buildWeatherDict(worst);
 check('Weather dict carries WEATHER_CLOUD_THICK (18 bytes, also without phone data)', [wdT.WEATHER_CLOUD_THICK.length, wxsend.buildWeatherDict({}).WEATHER_CLOUD_THICK.length], [18, 18]);
 check('Worst case with thickness <= 90 % of the inbox', dictBytes(wxsend.buildWeatherDict(Object.assign({ cloud_thick: arr(255).slice(0, 18) }, worst))) <= 2048 * 0.9, true);
 check('Cloud thickness setting: default On 0, Off 1, junk → 0', [settings.buildSettingsDict({}).SETTING_CLOUD_THICK, settings.buildSettingsDict({ SETTING_CLOUD_THICK: '1' }).SETTING_CLOUD_THICK, settings.buildSettingsDict({ SETTING_CLOUD_THICK: '5' }).SETTING_CLOUD_THICK], [0, 1, 0]);
-check('Watch cloud-thickness keys match package.json', [Number((/KEY_SETTING_CLOUD_THICK (\d+)/.exec(setSrc) || [])[1]), pkg.pebble.messageKeys.WEATHER_CLOUD_THICK], [pkg.pebble.messageKeys.SETTING_CLOUD_THICK, 10093]);
+check('Watch cloud-thickness keys match package.json', [(/KEY_SETTING_CLOUD_THICK MESSAGE_KEY_SETTING_CLOUD_THICK\b/.test(setSrc) ? pkg.pebble.messageKeys.SETTING_CLOUD_THICK : -1), pkg.pebble.messageKeys.WEATHER_CLOUD_THICK], [pkg.pebble.messageKeys.SETTING_CLOUD_THICK, 10093]);
 check('appinfo.json carries the 3.0.0 keys in both key maps', (JSON.stringify(require('../appinfo.json')).match(/WEATHER_CLOUD_THICK/g) || []).length, 2);
 check('Watch reads WEATHER_CLOUD_THICK into thick_bits (18 bytes)', [/MESSAGE_KEY_WEATHER_CLOUD_THICK/.test(mainSrc), /thick_bits\[WEATHER_HOURLY_COUNT \/ 4\]/.test(wxH)], [true, true]);
 check('Thick palette: LightGray + DarkGray checker; light = background checker', [/\*base = GColorLightGray;\s*\*dither = GColorDarkGray;/.test(cloudSrc), /is_light \? GColorWhite : GColorBlack/.test(cloudSrc)], [true, true]);
 
 /* ---- 3.0.1 ---- */
-check('Time drawn on a fixed box (digits as 0), steps flank uses it too', [/prv_time_template\(layer->time_buf, layer->time_tmpl/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8')), /time_str = tl->time_tmpl\[0\]/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8'))], [true, true]);
+check('Time drawn on a fixed box (digits as 0; 12h always "00:00", 3.0.3), steps flank uses it too', [/prv_time_template\("00:00", layer->time_tmpl/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8')), /prv_time_origin\(tl, time_font, w, &box_right\)/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8'))], [true, true]);
 check('Light theme light rain = VividCerulean, heavy CobaltBlue; dark unchanged', /\(light \? GColorCobaltBlue : GColorPictonBlue\)\s*: \(light \? GColorVividCerulean : GColorCobaltBlue\)/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/precip_layer.c', 'utf8')), true);
 var evSrc = require('fs').readFileSync(__dirname + '/../src/c/ui/event_layer.c', 'utf8');
 var tlSrc = require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8');
 check('Fog: DarkGray checkered with Black (light) / LightGray (dark), icon and range', [/light_theme \? GColorBlack : GColorLightGray/.test(evSrc), /gx_mask2\(ctx, &t, mask, FOG_W/.test(evSrc), /prv_line2\(ctx, GPoint\(x_start, center_y\)/.test(evSrc)], [true, true, true]);
 check('Status icons 2 px clear of the digits (3.0.2), same gap and size', [/STATUS_ICON_X 3 /.test(tlSrc), /STATUS_ICON_GAP 6 /.test(tlSrc), /STATUS_ICON_W 15\n#define STATUS_ICON_H 17/.test(tlSrc)], [true, true, true]);
+check('3.0.3: 12h blank lead cell, steps capped at 99K in one font size (no 14/09 fallback), weather request retried once after 30 s', [/time_lead_blank\)/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8')), /thousands > 99 \? 99 : thousands/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8')) && !/GOTHIC_09|GOTHIC_14_BOLD/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8')), /WEATHER_RETRY_MS 30000/.test(require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8'))], [true, true, true]);
+(function () {
+	var fs = require('fs'), sk = fs.readFileSync(__dirname + '/../src/c/modules/storage_keys.h', 'utf8'), m, got = {};
+	var re = /#define (STORAGE_KEY_\w+) (\d+)/g;
+	while ((m = re.exec(sk))) got[m[1]] = +m[2];
+	var others = ['main.c', 'modules/settings.c', 'ui/daylight_layer.c'].map(function (f) { return fs.readFileSync(__dirname + '/../src/c/' + f, 'utf8'); }).join('\n');
+	check('3.0.3: persist keys only in storage_keys.h, values unchanged, none reused', [got, /#define STORAGE_KEY_/.test(others),
+		Object.keys(got).length === new Set(Object.keys(got).map(function (k) { return got[k]; })).size],
+		[{ STORAGE_KEY_SETTINGS: 0, STORAGE_KEY_BATT_HIST: 1, STORAGE_KEY_WEATHER: 2, STORAGE_KEY_WEATHER_PART2: 3, STORAGE_KEY_EVENTS: 4,
+			STORAGE_KEY_WEATHER_PART3: 5, STORAGE_KEY_BATT_LEARNED: 6, STORAGE_KEY_TAP_RANGE: 7, STORAGE_KEY_WEATHER_HDR: 8,
+			STORAGE_KEY_CLOUD_OVERRIDE: 9, STORAGE_KEY_WEATHER_PART4: 10 }, false, true]);
+	var setH = fs.readFileSync(__dirname + '/../src/c/modules/settings.h', 'utf8');
+	check('3.0.3: settings.h uses generated MESSAGE_KEY_SETTING_* (no hardcoded 100xx outside the touch guard)',
+		[/#define KEY_SETTING_\w+ 100\d\d/.test(setH.replace(/#if defined\(CARBON_TOUCH_ENABLED\)\n\/\*[\s\S]*?#endif/, '')),
+			(setH.match(/#define KEY_SETTING_(\w+) MESSAGE_KEY_SETTING_\1\b/g) || []).every(function (l) { return ('SETTING_' + /KEY_SETTING_(\w+)/.exec(l)[1]) in pkg.pebble.messageKeys; })],
+		[false, true]);
+})();
+check('3.0.3: MET User-Agent carries the app version', require('../src/pkjs/weather/metno.js').userAgent, 'CarbonIon-Pebble/' + pkg.version + ' github.com/nilsreichhard/carbon-ion');
+(function () { /* 3.0.3: host C test of settings_init() migration, plain and short enums (ARM layout) */
+	var fs = require('fs'), cp = require('child_process'), os = require('os'), path = require('path');
+	var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'carbon_set_')), mkH = path.join(dir, 'message_keys.h'), o = '';
+	Object.keys(pkg.pebble.messageKeys).forEach(function (k) { o += '#define MESSAGE_KEY_' + k + ' ' + pkg.pebble.messageKeys[k] + '\n'; });
+	fs.writeFileSync(mkH, o);
+	var root = path.join(__dirname, '..');
+	var res = ['', '-fshort-enums'].map(function (fl) {
+		var bin = path.join(dir, 't' + (fl ? 's' : 'p'));
+		var r = cp.spawnSync('sh', ['-c', 'cc -std=c11 -Wall -Wextra -Werror ' + fl + ' -I"' + root + '/tools/host" -include "' + mkH + '" -o "' + bin + '" "' + root + '/tools/test_settings_migration.c" "' + root + '/src/c/modules/settings.c" && "' + bin + '"'], { encoding: 'utf8' });
+		if (r.status !== 0) console.log(r.stdout + r.stderr);
+		return r.status;
+	});
+	check('Settings migration C tests (tools/test_settings_migration.c, plain + short enums) pass', res, [0, 0]);
+})();
+(function () { /* 3.0.3: leading zero setting */
+	var S = require('../src/pkjs/settings.js'), fs = require('fs');
+	var fn = S.buildSettingsDict || S.buildSettingsMessage || S.toWatchDict;
+	var tl = fs.readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8');
+	check('3.0.3: SETTING_LEADING_ZERO declared (10094), in Clay, watch strips on Off / Auto+12h',
+		[pkg.pebble.messageKeys.SETTING_LEADING_ZERO, /"messageKey": "SETTING_LEADING_ZERO"/.test(fs.readFileSync(__dirname + '/../src/pkjs/config.js', 'utf8')),
+			/leading_zero == LEADING_ZERO_OFF \|\|\s*\(settings->leading_zero == LEADING_ZERO_AUTO && !is_24h\)/.test(tl),
+			S.WEATHER_SETTING_KEYS ? S.WEATHER_SETTING_KEYS.indexOf('SETTING_LEADING_ZERO') : -1],
+		[10094, true, true, -1]);
+	if (fn) check('3.0.3: leading zero sent as 0/1/2 (Auto default)', [fn({}).SETTING_LEADING_ZERO, fn({ SETTING_LEADING_ZERO: '2' }).SETTING_LEADING_ZERO, fn({ SETTING_LEADING_ZERO: 1 }).SETTING_LEADING_ZERO, fn({ SETTING_LEADING_ZERO: 9 }).SETTING_LEADING_ZERO], [0, 2, 1, 0]);
+	else check('3.0.3: settings dict builder exported', Object.keys(S), 'buildSettingsDict');
+})();
 console.log((n - fails) + '/' + n + ' passed');
 process.exit(fails ? 1 : 0);

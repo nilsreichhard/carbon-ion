@@ -189,6 +189,19 @@ function finalize(g, nowSec, lat, lon) {
 		} else if (st) { g.sunrise = st.sunrise; g.sunset = st.sunset; }
 	}
 	g.has_layers = !!(g.cloud_low && g.cloud_mid && g.cloud_high);
+	/* 3.0.3: a layer can never cover more sky than the total (models mixed in
+	 * a blend can disagree, e.g. total 0 % with low 98 %), so Split and Total
+	 * show the same clouds. */
+	if (g.has_layers) {
+		for (var ci = 0; ci < HOURS; ci++) {
+			var tot = g.cloud[ci];
+			if (tot === null || tot === undefined) continue;
+			['cloud_low', 'cloud_mid', 'cloud_high'].forEach(function (k) {
+				var v = g[k][ci];
+				if (v !== null && v !== undefined && v > tot) g[k][ci] = tot;
+			});
+		}
+	}
 	if (lat !== undefined && lat !== null) { g.lat = Number(lat); g.lon = Number(lon); }
 	return g;
 }
@@ -247,7 +260,7 @@ function thickLevel(g, i) {
 		if (lo < 15 && mi < 15 && hi >= 15) return 1; /* high cloud only: thin cirrus */
 		return 2;
 	}
-	return cover < 40 ? 1 : 2;
+	return 2; /* 3.0.3: no layer or radiation data: never call it light from cover alone */
 }
 
 /* 2 bits per hour, hour i in bits (i & 3) * 2 of byte i >> 2 (18 bytes). */

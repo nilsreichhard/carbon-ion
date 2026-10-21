@@ -23,7 +23,7 @@ var GEOCODE_RETRY_ATTEMPTS = C.GEOCODE_RETRY_ATTEMPTS, GEOCODE_RETRY_BASE_DELAY_
 var FETCH_DEDUPE_WINDOW_MS = C.FETCH_DEDUPE_WINDOW_MS, REQ_DEDUPE_WINDOW_MS = C.REQ_DEDUPE_WINDOW_MS;
 
 var buildInfo = {
-	version: '3.0.2',
+	version: C.APP_VERSION,
 	hash: 'custom',
 	branch: 'master',
 	dirty: false,
@@ -99,9 +99,11 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 	var calendarDone = false;
 	var weatherOk = false;
 	var payload = {};
-	var settings = readClaySettings();
-	var geocodeEnabled = getBoolSetting(settings, 'SETTING_GEOCODE_ENABLED', true);
-	var locationOverride = getStringSetting(settings, 'SETTING_LOCATION_OVERRIDE', '');
+	/* 3.0.3: was `var settings` (`clay` is taken by the Clay instance), which shadowed the settings module in this
+	 * whole function and made every fetch throw at settings.getFogVis. */
+	var claySettings = readClaySettings();
+	var geocodeEnabled = getBoolSetting(claySettings, 'SETTING_GEOCODE_ENABLED', true);
+	var locationOverride = getStringSetting(claySettings, 'SETTING_LOCATION_OVERRIDE', '');
 	var cachedGeoname;
 
 	var tempUnit = getTempUnit();
@@ -243,6 +245,26 @@ function fetchAndSend(lat, lon, isStaticLocation) {
 }
 
 /**
+ * 3.0.3: fetchAndSend behind a guard. Any exception clears the in-flight
+ * marker (or the dedupe window would block the next request) and falls back
+ * to a still-usable cache, so one bug can no longer stop all updates.
+ */
+function safeFetchAndSend(lat, lon, isStatic, cache) {
+	try {
+		fetchAndSend(lat, lon, isStatic);
+	} catch (e) {
+		s_fetchStartedAt = 0;
+		eventLog.log('fetch_crash', String(e && e.message || e).slice(0, 80));
+		console.log('Carbon: weather fetch crashed: ' + e);
+		var c = cache || readCache();
+		if (c && c.payload && cacheFresh(c.payload)) {
+			console.log('Carbon: using stale cache');
+			sendToWatch(c.payload);
+		}
+	}
+}
+
+/**
  * Check the local cache and send if still valid; otherwise acquire geolocation
  * and call fetchAndSend.
  */
@@ -254,7 +276,7 @@ function getWeather() {
 	// Timestamp moves only on handled calls so bursts cannot self-starve.
 	s_lastHandledAt = nowMs;
 
-	var settings = readClaySettings();
+	var claySettings = readClaySettings(); /* 3.0.3: no shadowing of the settings module */
 
 	// Check cache first
 	var cache = readCache();
@@ -280,12 +302,12 @@ function getWeather() {
 	}
 	s_fetchStartedAt = nowMs;
 
-	var staticLocation = getStaticLocation(settings);
+	var staticLocation = getStaticLocation(claySettings);
 	if (staticLocation) {
 		eventLog.log('geo_static',
 			'lat=' + staticLocation.lat.toFixed(4) +
 			' lon=' + staticLocation.lon.toFixed(4));
-		fetchAndSend(staticLocation.lat, staticLocation.lon, true);
+		safeFetchAndSend(staticLocation.lat, staticLocation.lon, true, cache);
 		return;
 	}
 
@@ -294,7 +316,7 @@ function getWeather() {
 			eventLog.log('geo_ok',
 				'lat=' + pos.coords.latitude.toFixed(4) +
 				' lon=' + pos.coords.longitude.toFixed(4));
-			fetchAndSend(pos.coords.latitude, pos.coords.longitude, false);
+			safeFetchAndSend(pos.coords.latitude, pos.coords.longitude, false, cache);
 		},
 		function (err) {
 			s_fetchStartedAt = 0;

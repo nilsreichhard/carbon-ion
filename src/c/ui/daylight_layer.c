@@ -39,11 +39,9 @@
  *     → omit (no right-edge park). Default ~20d full means empty is usually
  *     weeks out — only appears when battery is low enough that ETA fits the
  *     chart. Past markers keep their milestone colour (2.6.7).
- * Persist keys used elsewhere: 0=settings, 1=batt hist, 2–3/5=weather,
- * 4=events, 7=tapped range.
+ * Persist keys: see modules/storage_keys.h.
  */
-#define STORAGE_KEY_BATT_HIST 1
-#define STORAGE_KEY_BATT_LEARNED 6 /* uint32 secs_per_pct; survives charges */
+#include "../modules/storage_keys.h"
 /* ~7d of 1% steps at ~4.7h/% ≈ 35 samples; 36 keeps the full prune window. */
 #define BATT_HIST_MAX 36
 #define BATT_HIST_WINDOW_SEC (7L * 24L * 3600L) /* several days / since unplug */

@@ -23,15 +23,9 @@
 #include <pebble.h>
 #include <stddef.h>
 
-// Storage key for persisting last-received weather across cold starts
-#define STORAGE_KEY_WEATHER 2
-#define STORAGE_KEY_WEATHER_PART2 3
-#define STORAGE_KEY_WEATHER_PART3 5
-#define STORAGE_KEY_WEATHER_PART4 10 /* 2.9.6: WeatherData grew past 768 bytes */
-#define STORAGE_KEY_EVENTS 4
-/* Weather header {version, size, fetch_time}: fetch_time lives here so the
- * three data blocks are only rewritten when the forecast itself changes. */
-#define STORAGE_KEY_WEATHER_HDR 8
+#include "modules/storage_keys.h" /* 3.0.3: all persist keys in one place */
+/* Weather header {version, size, fetch_time}: fetch_time lives there so the
+ * data blocks are only rewritten when the forecast itself changes. */
 #define WEATHER_PERSIST_VERSION 7 /* 3: + fog_bits, wx_flags (2.8.0); 4: + wind_bits (2.9.3); 5: + storm_bits (2.9.4); 6: + precip_mm (2.9.6); 7: + thick_bits (3.0.0) */
 /* Oldest layout that is a prefix of the current one (fields only appended):
  * such data is kept and the newer fields start zeroed (3.0.0). */
@@ -206,6 +200,97 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 #endif
 }
 
+/* 3.0.3: helpers split out of prv_push_weather_to_layers (no behaviour change). */
+
+/* Hours elapsed since the top of the fetch hour (slot WEATHER_PAST_HOURS is
+ * the local hour the fetch happened in). */
+static int prv_weather_data_offset(void) {
+	int data_offset = 0;
+	if (s_weather.fetch_time > 0) {
+		/* Hourly slot WEATHER_PAST_HOURS is the local hour the fetch happened
+		 * in, so count from the top of that hour, not the exact fetch time. */
+		time_t fetch_t = s_weather.fetch_time;
+		struct tm *ft = localtime(&fetch_t);
+		time_t hour_top = fetch_t - (ft ? (ft->tm_min * 60 + ft->tm_sec) : 0);
+		time_t now_t = time(NULL);
+		long elapsed = (long)(now_t - hour_top);
+		if (elapsed > 0) {
+			data_offset = (int)(elapsed / 3600);
+		}
+	}
+	if (data_offset < 0)
+		data_offset = 0;
+	return data_offset;
+}
+
+typedef struct {
+	uint8_t precip[MAX_GRAPH_HOURS + 1];
+	int8_t temp[MAX_GRAPH_HOURS + 1];
+	int8_t appar[MAX_GRAPH_HOURS + 1];
+	uint8_t cloud[MAX_GRAPH_HOURS + 1];
+	uint8_t cloud_low[MAX_GRAPH_HOURS + 1];
+	uint8_t cloud_mid[MAX_GRAPH_HOURS + 1];
+	uint8_t cloud_high[MAX_GRAPH_HOURS + 1];
+	uint8_t code[MAX_GRAPH_HOURS + 1];
+	uint8_t shortwave[MAX_GRAPH_HOURS + 1];
+	uint8_t mm[MAX_GRAPH_HOURS + 1];
+	uint8_t thick[MAX_GRAPH_HOURS + 1];
+	uint8_t fog[MAX_GRAPH_HOURS + 1];
+	uint8_t wind[MAX_GRAPH_HOURS + 1];
+	uint8_t storm[MAX_GRAPH_HOURS + 1];
+} WxViews;
+
+static void prv_bit_view(uint8_t *dst, const uint8_t *bits, int start_idx, int copy_len) {
+	for (int i = 0; i < copy_len; i++) {
+		int k = start_idx + i;
+		dst[i] = (bits[k >> 3] >> (k & 7)) & 1;
+	}
+}
+
+/* Offset-shifted copies of the hourly arrays; static: off the stack (3.0.0). */
+static WxViews *prv_fill_views(int start_idx, int copy_len) {
+	static WxViews v;
+	memset(&v, 0, sizeof(v));
+	memcpy(v.precip, &s_weather.precip_prob[start_idx], copy_len);
+	memcpy(v.temp, &s_weather.temp_hourly[start_idx], copy_len);
+	memcpy(v.appar, &s_weather.apparent_temp_hourly[start_idx], copy_len);
+	memcpy(v.cloud, &s_weather.cloud_cover[start_idx], copy_len);
+	memcpy(v.cloud_low, &s_weather.cloud_cover_low[start_idx], copy_len);
+	memcpy(v.cloud_mid, &s_weather.cloud_cover_mid[start_idx], copy_len);
+	memcpy(v.cloud_high, &s_weather.cloud_cover_high[start_idx], copy_len);
+	memcpy(v.code, &s_weather.hourly_weather_code[start_idx], copy_len);
+	memcpy(v.shortwave, &s_weather.shortwave_radiation[start_idx], copy_len);
+	memcpy(v.mm, &s_weather.precip_mm[start_idx], copy_len);
+	for (int i = 0; i < copy_len; i++)
+		v.thick[i] = cloud_thick_unpack(s_weather.thick_bits, start_idx + i);
+	prv_bit_view(v.fog, s_weather.fog_bits, start_idx, copy_len);
+	prv_bit_view(v.wind, s_weather.wind_bits, start_idx, copy_len);
+	prv_bit_view(v.storm, s_weather.storm_bits, start_idx, copy_len);
+	return &v;
+}
+
+/* High/low over a rolling HILO_WINDOW_H hours from now (2.8.5), from the
+ * hourly slots; falls back to the fetched values without data. */
+static void prv_window_hilo(int now_idx, int16_t display_temp, int16_t *hi_out, int16_t *lo_out) {
+	int16_t hi = s_weather.high_temp, lo = s_weather.low_temp;
+	bool any = false;
+	int end = now_idx + HILO_WINDOW_H;
+	if (end > (int)s_weather.valid_hours)
+		end = s_weather.valid_hours;
+	for (int i = now_idx; i < end && i < WEATHER_HOURLY_COUNT; i++) {
+		int16_t t = s_weather.temp_hourly[i];
+		if (!any || t > hi) hi = t;
+		if (!any || t < lo) lo = t;
+		any = true;
+	}
+	if (any && display_temp != WEATHER_TEMP_INVALID) {
+		if (display_temp > hi) hi = display_temp;
+		if (display_temp < lo) lo = display_temp;
+	}
+	*hi_out = hi;
+	*lo_out = lo;
+}
+
 /**
  * Push current weather state to all graph layers.
  *
@@ -229,22 +314,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
 		return;
 	}
 
-	// Calculate how many hours have elapsed since the fetch
-	int data_offset = 0;
-	if (s_weather.fetch_time > 0) {
-		/* Hourly slot WEATHER_PAST_HOURS is the local hour the fetch happened
-		 * in, so count from the top of that hour, not the exact fetch time. */
-		time_t fetch_t = s_weather.fetch_time;
-		struct tm *ft = localtime(&fetch_t);
-		time_t hour_top = fetch_t - (ft ? (ft->tm_min * 60 + ft->tm_sec) : 0);
-		time_t now_t = time(NULL);
-		long elapsed = (long)(now_t - hour_top);
-		if (elapsed > 0) {
-			data_offset = (int)(elapsed / 3600);
-		}
-	}
-	if (data_offset < 0)
-		data_offset = 0;
+	int data_offset = prv_weather_data_offset();
 	/* Unclamped: past the provider's last valid slot the numbers expire. */
 	bool data_ran_out = WEATHER_PAST_HOURS + data_offset >= (int)s_weather.valid_hours;
 	if (data_offset >= WEATHER_HOURLY_COUNT)
@@ -272,62 +342,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
 		copy_len = WEATHER_HOURLY_COUNT - start_idx;
 
 	// Shifted views: window starting at past_needed hours ago
-	static uint8_t precip_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	static int8_t temp_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	static int8_t appar_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	static uint8_t cloud_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	static uint8_t cloud_low_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	static uint8_t cloud_mid_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	static uint8_t cloud_high_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	static uint8_t code_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	static uint8_t shortwave_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	static uint8_t mm_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	static uint8_t thick_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	memset(precip_view, 0, sizeof(precip_view));
-	memset(temp_view, 0, sizeof(temp_view));
-	memset(appar_view, 0, sizeof(appar_view));
-	memset(cloud_view, 0, sizeof(cloud_view));
-	memset(cloud_low_view, 0, sizeof(cloud_low_view));
-	memset(cloud_mid_view, 0, sizeof(cloud_mid_view));
-	memset(cloud_high_view, 0, sizeof(cloud_high_view));
-	memset(code_view, 0, sizeof(code_view));
-	memset(shortwave_view, 0, sizeof(shortwave_view));
-	memset(mm_view, 0, sizeof(mm_view));
-
-	memcpy(precip_view, &s_weather.precip_prob[start_idx], copy_len);
-	memcpy(temp_view, &s_weather.temp_hourly[start_idx], copy_len);
-	memcpy(appar_view, &s_weather.apparent_temp_hourly[start_idx], copy_len);
-	memcpy(cloud_view, &s_weather.cloud_cover[start_idx], copy_len);
-	memcpy(cloud_low_view, &s_weather.cloud_cover_low[start_idx], copy_len);
-	memcpy(cloud_mid_view, &s_weather.cloud_cover_mid[start_idx], copy_len);
-	memcpy(cloud_high_view, &s_weather.cloud_cover_high[start_idx], copy_len);
-	memcpy(code_view, &s_weather.hourly_weather_code[start_idx], copy_len);
-	memcpy(shortwave_view, &s_weather.shortwave_radiation[start_idx], copy_len);
-	memcpy(mm_view, &s_weather.precip_mm[start_idx], copy_len);
-	memset(thick_view, 0, sizeof(thick_view));
-	for (int i = 0; i < copy_len; i++) {
-		int k = start_idx + i;
-		thick_view[i] = cloud_thick_unpack(s_weather.thick_bits, k);
-	}
-
-	static uint8_t fog_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	memset(fog_view, 0, sizeof(fog_view));
-	for (int i = 0; i < copy_len; i++) {
-		int k = start_idx + i;
-		fog_view[i] = (s_weather.fog_bits[k >> 3] >> (k & 7)) & 1;
-	}
-	static uint8_t wind_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	memset(wind_view, 0, sizeof(wind_view));
-	for (int i = 0; i < copy_len; i++) {
-		int k = start_idx + i;
-		wind_view[i] = (s_weather.wind_bits[k >> 3] >> (k & 7)) & 1;
-	}
-	static uint8_t storm_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
-	memset(storm_view, 0, sizeof(storm_view));
-	for (int i = 0; i < copy_len; i++) {
-		int k = start_idx + i;
-		storm_view[i] = (s_weather.storm_bits[k >> 3] >> (k & 7)) & 1;
-	}
+	WxViews *v = prv_fill_views(start_idx, copy_len);
 
 	/* Providers with a shorter horizon pad the tail: draw nothing there. */
 	int valid_left = (int)s_weather.valid_hours - start_idx;
@@ -356,23 +371,8 @@ static void prv_push_weather_to_layers(struct tm *now) {
 
 	/* High/low cover a rolling HILO_WINDOW_H hours from now (2.8.5), taken
 	 * from the hourly slots; falls back to the fetched values without data. */
-	int16_t hi = s_weather.high_temp, lo = s_weather.low_temp;
-	{
-		bool any = false;
-		int end = now_idx + HILO_WINDOW_H;
-		if (end > (int)s_weather.valid_hours)
-			end = s_weather.valid_hours;
-		for (int i = now_idx; i < end && i < WEATHER_HOURLY_COUNT; i++) {
-			int16_t v = s_weather.temp_hourly[i];
-			if (!any || v > hi) hi = v;
-			if (!any || v < lo) lo = v;
-			any = true;
-		}
-		if (any && display_temp != WEATHER_TEMP_INVALID) {
-			if (display_temp > hi) hi = display_temp;
-			if (display_temp < lo) lo = display_temp;
-		}
-	}
+	int16_t hi, lo;
+	prv_window_hilo(now_idx, display_temp, &hi, &lo);
 
 	/* Weather older than WEATHER_STALE_SEC is marked: the condition icon
 	 * shows the "offline" glyph until fresh data arrives. */
@@ -390,20 +390,20 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	daylight_layer_set_data(s_daylight_layer, s_weather.sunrise_hour,
 	                        s_weather.sunrise_minute, s_weather.sunset_hour,
 	                        s_weather.sunset_minute, current_hour, false, false);
-	cloud_layer_set_data(s_cloud_layer, cloud_view, code_view, shortwave_view,
-	                       cloud_low_view, cloud_mid_view, cloud_high_view,
-	                       thick_view, mm_view, (s_weather.wx_flags & WX_FLAG_HAS_MM) != 0,
+	cloud_layer_set_data(s_cloud_layer, v->cloud, v->code, v->shortwave,
+	                       v->cloud_low, v->cloud_mid, v->cloud_high,
+	                       v->thick, v->mm, (s_weather.wx_flags & WX_FLAG_HAS_MM) != 0,
 	                       current_hour);
-	precip_layer_set_data(s_precip_layer, precip_view, code_view, mm_view,
+	precip_layer_set_data(s_precip_layer, v->precip, v->code, v->mm,
 	                      (s_weather.wx_flags & WX_FLAG_HAS_MM) != 0, current_hour);
-	event_layer_set_data(s_event_layer, code_view, fog_view, wind_view, storm_view, hours_remaining);
+	event_layer_set_data(s_event_layer, v->code, v->fog, v->wind, v->storm, hours_remaining);
 	time_layer_set_condition(s_time_layer,
 	                         stale ? WEATHER_CONDITION_UNKNOWN
 	                               : weather_code_to_condition(display_code),
 	                         is_day);
 	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
 	temp_layer_set_data(s_temp_layer, display_temp, hi,
-	                    lo, temp_view, appar_view, current_hour,
+	                    lo, v->temp, v->appar, current_hour,
 	                    hours_remaining);
 	time_layer_set_city(s_time_layer, s_weather.city_name);
 }
@@ -701,44 +701,35 @@ static void prv_unsubscribe_input_services(void) {
  * @param iter     Incoming message dictionary iterator.
  * @param context  Unused callback context.
  */
-static void prv_inbox_received(DictionaryIterator *iter, void *context) {
-	// Check for settings changes first
-	settings_apply_from_message(iter);
-	prv_apply_input_services();
-	prv_relayout_graph_stack();
-	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
-	window_set_background_color(s_main_window,
-	                            settings_get()->light_theme ? GColorWhite
-	                                                        : GColorBlack);
+/* 3.0.3: prv_inbox_received split into helpers (no behaviour change). */
+typedef struct { bool temp, code, hi, lo; } WxGot;
 
-	/* A message is weather when it carries any weather field (2.8.5: not only
-	 * WEATHER_TEMP, which the phone omits when the current hour has no value). */
+/* Scalar weather fields; returns true when any of them marks a weather message. */
+static bool prv_inbox_weather_scalars(DictionaryIterator *iter, WxGot *g) {
 	Tuple *t;
 	bool got_weather = false;
-	bool got_temp = false, got_code = false;
 
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_TEMP);
 	if (t) {
 		s_weather.current_temp = (int16_t)settings_tuple_int(t);
-		got_weather = got_temp = true;
+		got_weather = g->temp = true;
 	}
-	bool got_hi = false, got_lo = false;
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_TEMP_HIGH);
 	if (t) {
-		got_hi = true;
+		g->hi = true;
 		s_weather.high_temp = (int16_t)settings_tuple_int(t);
 		got_weather = true;
 	}
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_TEMP_LOW);
 	if (t) {
-		got_lo = true;
+		g->lo = true;
 		s_weather.low_temp = (int16_t)settings_tuple_int(t);
 		got_weather = true;
 	}
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_CODE);
 	if (t) {
 		s_weather.weather_code = (uint8_t)settings_tuple_int(t);
-		got_weather = got_code = true;
+		got_weather = g->code = true;
 	}
 	t = dict_find(iter, MESSAGE_KEY_WEATHER_SUNRISE_HOUR);
 	if (t)
@@ -756,32 +747,97 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 		int m = settings_tuple_int(t);
 		s_weather.sunset_minute = (uint8_t)(m < 0 ? 0 : (m > 59 ? 59 : m));
 	}
+	return got_weather;
+}
 
-	/* Hourly byte arrays (one table instead of nine copies). */
-	{
-		struct { uint32_t key; void *dst; } arrs[] = {
-			{MESSAGE_KEY_WEATHER_PRECIP_PROB, s_weather.precip_prob},
-			{MESSAGE_KEY_WEATHER_TEMP_HOURLY, s_weather.temp_hourly},
-			{MESSAGE_KEY_WEATHER_APPARENT_TEMP_HOURLY, s_weather.apparent_temp_hourly},
-			{MESSAGE_KEY_WEATHER_CLOUD_COVER, s_weather.cloud_cover},
-			{MESSAGE_KEY_WEATHER_CLOUD_COVER_LOW, s_weather.cloud_cover_low},
-			{MESSAGE_KEY_WEATHER_CLOUD_COVER_MID, s_weather.cloud_cover_mid},
-			{MESSAGE_KEY_WEATHER_CLOUD_COVER_HIGH, s_weather.cloud_cover_high},
-			{MESSAGE_KEY_WEATHER_HOURLY_CODE, s_weather.hourly_weather_code},
-			{MESSAGE_KEY_WEATHER_SHORTWAVE_RADIATION, s_weather.shortwave_radiation},
-			{MESSAGE_KEY_WEATHER_PRECIP_MM, s_weather.precip_mm},
-		};
-		for (unsigned i = 0; i < ARRAY_LENGTH(arrs); i++) {
-			t = dict_find(iter, arrs[i].key);
-			if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
-				int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
-				memcpy(arrs[i].dst, t->value->data, len);
-				got_weather = true;
-			}
+/* Hourly byte arrays (one table instead of nine copies). */
+static bool prv_inbox_hourly_arrays(DictionaryIterator *iter) {
+	Tuple *t;
+	bool got_weather = false;
+	struct { uint32_t key; void *dst; } arrs[] = {
+		{MESSAGE_KEY_WEATHER_PRECIP_PROB, s_weather.precip_prob},
+		{MESSAGE_KEY_WEATHER_TEMP_HOURLY, s_weather.temp_hourly},
+		{MESSAGE_KEY_WEATHER_APPARENT_TEMP_HOURLY, s_weather.apparent_temp_hourly},
+		{MESSAGE_KEY_WEATHER_CLOUD_COVER, s_weather.cloud_cover},
+		{MESSAGE_KEY_WEATHER_CLOUD_COVER_LOW, s_weather.cloud_cover_low},
+		{MESSAGE_KEY_WEATHER_CLOUD_COVER_MID, s_weather.cloud_cover_mid},
+		{MESSAGE_KEY_WEATHER_CLOUD_COVER_HIGH, s_weather.cloud_cover_high},
+		{MESSAGE_KEY_WEATHER_HOURLY_CODE, s_weather.hourly_weather_code},
+		{MESSAGE_KEY_WEATHER_SHORTWAVE_RADIATION, s_weather.shortwave_radiation},
+		{MESSAGE_KEY_WEATHER_PRECIP_MM, s_weather.precip_mm},
+	};
+	for (unsigned i = 0; i < ARRAY_LENGTH(arrs); i++) {
+		t = dict_find(iter, arrs[i].key);
+		if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+			int len = t->length < WEATHER_HOURLY_COUNT ? t->length : WEATHER_HOURLY_COUNT;
+			memcpy(arrs[i].dst, t->value->data, len);
+			got_weather = true;
 		}
 	}
+	return got_weather;
+}
 
-	t = dict_find(iter, MESSAGE_KEY_CITY_NAME);
+/* Packed hourly bit arrays: cleared, then filled from the message if present. */
+static void prv_inbox_bits(DictionaryIterator *iter, uint32_t key, uint8_t *dst, int size) {
+	Tuple *t = dict_find(iter, key);
+	memset(dst, 0, size);
+	if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0)
+		memcpy(dst, t->value->data, t->length < size ? t->length : size);
+}
+
+/* A weather message arrived: fill the rest of s_weather and persist it. */
+static void prv_inbox_commit_weather(DictionaryIterator *iter, Tuple *ft, const WxGot *g) {
+	Tuple *t;
+	/* Absent scalars mean "no value": fall back to the hourly slot. */
+	if (!g->temp)
+		s_weather.current_temp = WEATHER_TEMP_INVALID;
+	if (!g->code)
+		s_weather.weather_code = WEATHER_CODE_INVALID;
+	/* 2.8.7: a missing high/low must not keep an older fetch's value. */
+	if (!g->hi)
+		s_weather.high_temp = WEATHER_TEMP_INVALID;
+	if (!g->lo)
+		s_weather.low_temp = WEATHER_TEMP_INVALID;
+	s_weather.fetch_time = ft ? (time_t)settings_tuple_int(ft) : time(NULL);
+
+	s_weather.is_valid = true;
+	s_weather.valid_hours = WEATHER_HOURLY_COUNT;
+	t = dict_find(iter, MESSAGE_KEY_WEATHER_VALID_HOURS);
+	if (t) {
+		int vh = settings_tuple_int(t);
+		if (vh >= 1 && vh <= WEATHER_HOURLY_COUNT)
+			s_weather.valid_hours = (uint8_t)vh;
+	}
+	prv_inbox_bits(iter, MESSAGE_KEY_WEATHER_FOG, s_weather.fog_bits, sizeof(s_weather.fog_bits));
+	prv_inbox_bits(iter, MESSAGE_KEY_WEATHER_WIND, s_weather.wind_bits, sizeof(s_weather.wind_bits)); /* 2.9.3 */
+	prv_inbox_bits(iter, MESSAGE_KEY_WEATHER_STORM, s_weather.storm_bits, sizeof(s_weather.storm_bits)); /* 2.9.4 */
+	prv_inbox_bits(iter, MESSAGE_KEY_WEATHER_CLOUD_THICK, s_weather.thick_bits, sizeof(s_weather.thick_bits)); /* 3.0.0 */
+	t = dict_find(iter, MESSAGE_KEY_WEATHER_FLAGS);
+	s_weather.wx_flags = t ? (uint8_t)settings_tuple_int(t) : 0;
+	s_last_answered_seq = s_last_sent_request_seq;
+
+	prv_weather_persist();
+}
+
+static void prv_inbox_received(DictionaryIterator *iter, void *context) {
+	// Check for settings changes first
+	settings_apply_from_message(iter);
+	prv_apply_input_services();
+	prv_relayout_graph_stack();
+	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
+	window_set_background_color(s_main_window,
+	                            settings_get()->light_theme ? GColorWhite
+	                                                        : GColorBlack);
+
+	/* A message is weather when it carries any weather field (2.8.5: not only
+	 * WEATHER_TEMP, which the phone omits when the current hour has no value). */
+	WxGot got = {false, false, false, false};
+	bool got_weather = prv_inbox_weather_scalars(iter, &got);
+
+	if (prv_inbox_hourly_arrays(iter))
+		got_weather = true;
+
+	Tuple *t = dict_find(iter, MESSAGE_KEY_CITY_NAME);
 	if (t && t->type == TUPLE_CSTRING) {
 		strncpy(s_weather.city_name, t->value->cstring,
 		        sizeof(s_weather.city_name) - 1);
@@ -794,61 +850,8 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 	if (ft)
 		got_weather = true;
 
-	if (got_weather) {
-		/* Absent scalars mean "no value": fall back to the hourly slot. */
-		if (!got_temp)
-			s_weather.current_temp = WEATHER_TEMP_INVALID;
-		if (!got_code)
-			s_weather.weather_code = WEATHER_CODE_INVALID;
-		/* 2.8.7: a missing high/low must not keep an older fetch's value. */
-		if (!got_hi)
-			s_weather.high_temp = WEATHER_TEMP_INVALID;
-		if (!got_lo)
-			s_weather.low_temp = WEATHER_TEMP_INVALID;
-		s_weather.fetch_time = ft ? (time_t)settings_tuple_int(ft) : time(NULL);
-
-		s_weather.is_valid = true;
-		s_weather.valid_hours = WEATHER_HOURLY_COUNT;
-		t = dict_find(iter, MESSAGE_KEY_WEATHER_VALID_HOURS);
-		if (t) {
-			int vh = settings_tuple_int(t);
-			if (vh >= 1 && vh <= WEATHER_HOURLY_COUNT)
-				s_weather.valid_hours = (uint8_t)vh;
-		}
-		t = dict_find(iter, MESSAGE_KEY_WEATHER_FOG);
-		memset(s_weather.fog_bits, 0, sizeof(s_weather.fog_bits));
-		if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
-			int len = t->length < (int)sizeof(s_weather.fog_bits) ? t->length
-			                                                      : (int)sizeof(s_weather.fog_bits);
-			memcpy(s_weather.fog_bits, t->value->data, len);
-		}
-		t = dict_find(iter, MESSAGE_KEY_WEATHER_WIND); /* 2.9.3 */
-		memset(s_weather.wind_bits, 0, sizeof(s_weather.wind_bits));
-		if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
-			int len = t->length < (int)sizeof(s_weather.wind_bits) ? t->length
-			                                                       : (int)sizeof(s_weather.wind_bits);
-			memcpy(s_weather.wind_bits, t->value->data, len);
-		}
-		t = dict_find(iter, MESSAGE_KEY_WEATHER_STORM); /* 2.9.4 */
-		memset(s_weather.storm_bits, 0, sizeof(s_weather.storm_bits));
-		if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
-			int len = t->length < (int)sizeof(s_weather.storm_bits) ? t->length
-			                                                        : (int)sizeof(s_weather.storm_bits);
-			memcpy(s_weather.storm_bits, t->value->data, len);
-		}
-		t = dict_find(iter, MESSAGE_KEY_WEATHER_CLOUD_THICK); /* 3.0.0 */
-		memset(s_weather.thick_bits, 0, sizeof(s_weather.thick_bits));
-		if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
-			int len = t->length < (int)sizeof(s_weather.thick_bits) ? t->length
-			                                                        : (int)sizeof(s_weather.thick_bits);
-			memcpy(s_weather.thick_bits, t->value->data, len);
-		}
-		t = dict_find(iter, MESSAGE_KEY_WEATHER_FLAGS);
-		s_weather.wx_flags = t ? (uint8_t)settings_tuple_int(t) : 0;
-		s_last_answered_seq = s_last_sent_request_seq;
-
-		prv_weather_persist();
-	}
+	if (got_weather)
+		prv_inbox_commit_weather(iter, ft, &got);
 
 	// Apply settings and push weather to layers ONCE
 	time_t now_s = time(NULL);
@@ -864,15 +867,44 @@ static void prv_inbox_dropped(AppMessageResult reason, void *context) {
 	APP_LOG(APP_LOG_LEVEL_WARNING, "Inbox dropped: %d", (int)reason);
 }
 
+/* 3.0.3: a failed weather request is retried once, about 30 s later. A new
+ * scheduled request re-arms the single retry. */
+#define WEATHER_RETRY_MS 30000
+static AppTimer *s_weather_retry_timer = NULL;
+static bool s_weather_retry_used = false;
+static void prv_send_weather_request(bool is_retry);
+
+static void prv_weather_retry_cb(void *context) {
+	(void)context;
+	s_weather_retry_timer = NULL;
+	prv_send_weather_request(true);
+}
+
+static void prv_schedule_weather_retry(void) {
+	if (s_weather_retry_used || s_weather_retry_timer)
+		return;
+	s_weather_retry_used = true;
+	s_weather_retry_timer = app_timer_register(WEATHER_RETRY_MS, prv_weather_retry_cb, NULL);
+	APP_LOG(APP_LOG_LEVEL_INFO, "Weather request retry in %d ms", WEATHER_RETRY_MS);
+}
+
 static void prv_outbox_failed(DictionaryIterator *failed,
                               AppMessageResult reason, void *context) {
-	(void)failed;
 	(void)context;
 	APP_LOG(APP_LOG_LEVEL_WARNING, "Outbox failed: reason=%d seq=%lu",
 	        (int)reason, (unsigned long)s_last_sent_request_seq);
+	if (failed && dict_find(failed, MESSAGE_KEY_WEATHER_REQUEST))
+		prv_schedule_weather_retry();
 }
 
-static void prv_request_weather(void) {
+static void prv_send_weather_request(bool is_retry) {
+	if (!is_retry) {
+		s_weather_retry_used = false;
+		if (s_weather_retry_timer) {
+			app_timer_cancel(s_weather_retry_timer);
+			s_weather_retry_timer = NULL;
+		}
+	}
 	uint32_t seq = ++s_request_seq;
 	DictionaryIterator *iter;
 	AppMessageResult result = app_message_outbox_begin(&iter);
@@ -884,11 +916,17 @@ static void prv_request_weather(void) {
 			APP_LOG(APP_LOG_LEVEL_WARNING,
 			        "Outbox send failed: reason=%d seq=%lu", (int)result,
 			        (unsigned long)seq);
+			prv_schedule_weather_retry();
 		}
 	} else {
 		APP_LOG(APP_LOG_LEVEL_WARNING, "Outbox begin failed: reason=%d seq=%lu",
 		        (int)result, (unsigned long)seq);
+		prv_schedule_weather_retry();
 	}
+}
+
+static void prv_request_weather(void) {
+	prv_send_weather_request(false);
 }
 
 static void prv_battery_handler(BatteryChargeState state) {
@@ -1203,6 +1241,10 @@ static void deinit(void) {
 	battery_state_service_unsubscribe();
 	connection_service_unsubscribe();
 	prv_unsubscribe_input_services();
+	if (s_weather_retry_timer) { /* 3.0.3 */
+		app_timer_cancel(s_weather_retry_timer);
+		s_weather_retry_timer = NULL;
+	}
 	settings_flush();
 #if defined(PBL_HEALTH)
 	health_service_events_unsubscribe();

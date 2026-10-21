@@ -5,7 +5,7 @@
     "name": "Nils Reich",
     "url": "https://github.com/nilsreichhard/carbon-ion"
   },
-  "version": "3.0.2",
+  "version": "3.1.0",
   "keywords": [
     "pebble-app"
   ],
@@ -116,6 +116,7 @@
       "SETTING_RAIN_HEIGHT": 10090,
       "WEATHER_PRECIP_MM": 10091,
       "SETTING_CLOUD_THICK": 10092,
+      "SETTING_LEADING_ZERO": 10094,
       "WEATHER_CLOUD_THICK": 10093
     },
     "resources": {

@@ -10,7 +10,7 @@
 var P = require('./provider');
 
 var BASE = 'https://api.met.no/weatherapi/locationforecast/2.0/complete';
-var USER_AGENT = 'CarbonIon-Pebble/2.8 github.com/nilsreichhard/carbon-ion';
+var USER_AGENT = 'CarbonIon-Pebble/' + require('../constants').APP_VERSION + ' github.com/nilsreichhard/carbon-ion'; /* 3.0.3: from the app version */
 
 function r4(v) { return Math.round(Number(v) * 10000) / 10000; }
 function buildUrl(lat, lon) { return BASE + '?lat=' + r4(lat) + '&lon=' + r4(lon); }
@@ -38,6 +38,7 @@ function parse(json, ctx) {
 	if (!ts || !ts.length) throw new Error('invalid met.no payload');
 	var g = P.emptyGrid('metno', ctx.now);
 	g.cloud_low = P.nulls(); g.cloud_mid = P.nulls(); g.cloud_high = P.nulls();
+	var firstSlot = -1;
 	for (var n = 0; n < ts.length; n++) {
 		var t = Date.parse(ts[n].time) / 1000;
 		var i = P.slot(g, t);
@@ -55,20 +56,48 @@ function parse(json, ctx) {
 		P.setAt(g, 'cloud_mid', i, P.num(d.cloud_area_fraction_medium));
 		P.setAt(g, 'cloud_high', i, P.num(d.cloud_area_fraction_high));
 		P.setAt(g, 'gust', i, P.msToKmh(P.num(d.wind_speed_of_gust)));
+		/* 3.0.3: next_1_hours covers t..t+1. Open-Meteo labels an hour's
+		 * amount (and code) at its end, so the window goes to slot i + 1.
+		 * Edge cases:
+		 *  - hourly → 6-hourly switch: the last hourly window is only written
+		 *    when slot i + 1 is itself an hourly step, so no half-filled slot
+		 *    (rain but no temperature) appears past the horizon;
+		 *  - current hour: the first step's slot has no earlier window and the
+		 *    past fill skips it (it has a temperature), so it takes its own
+		 *    window as the best estimate of the hour in progress;
+		 *  - code fallback (no symbol) uses the cloud cover at the end of the
+		 *    window, i.e. the slot it is written to. */
+		var nx = ts[n + 1];
+		var nextHourly = !!(nx && nx.data && nx.data.next_1_hours && Date.parse(nx.time) / 1000 === t + 3600);
+		var j = (nextHourly && i + 1 < g.time.length) ? i + 1 : -1;
+		var first = (firstSlot < 0);
+		if (first) firstSlot = i;
 		var nd = n1.details || {};
-		P.setAt(g, 'precip', i, P.num(nd.precipitation_amount));
-		P.setAt(g, 'thunder_prob', i, P.num(nd.probability_of_thunder)); /* 2.9.4 */
 		var pop = P.num(nd.probability_of_precipitation);
 		if (pop === null) { /* not provided outside the Nordics: derive from amount */
 			var mm = P.num(nd.precipitation_amount) || 0, mx = P.num(nd.precipitation_amount_max);
 			pop = mm >= 0.1 ? Math.min(100, 40 + mm * 30) : (mx && mx > 0.1 ? 20 : 0);
 		}
-		P.setAt(g, 'pop', i, Math.round(pop));
-		var code = symbolToWmo(n1.summary && n1.summary.symbol_code);
-		if (code === null) code = (P.num(d.cloud_area_fraction) || 0) > 85 ? 3 : 2;
-		P.setAt(g, 'wmo_code', i, code);
+		var sym = symbolToWmo(n1.summary && n1.summary.symbol_code);
+		var targets = [];
+		if (j >= 0) targets.push(j);
+		if (first) targets.push(i);
+		targets.forEach(function (k) {
+			P.setAt(g, 'precip', k, P.num(nd.precipitation_amount));
+			P.setAt(g, 'thunder_prob', k, P.num(nd.probability_of_thunder)); /* 2.9.4 */
+			P.setAt(g, 'pop', k, Math.round(pop));
+			var cc = k === j && nx ? P.num(((nx.data.instant || {}).details || {}).cloud_area_fraction) : P.num(d.cloud_area_fraction);
+			P.setAt(g, 'wmo_code', k, sym !== null ? sym : ((cc || 0) > 85 ? 3 : 2));
+		});
+		var code = g.wmo_code[i];
+		if (code === null || code === undefined) { /* e.g. last hourly step before the switch */
+			code = sym !== null ? sym : ((P.num(d.cloud_area_fraction) || 0) > 85 ? 3 : 2);
+			P.setAt(g, 'wmo_code', i, code);
+		}
 		var fogFrac = P.num(d.fog_area_fraction);
-		g.fog[i] = (code === 45 || (fogFrac !== null && fogFrac >= 50)) ? 1 : 0;
+		/* fog stays on the step's own slot (instant fog fraction + its symbol) */
+		var fogCode = sym !== null ? sym : code;
+		g.fog[i] = (fogCode === 45 || (fogFrac !== null && fogFrac >= 50)) ? 1 : 0;
 	}
 	return P.finalize(g, ctx.now, ctx.lat, ctx.lon);
 }

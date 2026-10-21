@@ -353,7 +353,7 @@ module.exports = [
 						"value": 1
 					}
 				],
-				"description": "Shades clouds light (dotted pale), normal or thick (dotted dark) from how much sunlight gets through; at night and for providers without sunlight data from rain, cloud layers and cover. Thunderstorms and heavy rain/snow stay solid dark."
+				"description": "Shades clouds light (checkered pale), normal or thick (checkered dark) from how much sunlight gets through; at night and for providers without sunlight data from rain, cloud layers and cover. Thunderstorms and heavy rain/snow stay solid dark."
 			},
 			{
 				"type": "select",
@@ -1142,6 +1142,18 @@ module.exports = [
 						"label": "2026-01-15",
 						"value": "%Y-%m-%d"
 					}
+				]
+			},
+			{
+				"type": "select",
+				"messageKey": "SETTING_LEADING_ZERO",
+				"label": "Leading zero",
+				"description": "Auto: 24-hour clock shows 09:41, 12-hour clock shows 9:41. Without the zero the time stays centred.",
+				"defaultValue": 0,
+				"options": [
+					{ "label": "Auto", "value": 0 },
+					{ "label": "On", "value": 1 },
+					{ "label": "Off", "value": 2 }
 				]
 			}
 		]

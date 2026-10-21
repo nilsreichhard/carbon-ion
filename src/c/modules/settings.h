@@ -103,39 +103,46 @@ typedef enum {
 } RainHeightMode;
 
 typedef enum {
+	LEADING_ZERO_AUTO = 0, /* 3.0.3: 24 h shows it, 12 h strips it (default) */
+	LEADING_ZERO_ON = 1,
+	LEADING_ZERO_OFF = 2,
+} LeadingZeroMode;
+
+typedef enum {
 	CLOUD_THICKNESS_ON = 0,  /* 3.0.0: light / normal / thick clouds (default) */
 	CLOUD_THICKNESS_OFF = 1, /* every cloud drawn normal */
 } CloudThicknessMode;
 
 #define MAX_GRAPH_HOURS 60
 
-// Direct message key tags for robust compilation across CloudPebble environments
-#define KEY_SETTING_INFILL_MODE 10027
-#define KEY_SETTING_NEEDLE_MODE 10028
-#define KEY_SETTING_FORECAST_HOURS 10029
-#define KEY_SETTING_LIGHT_THEME 10030
-#define KEY_SETTING_SHOW_BT_ALERT 10031
-#define KEY_SETTING_SHOW_SILENT_MODE 10032
-#define KEY_SETTING_TIMELINE_BATTERY 10033
-#define KEY_SETTING_SHOW_STEP_COUNT 10034
-#define KEY_SETTING_TIMELINE_EVENT 10035
-#define KEY_SETTING_CLOUD_SENSITIVITY 10051
-#define KEY_SETTING_SUNLIGHT_RAYS 10052
-#define KEY_SETTING_SUNLIGHT_SENSITIVITY 10054
-#define KEY_SETTING_CLOUD_DISPLAY_MODE 10055
-#define KEY_SETTING_STEP_SIZE 10059
-#define KEY_SETTING_STEP_DISPLAY 10060
-#define KEY_SETTING_PRECIP_SENSITIVITY 10061
-#define KEY_SETTING_WEATHER_EVENT_DISPLAY 10062
-#define KEY_SETTING_ALARM_ROWS 10066       /* int32: byte i = row i (bit7 alarm, bits4-5 place, bits0-3 color) */
-#define KEY_SETTING_BACKLIGHT_COLORS 10067
-#define KEY_SETTING_TAP_CYCLE 10068 /* touch builds only (CARBON_TOUCH_ENABLED) */
-#define KEY_SETTING_WRIST_FLICK 10069
-#define KEY_SETTING_FOG_INDICATOR 10073
-#define KEY_SETTING_FLICK_ACTION 10074
-#define KEY_SETTING_RAIN_HEIGHT 10090 /* 2.9.6: RainHeightMode */
-#define KEY_SETTING_CLOUD_THICK 10092 /* 3.0.0: CloudThicknessMode */
-#define KEY_SETTING_EVENT_FLAGS 10085 /* 2.9.3: EVENT_HIDE_* mask */
+/* 3.0.3: watch-side names for the generated message keys (package.json is
+ * the single source of the numbers; build/include/message_keys.auto.h). */
+#define KEY_SETTING_INFILL_MODE MESSAGE_KEY_SETTING_INFILL_MODE
+#define KEY_SETTING_NEEDLE_MODE MESSAGE_KEY_SETTING_NEEDLE_MODE
+#define KEY_SETTING_FORECAST_HOURS MESSAGE_KEY_SETTING_FORECAST_HOURS
+#define KEY_SETTING_LIGHT_THEME MESSAGE_KEY_SETTING_LIGHT_THEME
+#define KEY_SETTING_SHOW_BT_ALERT MESSAGE_KEY_SETTING_SHOW_BT_ALERT
+#define KEY_SETTING_SHOW_SILENT_MODE MESSAGE_KEY_SETTING_SHOW_SILENT_MODE
+#define KEY_SETTING_TIMELINE_BATTERY MESSAGE_KEY_SETTING_TIMELINE_BATTERY
+#define KEY_SETTING_SHOW_STEP_COUNT MESSAGE_KEY_SETTING_SHOW_STEP_COUNT
+#define KEY_SETTING_TIMELINE_EVENT MESSAGE_KEY_SETTING_TIMELINE_EVENT
+#define KEY_SETTING_CLOUD_SENSITIVITY MESSAGE_KEY_SETTING_CLOUD_SENSITIVITY
+#define KEY_SETTING_SUNLIGHT_RAYS MESSAGE_KEY_SETTING_SUNLIGHT_RAYS
+#define KEY_SETTING_SUNLIGHT_SENSITIVITY MESSAGE_KEY_SETTING_SUNLIGHT_SENSITIVITY
+#define KEY_SETTING_CLOUD_DISPLAY_MODE MESSAGE_KEY_SETTING_CLOUD_DISPLAY_MODE
+#define KEY_SETTING_STEP_SIZE MESSAGE_KEY_SETTING_STEP_SIZE
+#define KEY_SETTING_STEP_DISPLAY MESSAGE_KEY_SETTING_STEP_DISPLAY
+#define KEY_SETTING_PRECIP_SENSITIVITY MESSAGE_KEY_SETTING_PRECIP_SENSITIVITY
+#define KEY_SETTING_WEATHER_EVENT_DISPLAY MESSAGE_KEY_SETTING_WEATHER_EVENT_DISPLAY
+#define KEY_SETTING_ALARM_ROWS MESSAGE_KEY_SETTING_ALARM_ROWS       /* int32: byte i = row i (bit7 alarm, bits4-5 place, bits0-3 color) */
+#define KEY_SETTING_BACKLIGHT_COLORS MESSAGE_KEY_SETTING_BACKLIGHT_COLORS
+#define KEY_SETTING_WRIST_FLICK MESSAGE_KEY_SETTING_WRIST_FLICK
+#define KEY_SETTING_FOG_INDICATOR MESSAGE_KEY_SETTING_FOG_INDICATOR
+#define KEY_SETTING_FLICK_ACTION MESSAGE_KEY_SETTING_FLICK_ACTION
+#define KEY_SETTING_RAIN_HEIGHT MESSAGE_KEY_SETTING_RAIN_HEIGHT /* 2.9.6: RainHeightMode */
+#define KEY_SETTING_CLOUD_THICK MESSAGE_KEY_SETTING_CLOUD_THICK /* 3.0.0: CloudThicknessMode */
+#define KEY_SETTING_LEADING_ZERO MESSAGE_KEY_SETTING_LEADING_ZERO /* 3.0.3: LeadingZeroMode */
+#define KEY_SETTING_EVENT_FLAGS MESSAGE_KEY_SETTING_EVENT_FLAGS /* 2.9.3: EVENT_HIDE_* mask */
 #define EVENT_HIDE_THUNDER 0x01
 #define EVENT_HIDE_TORNADO 0x02
 #define EVENT_HIDE_SNOW 0x04
@@ -162,6 +169,11 @@ typedef enum {
  * re-enable once firmware supports it (also restore the Clay toggle). */
 #if defined(CARBON_MODERN_SERVICES) && defined(CARBON_WATCHFACE_TOUCH) && CARBON_WATCHFACE_TOUCH
 #define CARBON_TOUCH_ENABLED 1
+#endif
+#if defined(CARBON_TOUCH_ENABLED)
+/* 3.0.3: not in package.json (touch is off). When enabling touch, declare
+ * "SETTING_TAP_CYCLE": 10068 there and switch this to MESSAGE_KEY_SETTING_TAP_CYCLE. */
+#define KEY_SETTING_TAP_CYCLE 10068
 #endif
 
 typedef struct {
@@ -194,6 +206,8 @@ typedef struct {
 	uint8_t rain_height;                 /* 2.9.6: RainHeightMode (0 = probability) */
 	uint8_t cloud_thick;                 /* 3.0.0: CloudThicknessMode (0 = on); 0 also
 	                                      * when an older blob's tail padding covers it */
+	uint8_t leading_zero;                /* 3.0.3: LeadingZeroMode (0 = auto); 0 also from
+	                                      * older blobs (shorter, or tail padding) */
 } Settings;
 
 /* 2.8.0: false when the weather provider has no low/mid/high cloud layers;

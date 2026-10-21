@@ -220,10 +220,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	}
 
 	if (tl->expired) {
-		strcpy(high_buf, "--");
-		strcpy(curr_buf, "--");
-		strcpy(low_buf, "--");
-		strcpy(s_range_buf, "--");
+		snprintf(high_buf, sizeof(high_buf), "--");
+		snprintf(curr_buf, sizeof(curr_buf), "--");
+		snprintf(low_buf, sizeof(low_buf), "--");
+		snprintf(s_range_buf, sizeof(s_range_buf), "--");
 	} else {
 		snprintf(high_buf, sizeof(high_buf), "%d", (int)window_high);
 		snprintf(curr_buf, sizeof(curr_buf), "%d", (int)tl->current);

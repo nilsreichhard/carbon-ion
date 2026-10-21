@@ -35,6 +35,7 @@ struct TimeLayer {
 	char cond_glyph[8];
 	char time_buf[8];
 	char time_tmpl[8];     /* time_buf with every digit as '0' (layout box) */
+	bool time_lead_blank;  /* 3.0.3: 12h, leading zero stripped: skip one cell */
 	char step_buf[12];
 	char date_buf[32];
 };
@@ -230,30 +231,90 @@ static int prv_text_w(const char *str, GFont f) {
 	                                             GTextOverflowModeWordWrap, GTextAlignmentLeft).w;
 }
 
+/* 3.0.3: time metrics, cached; they only change with the font (the face
+ * redraws every minute, on gabbro every frame of the arc warp). */
+static GFont s_tf = NULL;
+static int16_t s_w0, s_adv0, s_dw[10], s_sep_adv;
+static char s_sep = 0;
+static void prv_time_cache(GFont f) {
+	if (f == s_tf)
+		return;
+	s_tf = f;
+	s_w0 = prv_text_w("0", f);
+	s_adv0 = prv_text_w("00", f) - s_w0; /* digit advance */
+	for (int d = 0; d < 10; d++) {
+		char c1[2] = {(char)('0' + d), '\0'};
+		s_dw[d] = prv_text_w(c1, f);
+	}
+	s_sep = 0;
+}
+static int prv_char_adv(char c, GFont f) {
+	if (c >= '0' && c <= '9')
+		return s_adv0;
+	if (c != s_sep) { /* separator advance: "0:0" minus "00" */
+		char t3[4] = {'0', c, '0', '\0'};
+		s_sep = c;
+		s_sep_adv = prv_text_w(t3, f) - (s_w0 + s_adv0);
+	}
+	return s_sep_adv;
+}
+/* Width from the first cell's left edge to the last cell's right edge (the
+ * last cell counts its own width, not its advance). 3.0.3: the old centring
+ * used the text layout width of the string, which includes the trailing
+ * advance/side bearing of the last glyph, so the digits sat a few px left
+ * of centre (emery 24 h: x = 22-167 on a 200 px screen). */
+static int prv_cells_span(const char *str, GFont f) {
+	int span = 0, n = (int)strlen(str);
+	for (int i = 0; i < n; i++)
+		span += (i == n - 1) ? ((str[i] >= '0' && str[i] <= '9') ? s_w0 : prv_char_adv(str[i], f))
+		                     : prv_char_adv(str[i], f);
+	return span;
+}
+
+#ifndef TIME_12H_ALIGN
+#define TIME_12H_ALIGN 2 /* 12 h single-digit hour: 0 stable box, 1 centred real text, 2 shift adv0/2 */
+#endif
+
+/* x of the first drawn cell. Also gives the visible right end of the fixed
+ * box for the step layout (via *box_right). */
+static int prv_time_origin(TimeLayer *tl, GFont f, int w, int *box_right) {
+	prv_time_cache(f);
+	int box_span = prv_cells_span(tl->time_tmpl, f);
+	int x_box = (w - box_span) / 2;
+	if (box_right)
+		*box_right = x_box + box_span;
+	if (!tl->time_lead_blank)
+		return x_box;
+#if TIME_12H_ALIGN == 0
+	return x_box + s_adv0;
+#elif TIME_12H_ALIGN == 1
+	{ /* centre the real visible glyphs (first/last digit inked width) */
+		const char *b = tl->time_buf;
+		int n = (int)strlen(b), span = prv_cells_span(b, f);
+		int l = (b[0] >= '0' && b[0] <= '9') ? (s_w0 - s_dw[b[0] - '0']) / 2 : 0;
+		int r = (b[n - 1] >= '0' && b[n - 1] <= '9') ? (s_w0 - s_dw[b[n - 1] - '0']) / 2 : 0;
+		return (w - (span - l - r)) / 2 - l;
+	}
+#else
+	return x_box + s_adv0 / 2;
+#endif
+}
+
 static void prv_time_update_proc(Layer *layer, GContext *ctx) {
 	TimeLayer *tl = *(TimeLayer **)layer_get_data(layer);
 	if (!tl->time_buf[0])
 		return;
 	GFont f = fonts_get_system_font(TL_TIME_FONT_KEY);
 	int w = layer_get_bounds(layer).size.w;
-	int w0 = prv_text_w("0", f);
-	int adv0 = prv_text_w("00", f) - w0;  /* digit advance */
-	int x = (w - prv_text_w(tl->time_tmpl, f)) / 2;
+	int x = prv_time_origin(tl, f, w, NULL);
 	graphics_context_set_text_color(ctx, tl->time_color);
 	for (int i = 0; tl->time_buf[i]; i++) {
 		char c[2] = {tl->time_buf[i], '\0'};
 		bool digit = c[0] >= '0' && c[0] <= '9';
-		int adv;
-		if (digit) {
-			adv = adv0;
-		} else { /* separator advance: "0:0" minus "00" */
-			char t3[4] = {'0', c[0], '0', '\0'};
-			adv = prv_text_w(t3, f) - prv_text_w("00", f);
-		}
-		int ox = digit ? (w0 - prv_text_w(c, f)) / 2 : 0;
+		int ox = digit ? (s_w0 - s_dw[c[0] - '0']) / 2 : 0;
 		graphics_draw_text(ctx, c, f, GRect(x + ox, 0, w - (x + ox) > 0 ? w - (x + ox) : 1, TL_TIME_H),
 		                   GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-		x += adv;
+		x += prv_char_adv(c[0], f);
 	}
 }
 
@@ -294,10 +355,12 @@ static void prv_layout_step_label(TimeLayer *tl) {
 		step_y = time_y;
 
 	GFont time_font = fonts_get_system_font(TL_TIME_FONT_KEY);
-	const char *time_str = tl->time_tmpl[0] ? tl->time_tmpl : "00:00"; /* 3.0.1: fixed box */
-	GSize time_size = graphics_text_layout_get_content_size(
-	    time_str, time_font, GRect(0, 0, w, TL_TIME_H),
-	    GTextOverflowModeWordWrap, GTextAlignmentCenter);
+	/* 3.0.3: right end of the fixed time box as drawn (cells, not the text
+	 * layout width with its trailing slack). */
+	int box_right;
+	if (!tl->time_tmpl[0])
+		strncpy(tl->time_tmpl, "00:00", sizeof(tl->time_tmpl));
+	prv_time_origin(tl, time_font, w, &box_right);
 
 	/* 3.0.2: the stack is right-aligned to a fixed margin from the visible
 	 * edge (on round screens the bezel curve at the stack's rows is added),
@@ -322,33 +385,24 @@ static void prv_layout_step_label(TimeLayer *tl) {
 #else
 	int edge = 4;
 #endif
-	int flank_left = (w + time_size.w) / 2 + gap;
+	int flank_left = box_right + gap;
 	if (flank_left < w / 2)
 		flank_left = w / 2;
 	int flank_right = w - edge;
-	int flank_w = flank_right - flank_left;
-	if (flank_w < 8)
-		flank_w = 8;
 
 	const char *num_str = tl->step_buf[0] ? tl->step_buf : "0";
-	/* Never ellipsize. Fit order: the normal face in the flank; then let
-	 * the gap to the time shrink to 2 px; then the 14 px face of the same
-	 * weight; last, the gap may go to 1 px. The edge margin always holds. */
+	/* Never ellipsize, never shrink the font (Nils, 3.0.3): 1K-99K all use
+	 * the same face and flank_right stays at w - edge. If the count does not
+	 * fit, the gap to the time gives way, down to 2 px of visible blank. */
 	int text_pad = 2; /* TextLayer needs a little slack or it ellipsizes */
 	GSize num_size = graphics_text_layout_get_content_size(
 	    num_str, num_font, GRect(0, 0, 100, num_h),
 	    GTextOverflowModeWordWrap, GTextAlignmentLeft);
-	int min_left = flank_left - (gap - 2);
-	if (num_size.w + text_pad > flank_right - min_left) {
-		bool bold = settings_get()->step_size == STEP_SIZE_LARGE;
-		num_font = fonts_get_system_font(bold ? FONT_KEY_GOTHIC_14_BOLD : FONT_KEY_GOTHIC_14);
-		text_layer_set_font(tl->step_label, num_font);
-		num_size = graphics_text_layout_get_content_size(
-		    num_str, num_font, GRect(0, 0, 100, num_h),
-		    GTextOverflowModeWordWrap, GTextAlignmentLeft);
-		if (num_size.w + text_pad > flank_right - min_left)
-			min_left = flank_left - (gap - 1);
-	}
+	/* The last '0' cell has 3 px of blank right of its ink (emery: ink ends
+	 * at x=177, box at 180), so 2 px into the box still leaves >= 2 px visible. */
+	int min_left = box_right - 2;
+	if (min_left > flank_left)
+		min_left = flank_left;
 	GSize k_size = graphics_text_layout_get_content_size(
 	    "K", k_font, GRect(0, 0, 100, k_h),
 	    GTextOverflowModeWordWrap, GTextAlignmentLeft);
@@ -358,7 +412,6 @@ static void prv_layout_step_label(TimeLayer *tl) {
 		slot_left = min_left;
 		content_w = flank_right - min_left;
 	}
-	(void)flank_w;
 
 	layer_set_frame(text_layer_get_layer(tl->step_label),
 	                GRect(slot_left, step_y, content_w, num_h));
@@ -377,6 +430,7 @@ TimeLayer *time_layer_create(GRect frame) {
 	tl->cond_glyph[0] = '\0';
 	tl->time_buf[0] = '\0';
 	tl->time_tmpl[0] = '\0';
+	tl->time_lead_blank = false;
 	tl->step_buf[0] = '\0';
 	tl->date_buf[0] = '\0';
 	tl->bt_connected = true;
@@ -554,24 +608,24 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	bool is_24h = clock_is_24h_style();
 
 	// Time string
-	if (is_24h) {
-		strftime(layer->time_buf, sizeof(layer->time_buf), "%H:%M", tick_time);
-	} else {
-		// 12h: format and strip leading zero
-		char tmp[8];
-		strftime(tmp, sizeof(tmp), "%I:%M", tick_time);
-		const char *src = (tmp[0] == '0') ? tmp + 1 : tmp;
-		strncpy(layer->time_buf, src, sizeof(layer->time_buf) - 1);
-		layer->time_buf[sizeof(layer->time_buf) - 1] = '\0';
-	}
-	prv_time_template(layer->time_buf, layer->time_tmpl, sizeof(layer->time_tmpl));
+	/* 3.0.3: Leading zero setting. Auto keeps the old behaviour (24 h shows
+	 * it, 12 h strips it). The box is always sized for "00:00"; without the
+	 * zero the time is shifted by half a digit (TIME_12H_ALIGN) to stay
+	 * centred. */
+	bool strip = settings->leading_zero == LEADING_ZERO_OFF ||
+	             (settings->leading_zero == LEADING_ZERO_AUTO && !is_24h);
+	char tmp[8];
+	strftime(tmp, sizeof(tmp), is_24h ? "%H:%M" : "%I:%M", tick_time);
+	const char *src = (strip && tmp[0] == '0') ? tmp + 1 : tmp;
+	strncpy(layer->time_buf, src, sizeof(layer->time_buf) - 1);
+	layer->time_buf[sizeof(layer->time_buf) - 1] = '\0';
+	prv_time_template("00:00", layer->time_tmpl, sizeof(layer->time_tmpl));
+	layer->time_lead_blank = strlen(layer->time_buf) < strlen(layer->time_tmpl);
 	layer_mark_dirty(layer->time_label);
 	prv_layout_step_label(layer);
 	bool hide_steps = !settings->show_step_count || layer->step_buf[0] == '\0';
 	layer_set_hidden(text_layer_get_layer(layer->step_label), hide_steps);
 	layer_set_hidden(text_layer_get_layer(layer->step_k_label), hide_steps);
-	layer_set_hidden(text_layer_get_layer(layer->step_label),
-	                 !settings->show_step_count || layer->step_buf[0] == '\0');
 
 	// Date — format string stored in settings; leading zeros stripped
 	// automatically. Full weekday name expanded if %A is used.
@@ -598,7 +652,8 @@ void time_layer_set_steps(TimeLayer *layer, int steps) {
 	s_last_show = (int8_t)show;
 	s_last_size = size;
 	if (show) {
-		snprintf(layer->step_buf, sizeof(layer->step_buf), "%d", thousands);
+		/* 3.0.3: capped at 99K (two digits always fit the flank) */
+		snprintf(layer->step_buf, sizeof(layer->step_buf), "%d", thousands > 99 ? 99 : thousands);
 	} else {
 		layer->step_buf[0] = '\0';
 	}

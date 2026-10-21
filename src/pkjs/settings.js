@@ -453,6 +453,9 @@ function buildSettingsDict(rawSettings) {
 	dict['SETTING_RAIN_HEIGHT'] = extractInt(rawSettings['SETTING_RAIN_HEIGHT']) === 1 ? 1 : 0;
 	/* 3.0.0: cloud thickness (0 on, 1 off); watch-side only, no refetch. */
 	dict['SETTING_CLOUD_THICK'] = extractInt(rawSettings['SETTING_CLOUD_THICK']) === 1 ? 1 : 0;
+	/* 3.0.3: leading zero (0 auto, 1 on, 2 off); watch-side only, no refetch. */
+	var lz = extractInt(rawSettings['SETTING_LEADING_ZERO']);
+	dict['SETTING_LEADING_ZERO'] = lz === 1 || lz === 2 ? lz : 0;
 
 	var weatherEventDisp = extractInt(rawSettings['SETTING_WEATHER_EVENT_DISPLAY']);
 	if (isNaN(weatherEventDisp)) weatherEventDisp = 0;
