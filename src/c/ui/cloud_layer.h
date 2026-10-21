@@ -18,8 +18,8 @@ Layer *cloud_layer_get_layer(CloudLayer *layer);
 void cloud_layer_set_data(CloudLayer *layer, const uint8_t *cover,
                           const uint8_t *hourly_code, const uint8_t *shortwave,
                           const uint8_t *cover_low, const uint8_t *cover_mid,
-                          const uint8_t *cover_high, const uint8_t *fog,
-                          uint8_t current_hour);
+                          const uint8_t *cover_high, const uint8_t *thick,
+                          const uint8_t *mm, bool have_mm, uint8_t current_hour);
 
 #if defined(PBL_ROUND)
 /* Gabbro: draw lobes/rays at native size after the arc warp (2.8.4). */

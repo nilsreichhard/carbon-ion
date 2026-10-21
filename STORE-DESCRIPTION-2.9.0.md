@@ -5,7 +5,7 @@
 Carbon Ion turns your Pebble into a compact meteogram. One rolling timeline, adjustable from 12 to 48 hours, shows the last few hours and what's coming:
 
 - **Temperature:** a smooth curve shaded in colour bands from freezing to hot, a dashed feels-like line, and the next-24-hour high and low
-- **Rain and clouds:** rain intensity bars under the curve and clouds above it, shown as one layer or split into low, mid and high cloud
+- **Rain and clouds:** rain bars coloured by type (rain, snow, mixed, hail) showing either the chance or the amount, and clouds above them that show how much sky they cover and how thick they are (light, normal, thick or stormy), as one layer or split into low, mid and high cloud
 - **Weather events:** small icons mark thunder, snow, strong wind gusts and fog at the hour they're expected, each with an adjustable sensitivity (for example Strong storms only, Heavy snow only, or dense fog under 200 m)
 - **Daylight:** a day and night track with sunrise and sunset markers, solar noon, midnight and moon phases
 - **Now needle:** a marker that shows exactly where you are on the timeline

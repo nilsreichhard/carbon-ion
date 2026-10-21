@@ -22,7 +22,7 @@ function buildUrl(lat, lon, opts) {
 /* OWM condition id (+ visibility m) → WMO 4677 */
 function idToWmo(id, vis) {
 	id = Number(id);
-	if (id >= 200 && id < 300) return (id === 202 || id === 212 || id === 221 || id === 232) ? 96 : 95;
+	if (id >= 200 && id < 300) return (id === 202 || id === 212 || id === 221 || id === 232) ? 97 : 95; /* heavy thunderstorm: 97 (96/99 = hail, 2.9.6) */
 	if (id >= 300 && id < 400) return id <= 301 ? 51 : id <= 311 ? 53 : 55;
 	if (id === 500) return 61;
 	if (id === 501) return 63;

@@ -170,7 +170,10 @@ static int prv_find_spans(const uint8_t hourly_code[MAX_GRAPH_HOURS],
 #define FOG_W 11
 #define FOG_CY_OFS 1
 static const int8_t s_fog_row_dy[2] = {-2, 2};
+static GColor prv_fog_second(void);
+static void prv_draw_pixel2(GContext *ctx, GPoint p, GColor c, GColor c2);
 static void prv_draw_fog_icon(GContext *ctx, int cx, int cy, GColor col, int32_t angle) {
+	GColor col2 = prv_fog_second();
 	static const int8_t wave[FOG_W] = {0, -1, -1, 0, 1, 1, 0, -1, -1, 0, 1};
 	cy += FOG_CY_OFS;
 	graphics_context_set_stroke_color(ctx, col);
@@ -186,15 +189,15 @@ static void prv_draw_fog_icon(GContext *ctx, int cx, int cy, GColor col, int32_t
 					mask[s_fog_row_dy[r] + wave[k + 1] + 4] |= (uint16_t)(1u << k);
 			}
 		}
-		gx_mask(ctx, &t, mask, FOG_W, 9, -(FOG_W / 2), -4, col);
+		gx_mask2(ctx, &t, mask, FOG_W, 9, -(FOG_W / 2), -4, col, col2);
 		return;
 	}
 	for (int r = 0; r < 2; r++) {
 		int y = cy + s_fog_row_dy[r];
 		for (int k = 0; k < FOG_W; k++) {
-			graphics_draw_pixel(ctx, GPoint(cx - FOG_W / 2 + k, y + wave[k]));
+			prv_draw_pixel2(ctx, GPoint(cx - FOG_W / 2 + k, y + wave[k]), col, col2);
 			if (k < FOG_W - 1 && wave[k + 1] != wave[k])
-				graphics_draw_pixel(ctx, GPoint(cx - FOG_W / 2 + k, y + wave[k + 1]));
+				prv_draw_pixel2(ctx, GPoint(cx - FOG_W / 2 + k, y + wave[k + 1]), col, col2);
 		}
 	}
 }
@@ -224,11 +227,45 @@ static void prv_draw_wind_icon(GContext *ctx, int cx, int cy, GColor col, int32_
 #define EVENT_ICON_LIFT 0
 #endif
 
+/* 3.0.1: the palette has no grey between DarkGray (#555555) and Black, so
+ * fog mixes DarkGray with a second colour on every other pixel: Black on
+ * light screens (reads ~#2A2A2A, darker yet still grey next to black
+ * text), LightGray on dark screens (~#808080, a little brighter so it
+ * keeps the same contrast against black). */
+static GColor prv_fog_second(void) {
+#if defined(PBL_COLOR)
+	return settings_get()->light_theme ? GColorBlack : GColorLightGray;
+#else
+	return GColorWhite;
+#endif
+}
+
+static void prv_draw_pixel2(GContext *ctx, GPoint p, GColor c, GColor c2) {
+	graphics_context_set_stroke_color(ctx, ((p.x + p.y) & 1) ? c2 : c);
+	graphics_draw_pixel(ctx, p);
+}
+
+/* Straight (horizontal or vertical) 1 px line, checkered c / c2. */
+static void prv_line2(GContext *ctx, GPoint a, GPoint b, GColor c, GColor c2) {
+	if (gcolor_equal(c, c2)) {
+		graphics_context_set_stroke_color(ctx, c);
+		graphics_draw_line(ctx, a, b);
+		return;
+	}
+	int dx = b.x > a.x ? 1 : (b.x < a.x ? -1 : 0), dy = b.y > a.y ? 1 : (b.y < a.y ? -1 : 0);
+	for (GPoint p = a;; p.x += dx, p.y += dy) {
+		prv_draw_pixel2(ctx, p, c, c2);
+		if (p.x == b.x && p.y == b.y)
+			break;
+	}
+}
+
 static GColor prv_span_color(const EventSpan *span) {
 #if defined(PBL_COLOR)
 	bool light = settings_get()->light_theme;
 	/* Light theme needs darker inks: yellow/cyan/light grey vanish on white. */
-	/* 2.9.2/2.9.3: fog icon and its range bracket are dark grey in both themes. */
+	/* 2.9.2/2.9.3: fog is grey; 3.0.1: DarkGray checkered with
+	 * prv_fog_second() (see there). */
 	if (span->kind == EVENT_KIND_FOG)
 		return GColorDarkGray;
 	/* 2.9.3: wind is violet, apart from thunder tan, snow blue, tornado orange. */
@@ -318,17 +355,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 			continue;
 		bool draw_range = (mode == WEATHER_EVENT_RANGE_ICON);
 
+		GColor c2 = span->kind == EVENT_KIND_FOG ? prv_fog_second() : icon_color;
 		if (draw_range && x_start < icon_x - icon_gap) {
-			graphics_draw_line(ctx, GPoint(x_start, center_y),
-			                   GPoint(icon_x - icon_gap, center_y));
-			graphics_draw_line(ctx, GPoint(x_start, center_y - 2),
-			                   GPoint(x_start, center_y + 2));
+			prv_line2(ctx, GPoint(x_start, center_y), GPoint(icon_x - icon_gap, center_y), icon_color, c2);
+			prv_line2(ctx, GPoint(x_start, center_y - 2), GPoint(x_start, center_y + 2), icon_color, c2);
 		}
 		if (draw_range && x_end > icon_x + icon_gap) {
-			graphics_draw_line(ctx, GPoint(icon_x + icon_gap, center_y),
-			                   GPoint(x_end, center_y));
-			graphics_draw_line(ctx, GPoint(x_end, center_y - 2),
-			                   GPoint(x_end, center_y + 2));
+			prv_line2(ctx, GPoint(icon_x + icon_gap, center_y), GPoint(x_end, center_y), icon_color, c2);
+			prv_line2(ctx, GPoint(x_end, center_y - 2), GPoint(x_end, center_y + 2), icon_color, c2);
 		}
 
 		// Draw the icon centered in the span (round: drawn upright later

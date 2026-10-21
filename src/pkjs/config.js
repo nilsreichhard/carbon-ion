@@ -340,6 +340,23 @@ module.exports = [
 			},
 			{
 				"type": "select",
+				"messageKey": "SETTING_CLOUD_THICK",
+				"label": "Cloud thickness",
+				"defaultValue": 0,
+				"options": [
+					{
+						"label": "On",
+						"value": 0
+					},
+					{
+						"label": "Off",
+						"value": 1
+					}
+				],
+				"description": "Shades clouds light (dotted pale), normal or thick (dotted dark) from how much sunlight gets through; at night and for providers without sunlight data from rain, cloud layers and cover. Thunderstorms and heavy rain/snow stay solid dark."
+			},
+			{
+				"type": "select",
 				"messageKey": "SETTING_SUNLIGHT_SENSITIVITY",
 				"label": "Sunlight bars",
 				"defaultValue": 4,
@@ -394,6 +411,23 @@ module.exports = [
 					}
 				],
 				"description": "Minimum rain chance for a bar."
+			},
+			{
+				"type": "select",
+				"messageKey": "SETTING_RAIN_HEIGHT",
+				"label": "Rain bar height",
+				"defaultValue": 0,
+				"options": [
+					{
+						"label": "Probability",
+						"value": 0
+					},
+					{
+						"label": "Amount",
+						"value": 1
+					}
+				],
+				"description": "Probability: taller bar = higher chance. Amount: taller bar = more rain (full at 8 mm/h); the chance shows as shading (solid 70 %+, checkered 40 %+, dotted below)."
 			},
 			{
 				"type": "select",

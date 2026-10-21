@@ -64,12 +64,15 @@ typedef struct {
 	uint8_t wx_flags;                                  /* 2.8.0: WX_FLAG_* */
 	uint8_t wind_bits[(WEATHER_HOURLY_COUNT + 7) / 8]; /* 2.9.3: bit i = strong gusts in hour i */
 	uint8_t storm_bits[(WEATHER_HOURLY_COUNT + 7) / 8]; /* 2.9.4: bit i = strong thunderstorm */
+	uint8_t precip_mm[WEATHER_HOURLY_COUNT]; /* 2.9.6: mm/h in 0.1 steps, capped 255 */
+	uint8_t thick_bits[WEATHER_HOURLY_COUNT / 4]; /* 3.0.0: 2 bits/hour cloud thickness (0 none, 1 light, 2 normal, 3 thick) */
 } WeatherData;
 
 #define WX_FLAG_NO_CLOUD_LAYERS 0x01 /* provider has no low/mid/high cloud cover */
+#define WX_FLAG_HAS_MM 0x02          /* 2.9.6: precip_mm holds provider amounts */
 
-_Static_assert(sizeof(WeatherData) <= (PERSIST_DATA_MAX_LENGTH * 3),
-               "WeatherData exceeds 768 bytes");
+_Static_assert(sizeof(WeatherData) <= (PERSIST_DATA_MAX_LENGTH * 4),
+               "WeatherData exceeds 1024 bytes (4 persist blocks)");
 
 /**
  * Converts a WMO weather code (0-99) to a WeatherCondition enum.

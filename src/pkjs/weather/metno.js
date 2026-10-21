@@ -28,7 +28,8 @@ var SYMBOL_WMO = {
 function symbolToWmo(sym) {
 	if (!sym) return null;
 	var s = String(sym).replace(/_(day|night|polartwilight)$/, '');
-	if (/thunder/.test(s)) return /heavy/.test(s) ? 96 : 95;
+	/* 2.9.6: heavy thunder = 97 (WMO heavy thunderstorm, no hail); 96/99 mean hail. */
+	if (/thunder/.test(s)) return /heavy/.test(s) ? 97 : 95;
 	return SYMBOL_WMO.hasOwnProperty(s) ? SYMBOL_WMO[s] : null;
 }
 

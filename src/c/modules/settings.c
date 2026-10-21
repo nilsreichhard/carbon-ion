@@ -52,6 +52,8 @@ static const Settings s_defaults = {
     .fog_indicator = true,
     .flick_action = FLICK_ACTION_RANGE,
     .event_hide = 0,
+    .rain_height = RAIN_HEIGHT_PROBABILITY,
+    .cloud_thick = CLOUD_THICKNESS_ON,
 };
 
 /* 2.9.3: event_hide is appended right where the 2.9.2 struct ended (no tail
@@ -59,6 +61,11 @@ static const Settings s_defaults = {
  * keeps its default 0 = every event on. */
 _Static_assert(offsetof(Settings, event_hide) % _Alignof(Settings) == 0,
                "event_hide must start at the old sizeof(Settings)");
+
+/* 2.9.6/3.0.0: rain_height and cloud_thick may sit in an older blob's tail
+ * padding (persisted as zeros), so their defaults must be 0. */
+_Static_assert(RAIN_HEIGHT_PROBABILITY == 0 && CLOUD_THICKNESS_ON == 0,
+               "fields in old tail padding must default to 0");
 
 void settings_init(void) {
 	s_settings = s_defaults;
@@ -425,6 +432,16 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	t = dict_find(iter, KEY_SETTING_EVENT_FLAGS);
 	if (t)
 		s_settings.event_hide = (uint8_t)(settings_tuple_int(t) & EVENT_FLAGS_MASK);
+
+	t = dict_find(iter, KEY_SETTING_RAIN_HEIGHT);
+	if (t) {
+		int v = settings_tuple_int(t);
+		s_settings.rain_height = (v == RAIN_HEIGHT_AMOUNT) ? RAIN_HEIGHT_AMOUNT : RAIN_HEIGHT_PROBABILITY;
+	}
+
+	t = dict_find(iter, KEY_SETTING_CLOUD_THICK);
+	if (t)
+		s_settings.cloud_thick = settings_tuple_int(t) == CLOUD_THICKNESS_OFF ? CLOUD_THICKNESS_OFF : CLOUD_THICKNESS_ON;
 
 	t = dict_find(iter, KEY_SETTING_FLICK_ACTION);
 	if (t) {

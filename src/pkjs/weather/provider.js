@@ -9,6 +9,7 @@
  *     visibility_m[72]|null, wmo_code[72], fog[72] (0/1), shortwave[72]|null,
  *     gust[72]|null (km/h, 2.9.3: wind event), cape[72]|null (J/kg),
  *     thunder_prob[72]|null (%, 2.9.4: strong-storm level),
+ *     cloud_base[72]|null (m above ground, 3.0.0: Tomorrow.io),
  *     sunrise, sunset (unix s), tmin, tmax, current_temp, current_code,
  *     valid_hours, has_layers }
  *
@@ -45,6 +46,7 @@ function emptyGrid(provider, nowSec) {
 		temp: nulls(), feels: nulls(), pop: nulls(), precip: nulls(), cloud: nulls(),
 		cloud_low: null, cloud_mid: null, cloud_high: null, visibility_m: null,
 		wmo_code: nulls(), fog: nulls(), shortwave: null, gust: null, cape: null, thunder_prob: null,
+		cloud_base: null, lat: null, lon: null,
 		sunrise: null, sunset: null, tmin: null, tmax: null,
 		current_temp: null, current_code: null, valid_hours: 0, has_layers: false,
 	};
@@ -187,7 +189,73 @@ function finalize(g, nowSec, lat, lon) {
 		} else if (st) { g.sunrise = st.sunrise; g.sunset = st.sunset; }
 	}
 	g.has_layers = !!(g.cloud_low && g.cloud_mid && g.cloud_high);
+	if (lat !== undefined && lat !== null) { g.lat = Number(lat); g.lon = Number(lon); }
 	return g;
+}
+
+/* ---- 3.0.0: cloud thickness ---------------------------------------------
+ * Level per hour: 0 no data (drawn normal), 1 light, 2 normal, 3 thick.
+ * Day (sun >= THICK_MIN_ELEV at mid-hour, radiation known): clear-sky ratio
+ * kt = shortwave / clear-sky GHI (Haurwitz). Radiation is the mean of the
+ * hour before the slot time, so the sun is taken at slot time - 30 min.
+ * Otherwise a fallback from rain, the layer mix, the cloud base (Tomorrow.io)
+ * and total cover. Rain >= THICK_RAIN_MM always makes the hour thick. */
+var THICK_LIGHT_KT = 0.70, THICK_THICK_KT = 0.35, THICK_MIN_ELEV = 10, THICK_RAIN_MM = 0.3;
+
+/* Solar elevation in degrees (NOAA low-precision; ~0.5 deg). */
+function sunElevation(lat, lon, tSec) {
+	var rad = Math.PI / 180;
+	var d = tSec / 86400 - 10957.5; /* days since J2000.0 */
+	var g = (357.529 + 0.98560028 * d) % 360;
+	var q = (280.459 + 0.98564736 * d) % 360;
+	var L = q + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad);
+	var e = 23.439 - 0.00000036 * d;
+	var ra = Math.atan2(Math.cos(e * rad) * Math.sin(L * rad), Math.cos(L * rad)) / rad;
+	var dec = Math.asin(Math.sin(e * rad) * Math.sin(L * rad));
+	var gmst = (18.697374558 + 24.06570982441908 * d) % 24;
+	var ha = ((gmst * 15 + lon - ra) % 360 + 540) % 360 - 180;
+	var sinEl = Math.sin(lat * rad) * Math.sin(dec) + Math.cos(lat * rad) * Math.cos(dec) * Math.cos(ha * rad);
+	return Math.asin(Math.max(-1, Math.min(1, sinEl))) / rad;
+}
+
+/* Haurwitz clear-sky global horizontal irradiance (W/m2). */
+function clearSkyGhi(elevDeg) {
+	var cz = Math.sin(elevDeg * Math.PI / 180);
+	return cz <= 0 ? 0 : 1098 * cz * Math.exp(-0.057 / cz);
+}
+
+function at(a, i) { var v = a ? a[i] : null; return v === null || v === undefined || isNaN(v) ? null : v; }
+
+function thickLevel(g, i) {
+	var cover = at(g.cloud, i);
+	if (cover === null) return 0;
+	var mm = at(g.precip, i);
+	if (mm !== null && mm >= THICK_RAIN_MM) return 3;
+	var sw = at(g.shortwave, i);
+	if (sw !== null && g.lat !== null && g.lat !== undefined && g.time) {
+		var el = sunElevation(g.lat, g.lon, g.time[i] - 1800);
+		if (el >= THICK_MIN_ELEV) {
+			var kt = sw / clearSkyGhi(el);
+			return kt >= THICK_LIGHT_KT ? 1 : (kt >= THICK_THICK_KT ? 2 : 3);
+		}
+	}
+	var base = at(g.cloud_base, i);
+	if (base !== null && base < 1000 && cover >= 85) return 3;
+	var lo = at(g.cloud_low, i), mi = at(g.cloud_mid, i), hi = at(g.cloud_high, i);
+	if (g.has_layers && lo !== null && mi !== null && hi !== null) {
+		if (lo >= 80 && cover >= 90) return 3;
+		if (lo < 15 && mi < 15 && hi >= 15) return 1; /* high cloud only: thin cirrus */
+		return 2;
+	}
+	return cover < 40 ? 1 : 2;
+}
+
+/* 2 bits per hour, hour i in bits (i & 3) * 2 of byte i >> 2 (18 bytes). */
+function thickBits(g) {
+	var b = [];
+	for (var k = 0; k < HOURS / 4; k++) b.push(0);
+	for (var i = 0; i < HOURS; i++) b[i >> 2] |= (thickLevel(g, i) & 3) << ((i & 3) * 2);
+	return b;
 }
 
 /**
@@ -202,6 +270,22 @@ function finalize(g, nowSec, lat, lon) {
  *                           Stricter levels only narrow the provider's fog hours;
  *                           fog codes 45/48 and hours without visibility data stay fog.
  */
+/** mm/h → uint8 tenths (0.1 mm steps, 255 = 25.5 mm/h or more); null → 0. */
+function packMm(a) {
+	var out = [];
+	for (var i = 0; i < HOURS; i++) {
+		var v = a ? a[i] : null;
+		out.push(v === null || v === undefined || !(v > 0) ? 0 : Math.min(255, Math.round(v * 10)));
+	}
+	return out;
+}
+/** True when the provider gave any hourly amount (WX_FLAG_HAS_MM). */
+function hasMm(a) {
+	if (!a) return false;
+	for (var i = 0; i < a.length; i++) if (a[i] !== null && a[i] !== undefined) return true;
+	return false;
+}
+
 function toPayload(g, unit, fogOn, nowSec, windKmh, fogVis) {
 	var f = unit === 'fahrenheit';
 	function T(v) { return v === null ? null : (f ? v * 9 / 5 + 32 : v); }
@@ -255,7 +339,11 @@ function toPayload(g, unit, fogOn, nowSec, windKmh, fogVis) {
 		fog_bits: fogBytes,
 		wind_bits: windBits(g, windKmh),
 		storm_bits: stormBits(g),
-		wx_flags: g.has_layers ? 0 : 1,
+		/* 2.9.6: hourly amount, 0.1 mm/h steps capped at 25.5 (uint8). */
+		precip_mm: packMm(g.precip),
+		/* 3.0.0: cloud thickness, 2 bits per hour (the watch splits it per layer). */
+		cloud_thick: thickBits(g),
+		wx_flags: (g.has_layers ? 0 : 1) | (hasMm(g.precip) ? 2 : 0),
 		valid_hours: Math.max(1, g.valid_hours),
 		current_temp: T(g.current_temp),
 		weather_code: g.current_code,
@@ -288,5 +376,6 @@ module.exports = {
 	gridStart: gridStart, emptyGrid: emptyGrid, slot: slot, setAt: setAt, num: num,
 	nulls: nulls, isFogWmo: isFogWmo, apparentTemp: apparentTemp, sunTimes: sunTimes,
 	fillFrom: fillFrom, finalize: finalize, toPayload: toPayload,
-	msToKmh: msToKmh, windBits: windBits, stormBits: stormBits, STRONG_CAPE: STRONG_CAPE, STRONG_THUNDER_PROB: STRONG_THUNDER_PROB,
+	packMm: packMm, hasMm: hasMm, sunElevation: sunElevation, clearSkyGhi: clearSkyGhi, thickLevel: thickLevel, thickBits: thickBits,
+	THICK_LIGHT_KT: THICK_LIGHT_KT, THICK_THICK_KT: THICK_THICK_KT, THICK_MIN_ELEV: THICK_MIN_ELEV, THICK_RAIN_MM: THICK_RAIN_MM, msToKmh: msToKmh, windBits: windBits, stormBits: stormBits, STRONG_CAPE: STRONG_CAPE, STRONG_THUNDER_PROB: STRONG_THUNDER_PROB,
 };

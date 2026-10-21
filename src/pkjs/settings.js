@@ -449,6 +449,11 @@ function buildSettingsDict(rawSettings) {
 		dict['SETTING_PRECIP_SENSITIVITY'] = precipSens;
 	}
 
+	/* 2.9.6: rain bar height (0 probability, 1 amount); watch-side only, no refetch. */
+	dict['SETTING_RAIN_HEIGHT'] = extractInt(rawSettings['SETTING_RAIN_HEIGHT']) === 1 ? 1 : 0;
+	/* 3.0.0: cloud thickness (0 on, 1 off); watch-side only, no refetch. */
+	dict['SETTING_CLOUD_THICK'] = extractInt(rawSettings['SETTING_CLOUD_THICK']) === 1 ? 1 : 0;
+
 	var weatherEventDisp = extractInt(rawSettings['SETTING_WEATHER_EVENT_DISPLAY']);
 	if (isNaN(weatherEventDisp)) weatherEventDisp = 0;
 	if (weatherEventDisp >= 0 && weatherEventDisp <= 2) {

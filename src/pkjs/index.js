@@ -23,7 +23,7 @@ var GEOCODE_RETRY_ATTEMPTS = C.GEOCODE_RETRY_ATTEMPTS, GEOCODE_RETRY_BASE_DELAY_
 var FETCH_DEDUPE_WINDOW_MS = C.FETCH_DEDUPE_WINDOW_MS, REQ_DEDUPE_WINDOW_MS = C.REQ_DEDUPE_WINDOW_MS;
 
 var buildInfo = {
-	version: '2.9.5',
+	version: '3.0.2',
 	hash: 'custom',
 	branch: 'master',
 	dirty: false,

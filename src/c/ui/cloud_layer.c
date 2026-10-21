@@ -11,6 +11,7 @@
 #include "arc.h"
 #include "cloud_layer.h"
 #include "../modules/settings.h"
+#include "../modules/precip_map.h"
 #include "graph_common.h"
 #include <stddef.h>
 #include <stdlib.h>
@@ -23,7 +24,9 @@ struct CloudLayer {
 	uint8_t cover_high[MAX_GRAPH_HOURS];
 	uint8_t hourly_code[MAX_GRAPH_HOURS];
 	uint8_t shortwave[MAX_GRAPH_HOURS]; // packed W/m² / 4 (0–255)
-	uint8_t fog[MAX_GRAPH_HOURS];       // 1 = fog hour (2.8.0)
+	uint8_t thick[MAX_GRAPH_HOURS];     // 3.0.0: CLOUD_THICK_* (0 = none)
+	uint8_t mm[MAX_GRAPH_HOURS];        // 0.1 mm/h (2.9.6)
+	bool have_mm;
 	uint8_t current_hour;
 };
 
@@ -121,17 +124,9 @@ static void prv_draw_cloud(GContext *ctx, int cx, int cy, int r) {
 
 
 static int prv_radius_for_cover(uint8_t cover, int clear_th, int small_th,
-                                int med_th, bool split) {
+                                int med_th) {
 	if (cover < clear_th)
 		return 0;
-	if (split) {
-		/* Smaller lobes so three stacked bands fit in CLOUD_H. */
-		if (cover < small_th)
-			return 1;
-		if (cover < med_th)
-			return 2;
-		return 3;
-	}
 	if (cover < small_th)
 		return 2;
 	if (cover < med_th)
@@ -139,48 +134,111 @@ static int prv_radius_for_cover(uint8_t cover, int clear_th, int small_th,
 	return 4;
 }
 
-static void prv_set_cloud_fill(GContext *ctx, uint8_t code, bool is_light) {
+/* 3.0.0 palette. Base colour per level, plus an optional second colour laid
+ * over it as a 1 px checkerboard (light = see-through, thick = darker):
+ *   light theme: light LightGray+White, normal LightGray,
+ *                thick LightGray+DarkGray, heavy DarkGray;
+ *   dark theme:  light White+Black, normal White,
+ *                thick LightGray+DarkGray, heavy LightGray.
+ * Dark thick has no white pixel and a dark checker, so it reads apart from
+ * both normal (White) and heavy (solid LightGray). */
+static GColor prv_cloud_color(bool heavy, bool is_light) {
 #if defined(PBL_COLOR)
-	GColor cloud_color;
-	if (code == 95 || code == 96 || code == 99) {
-		cloud_color = GColorLightGray; // storm clouds — grey
-	} else if (code == 75 || code == 77 || code == 85 || code == 86) {
-		cloud_color = GColorCeleste; // blizzard clouds — light blue
-	} else {
-		cloud_color = is_light ? GColorLightGray : GColorWhite;
-	}
-	graphics_context_set_fill_color(ctx, cloud_color);
+	if (heavy)
+		return is_light ? GColorDarkGray : GColorLightGray;
+	return is_light ? GColorLightGray : GColorWhite;
 #else
-	graphics_context_set_fill_color(ctx, GColorWhite);
-	(void)code;
+	(void)heavy;
 	(void)is_light;
+	return GColorWhite;
 #endif
 }
 
+/* Returns true when a checker colour is laid over the base. */
+static bool prv_cloud_style(uint8_t level, bool heavy, bool is_light, GColor *base, GColor *dither) {
+	*base = prv_cloud_color(heavy, is_light);
+#if defined(PBL_COLOR)
+	if (heavy)
+		return false;
+	if (level == CLOUD_THICK_LIGHT) {
+		*dither = is_light ? GColorWhite : GColorBlack;
+		return true;
+	}
+	if (level == CLOUD_THICK_THICK) {
+		*base = GColorLightGray;
+		*dither = GColorDarkGray;
+		return true;
+	}
+#else
+	(void)level;
+#endif
+	(void)dither;
+	return false;
+}
+
+/* Checkerboard in screen space (gabbro's mapped lobes match). Strictly inside
+ * the filled circle so no checker pixel lands outside the cloud edge. */
+static void prv_stipple_circle(GContext *ctx, GPoint c, int r) {
+	for (int dy = -r; dy <= r; dy++)
+		for (int dx = -r; dx <= r; dx++)
+			if (dx * dx + dy * dy < r * r && (((c.x + dx) + (c.y + dy)) & 1) == 0)
+				graphics_draw_pixel(ctx, GPoint(c.x + dx, c.y + dy));
+}
+
+static void prv_stipple_lobes(GContext *ctx, int cx, int cy, int r) {
+	if (r <= 0)
+		return;
+	GlyphXf t = prv_xf(cx, cy);
+	prv_stipple_circle(ctx, gx_pt(&t, 0, 0), r);
+	prv_stipple_circle(ctx, gx_pt(&t, -r, r / 2), r * 2 / 3);
+	prv_stipple_circle(ctx, gx_pt(&t, r, r / 2), r * 2 / 3);
+}
 
 /* Pass halo=true then fill=true so same-band clouds merge; halo only
- * remains where this band overlaps a band drawn earlier. */
+ * remains where this band overlaps a band drawn earlier. layer_bit selects
+ * the Split layer (0 = Total) for the per-layer heavy rule. */
 static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
                           int total_hours, int graph_x, int graph_w, int cy,
-                          int clear_th, int small_th, int med_th, bool split,
+                          int clear_th, int small_th, int med_th, uint8_t layer_bit,
                           bool is_light, bool with_layer_halo) {
 	if (with_layer_halo) {
 		graphics_context_set_fill_color(ctx, is_light ? GColorWhite : GColorBlack);
 		for (int i = total_hours - 1; i >= 0; i--) {
-			int r = prv_radius_for_cover(cover[i], clear_th, small_th, med_th, split);
+			int r = prv_radius_for_cover(cover[i], clear_th, small_th, med_th);
 			if (r <= 0)
 				continue;
 			int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
 			prv_draw_cloud_lobes(ctx, cx, cy, r + 1);
 		}
 	}
+	bool thick_on = settings_get()->cloud_thick == CLOUD_THICKNESS_ON;
 	for (int i = total_hours - 1; i >= 0; i--) {
-		int r = prv_radius_for_cover(cover[i], clear_th, small_th, med_th, split);
+		int r = prv_radius_for_cover(cover[i], clear_th, small_th, med_th);
 		if (r <= 0)
 			continue;
 		int cx = graph_x + (long)(i * 2 + 1) * graph_w / (total_hours * 2);
-		prv_set_cloud_fill(ctx, cl->hourly_code[i], is_light);
+		uint8_t code = cl->hourly_code[i];
+		bool heavy = cloud_hour_heavy(code, cl->have_mm, cl->mm[i]);
+		uint8_t drawn = 0;
+		if (layer_bit) {
+			if (prv_radius_for_cover(cl->cover_low[i], clear_th, small_th, med_th) > 0)
+				drawn |= CLOUD_LAYER_LOW;
+			if (prv_radius_for_cover(cl->cover_mid[i], clear_th, small_th, med_th) > 0)
+				drawn |= CLOUD_LAYER_MID;
+			if (prv_radius_for_cover(cl->cover_high[i], clear_th, small_th, med_th) > 0)
+				drawn |= CLOUD_LAYER_HIGH;
+			heavy = (cloud_split_heavy_mask(code, heavy, drawn) & layer_bit) != 0;
+		}
+		uint8_t level = thick_on ? cloud_thick_for_layer(cl->thick[i], layer_bit, drawn)
+		                         : CLOUD_THICK_NORMAL;
+		GColor base, dither = GColorClear;
+		bool dith = prv_cloud_style(level, heavy, is_light, &base, &dither);
+		graphics_context_set_fill_color(ctx, base);
 		prv_draw_cloud(ctx, cx, cy, r);
+		if (dith) {
+			graphics_context_set_stroke_color(ctx, dither);
+			prv_stipple_lobes(ctx, cx, cy, r);
+		}
 	}
 }
 
@@ -286,11 +344,11 @@ static void prv_draw(CloudLayer *cl, GContext *ctx) {
 			/* High first (no halo). Mid/low: halo pass then fill so same-band
 			 * clouds merge; halo only shows against the band underneath. */
 			prv_draw_band(ctx, cl, cl->cover_high, total_hours, graph_x, graph_w,
-			              cy_high, clear_th, small_th, med_th, false, is_light, false);
+			              cy_high, clear_th, small_th, med_th, CLOUD_LAYER_HIGH, is_light, false);
 			prv_draw_band(ctx, cl, cl->cover_mid, total_hours, graph_x, graph_w,
-			              cy_mid, clear_th, small_th, med_th, false, is_light, true);
+			              cy_mid, clear_th, small_th, med_th, CLOUD_LAYER_MID, is_light, true);
 			prv_draw_band(ctx, cl, cl->cover_low, total_hours, graph_x, graph_w,
-			              cy_low, clear_th, small_th, med_th, false, is_light, true);
+			              cy_low, clear_th, small_th, med_th, CLOUD_LAYER_LOW, is_light, true);
 		} else {
 			/* Total: 1px lower so rain sits closer under the cloud row. */
 			int cy = h / 2;
@@ -299,7 +357,7 @@ static void prv_draw(CloudLayer *cl, GContext *ctx) {
 			if (cy < 4)
 				cy = 4;
 			prv_draw_band(ctx, cl, cl->cover, total_hours, graph_x, graph_w, cy,
-			              clear_th, small_th, med_th, false, is_light, false);
+			              clear_th, small_th, med_th, 0, is_light, false);
 		}
 	}
 
@@ -346,7 +404,9 @@ CloudLayer *cloud_layer_create(GRect frame) {
 	memset(cl->cover_high, 0, sizeof(cl->cover_high));
 	memset(cl->hourly_code, 0, sizeof(cl->hourly_code));
 	memset(cl->shortwave, 0, sizeof(cl->shortwave));
-	memset(cl->fog, 0, sizeof(cl->fog));
+	memset(cl->thick, 0, sizeof(cl->thick));
+	memset(cl->mm, 0, sizeof(cl->mm));
+	cl->have_mm = false;
 	cl->current_hour = 0;
 
 	cl->layer = layer_create_with_data(frame, sizeof(CloudLayer *));
@@ -369,8 +429,8 @@ Layer *cloud_layer_get_layer(CloudLayer *layer) {
 void cloud_layer_set_data(CloudLayer *layer, const uint8_t *cover,
                           const uint8_t *hourly_code, const uint8_t *shortwave,
                           const uint8_t *cover_low, const uint8_t *cover_mid,
-                          const uint8_t *cover_high, const uint8_t *fog,
-                          uint8_t current_hour) {
+                          const uint8_t *cover_high, const uint8_t *thick,
+                          const uint8_t *mm, bool have_mm, uint8_t current_hour) {
 	if (!layer)
 		return;
 	int total_hours = GRAPH_HOURS;
@@ -397,10 +457,15 @@ void cloud_layer_set_data(CloudLayer *layer, const uint8_t *cover,
 	} else {
 		memset(layer->shortwave, 0, sizeof(layer->shortwave));
 	}
-	if (fog)
-		memcpy(layer->fog, fog, total_hours);
+	if (thick)
+		memcpy(layer->thick, thick, total_hours);
 	else
-		memset(layer->fog, 0, sizeof(layer->fog));
+		memset(layer->thick, 0, sizeof(layer->thick));
+	if (mm)
+		memcpy(layer->mm, mm, total_hours);
+	else
+		memset(layer->mm, 0, sizeof(layer->mm));
+	layer->have_mm = have_mm && mm;
 	layer->current_hour = current_hour;
 	layer_mark_dirty(layer->layer);
 }

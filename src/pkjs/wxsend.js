@@ -144,6 +144,7 @@ function writeCache(payload) {
  * @param {number[]} payload.cloud_cover_high      Hourly high-altitude cloud cover (0–100).
  * @param {number[]} payload.hourly_weather_code   Hourly WMO weather codes.
  * @param {number[]} payload.shortwave_radiation   Hourly shortwave radiation (W/m²).
+ * @param {number[]} [payload.precip_mm]          Hourly amount, 0.1 mm/h steps (0–255).
  * @param {string}   payload.city_name             City label for the time layer.
  * @param {string}   payload.temp_unit             'celsius' or 'fahrenheit'.
  * @param {number}  [payload.current_temp]         Current temperature (omitted when null).
@@ -166,6 +167,7 @@ function buildWeatherDict(payload) {
 	var cloudCoverHigh = (payload.cloud_cover_high || []).slice(0, hourlyCount);
 	var hourlyCode = (payload.hourly_weather_code || []).slice(0, hourlyCount);
 	var shortwave = (payload.shortwave_radiation || []).slice(0, hourlyCount);
+	var precipMm = (payload.precip_mm || []).slice(0, hourlyCount);
 
 	while (precipProb.length < hourlyCount) precipProb.push(0);
 	while (tempHourly.length < hourlyCount) tempHourly.push(0);
@@ -176,6 +178,7 @@ function buildWeatherDict(payload) {
 	while (cloudCoverHigh.length < hourlyCount) cloudCoverHigh.push(0);
 	while (hourlyCode.length < hourlyCount) hourlyCode.push(0);
 	while (shortwave.length < hourlyCount) shortwave.push(0);
+	while (precipMm.length < hourlyCount) precipMm.push(0);
 
 	// 0 = celsius, 1 = fahrenheit  (matches settings.c convention)
 	var tempUnitFlag = (payload.temp_unit === 'fahrenheit') ? 1 : 0;
@@ -194,6 +197,8 @@ function buildWeatherDict(payload) {
 		'WEATHER_CLOUD_COVER_HIGH': packUint8Array(cloudCoverHigh, hourlyCount),
 		'WEATHER_HOURLY_CODE': packUint8Array(hourlyCode, hourlyCount),
 		'WEATHER_SHORTWAVE_RADIATION': packShortwaveArray(shortwave, hourlyCount),
+		/* 2.9.6: already packed by toPayload (0.1 mm/h steps, uint8). */
+		'WEATHER_PRECIP_MM': packUint8Array(precipMm, hourlyCount),
 		'CITY_NAME': cityName.substring(0, 23),
 		'SETTING_TEMP_UNIT': tempUnitFlag,
 	};
@@ -243,6 +248,10 @@ function buildWeatherDict(payload) {
 	var stormB = (payload.storm_bits || []).slice(0, 9);
 	while (stormB.length < 9) stormB.push(0);
 	dict['WEATHER_STORM'] = stormB;
+	/* 3.0.0: cloud thickness, 2 bits per hour. */
+	var thickB = (payload.cloud_thick || []).slice(0, 18);
+	while (thickB.length < 18) thickB.push(0);
+	dict['WEATHER_CLOUD_THICK'] = packUint8Array(thickB, 18);
 	dict['WEATHER_FLAGS'] = (payload.wx_flags | 0) & 0xFF;
 	var validHours = payload.valid_hours ? Math.max(1, Math.min(hourlyCount, payload.valid_hours | 0)) : hourlyCount;
 	dict['WEATHER_VALID_HOURS'] = validHours;

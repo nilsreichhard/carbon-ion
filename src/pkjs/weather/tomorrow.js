@@ -40,6 +40,8 @@ function parse(json, ctx) {
 		P.setAt(g, 'precip', i, mm);
 		P.setAt(g, 'cloud', i, P.num(v.cloudCover));
 		P.setAt(g, 'gust', i, P.msToKmh(P.num(v.windGust))); /* units=metric: m/s */
+		var cb = P.num(v.cloudBase); /* km; null without cloud (3.0.0: thickness) */
+		P.setAt(g, 'cloud_base', i, cb === null ? null : cb * 1000);
 		var vis = P.num(v.visibility);
 		P.setAt(g, 'visibility_m', i, vis === null ? null : vis * 1000);
 		var code = codeToWmo(v.weatherCode);

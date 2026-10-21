@@ -97,6 +97,16 @@ typedef enum {
 #define MIN_FORECAST_HOURS 12
 #define MAX_FORECAST_HOURS 48
 #define DEFAULT_FORECAST_HOURS 24
+typedef enum {
+	RAIN_HEIGHT_PROBABILITY = 0, /* bar height = chance (default) */
+	RAIN_HEIGHT_AMOUNT = 1,      /* 2.9.6: height = mm/h, chance as shading */
+} RainHeightMode;
+
+typedef enum {
+	CLOUD_THICKNESS_ON = 0,  /* 3.0.0: light / normal / thick clouds (default) */
+	CLOUD_THICKNESS_OFF = 1, /* every cloud drawn normal */
+} CloudThicknessMode;
+
 #define MAX_GRAPH_HOURS 60
 
 // Direct message key tags for robust compilation across CloudPebble environments
@@ -123,6 +133,8 @@ typedef enum {
 #define KEY_SETTING_WRIST_FLICK 10069
 #define KEY_SETTING_FOG_INDICATOR 10073
 #define KEY_SETTING_FLICK_ACTION 10074
+#define KEY_SETTING_RAIN_HEIGHT 10090 /* 2.9.6: RainHeightMode */
+#define KEY_SETTING_CLOUD_THICK 10092 /* 3.0.0: CloudThicknessMode */
 #define KEY_SETTING_EVENT_FLAGS 10085 /* 2.9.3: EVENT_HIDE_* mask */
 #define EVENT_HIDE_THUNDER 0x01
 #define EVENT_HIDE_TORNADO 0x02
@@ -179,6 +191,9 @@ typedef struct {
 	bool fog_indicator;                  /* 2.8.1: fog weather event (default on) */
 	uint8_t flick_action;                /* 2.8.0: FlickAction (flick / double-tap) */
 	uint8_t event_hide;                  /* 2.9.3/2.9.4: EVENT_* flags (0 = defaults) */
+	uint8_t rain_height;                 /* 2.9.6: RainHeightMode (0 = probability) */
+	uint8_t cloud_thick;                 /* 3.0.0: CloudThicknessMode (0 = on); 0 also
+	                                      * when an older blob's tail padding covers it */
 } Settings;
 
 /* 2.8.0: false when the weather provider has no low/mid/high cloud layers;

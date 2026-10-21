@@ -19,7 +19,8 @@ struct TimeLayer {
 	Layer *container;
 	TextLayer *city_label;
 	TextLayer *cond_label; // weather condition icon right of city
-	TextLayer *time_label;
+	Layer *time_label;     /* 3.0.1: fixed-cell digits (was a centred TextLayer) */
+	GColor time_color;
 	TextLayer *step_label;
 	TextLayer *step_k_label; // "K" under step thousands
 	TextLayer *date_label;
@@ -33,6 +34,7 @@ struct TimeLayer {
 	char city_buf[24];
 	char cond_glyph[8];
 	char time_buf[8];
+	char time_tmpl[8];     /* time_buf with every digit as '0' (layout box) */
 	char step_buf[12];
 	char date_buf[32];
 };
@@ -43,7 +45,7 @@ struct TimeLayer {
  * drawn). The "off" slash runs along the same diagonal in both. */
 #define STATUS_ICON_W 15
 #define STATUS_ICON_H 17
-#define STATUS_ICON_X 5   /* left edge inside the status layer (2.9.4 badge x) */
+#define STATUS_ICON_X 3   /* left edge inside the status layer (3.0.1: 5 -> 4, 3.0.2: -> 3, 2 px clear of the hour digits) */
 #define STATUS_ICON_GAP 6 /* vertical gap between the two badges */
 
 static const char *const s_bt_off_bits[STATUS_ICON_H] = {
@@ -212,6 +214,49 @@ static void prv_update_location_row(TimeLayer *tl) {
 }
 
 
+/* 3.0.1: the time is laid out on a fixed box: the width of the same string
+ * with every digit '0' (LECO digits share one advance; '1' is narrower), and
+ * each digit is centred in a '0'-wide cell. So 11:11 sits exactly where
+ * 22:22 does and nothing moves when thin digits come up. */
+static void prv_time_template(const char *src, char *dst, int n) {
+	int i = 0;
+	for (; src[i] && i < n - 1; i++)
+		dst[i] = (src[i] >= '0' && src[i] <= '9') ? '0' : src[i];
+	dst[i] = '\0';
+}
+
+static int prv_text_w(const char *str, GFont f) {
+	return graphics_text_layout_get_content_size(str, f, GRect(0, 0, 400, TL_TIME_H),
+	                                             GTextOverflowModeWordWrap, GTextAlignmentLeft).w;
+}
+
+static void prv_time_update_proc(Layer *layer, GContext *ctx) {
+	TimeLayer *tl = *(TimeLayer **)layer_get_data(layer);
+	if (!tl->time_buf[0])
+		return;
+	GFont f = fonts_get_system_font(TL_TIME_FONT_KEY);
+	int w = layer_get_bounds(layer).size.w;
+	int w0 = prv_text_w("0", f);
+	int adv0 = prv_text_w("00", f) - w0;  /* digit advance */
+	int x = (w - prv_text_w(tl->time_tmpl, f)) / 2;
+	graphics_context_set_text_color(ctx, tl->time_color);
+	for (int i = 0; tl->time_buf[i]; i++) {
+		char c[2] = {tl->time_buf[i], '\0'};
+		bool digit = c[0] >= '0' && c[0] <= '9';
+		int adv;
+		if (digit) {
+			adv = adv0;
+		} else { /* separator advance: "0:0" minus "00" */
+			char t3[4] = {'0', c[0], '0', '\0'};
+			adv = prv_text_w(t3, f) - prv_text_w("00", f);
+		}
+		int ox = digit ? (w0 - prv_text_w(c, f)) / 2 : 0;
+		graphics_draw_text(ctx, c, f, GRect(x + ox, 0, w - (x + ox) > 0 ? w - (x + ox) : 1, TL_TIME_H),
+		                   GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+		x += adv;
+	}
+}
+
 static void prv_step_metrics(StepSize size, GFont *num_font, GFont *k_font,
                              int *num_h, int *k_h) {
 	if (size == STEP_SIZE_LARGE) {
@@ -249,50 +294,71 @@ static void prv_layout_step_label(TimeLayer *tl) {
 		step_y = time_y;
 
 	GFont time_font = fonts_get_system_font(TL_TIME_FONT_KEY);
-	const char *time_str = tl->time_buf[0] ? tl->time_buf : "00:00";
+	const char *time_str = tl->time_tmpl[0] ? tl->time_tmpl : "00:00"; /* 3.0.1: fixed box */
 	GSize time_size = graphics_text_layout_get_content_size(
 	    time_str, time_font, GRect(0, 0, w, TL_TIME_H),
 	    GTextOverflowModeWordWrap, GTextAlignmentCenter);
 
+	/* 3.0.2: the stack is right-aligned to a fixed margin from the visible
+	 * edge (on round screens the bezel curve at the stack's rows is added),
+	 * and never comes closer than 4 px to the fixed time box. */
 	int gap = 4;
-	int edge = 2;
+#if defined(PBL_ROUND)
+	int edge = 4;
+	{
+		int r = w / 2, dy_max = 0;
+		int abs_y0 = frame.origin.y + step_y, abs_y1 = abs_y0 + stack_h;
+		int cy = r; /* gabbro: container spans the full width; centre row = r */
+		int d0 = abs_y0 - cy, d1 = abs_y1 - cy;
+		if (d0 < 0) d0 = -d0;
+		if (d1 < 0) d1 = -d1;
+		dy_max = d0 > d1 ? d0 : d1;
+		int half = 0; /* integer sqrt(r^2 - dy^2) */
+		int rem = r * r - dy_max * dy_max;
+		while ((half + 1) * (half + 1) <= rem)
+			half++;
+		edge += r - half;
+	}
+#else
+	int edge = 4;
+#endif
 	int flank_left = (w + time_size.w) / 2 + gap;
 	if (flank_left < w / 2)
 		flank_left = w / 2;
 	int flank_right = w - edge;
 	int flank_w = flank_right - flank_left;
-	if (flank_w < 12)
-		flank_w = 12;
+	if (flank_w < 8)
+		flank_w = 8;
 
 	const char *num_str = tl->step_buf[0] ? tl->step_buf : "0";
-	/* 2.8.3: never ellipsize. Measure unconstrained; if the count is wider
-	 * than the flank, first use the 2 px edge margin, then drop the number to
-	 * the 14 px face of the same weight (e.g. Bold "15" over "K"). */
+	/* Never ellipsize. Fit order: the normal face in the flank; then let
+	 * the gap to the time shrink to 2 px; then the 14 px face of the same
+	 * weight; last, the gap may go to 1 px. The edge margin always holds. */
+	int text_pad = 2; /* TextLayer needs a little slack or it ellipsizes */
 	GSize num_size = graphics_text_layout_get_content_size(
 	    num_str, num_font, GRect(0, 0, 100, num_h),
 	    GTextOverflowModeWordWrap, GTextAlignmentLeft);
-	if (num_size.w > flank_w) {
-		flank_w += edge;
-	}
-	if (num_size.w > flank_w) {
+	int min_left = flank_left - (gap - 2);
+	if (num_size.w + text_pad > flank_right - min_left) {
 		bool bold = settings_get()->step_size == STEP_SIZE_LARGE;
 		num_font = fonts_get_system_font(bold ? FONT_KEY_GOTHIC_14_BOLD : FONT_KEY_GOTHIC_14);
 		text_layer_set_font(tl->step_label, num_font);
 		num_size = graphics_text_layout_get_content_size(
 		    num_str, num_font, GRect(0, 0, 100, num_h),
 		    GTextOverflowModeWordWrap, GTextAlignmentLeft);
+		if (num_size.w + text_pad > flank_right - min_left)
+			min_left = flank_left - (gap - 1);
 	}
 	GSize k_size = graphics_text_layout_get_content_size(
-	    "K", k_font, GRect(0, 0, flank_w, k_h),
-	    GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
-	int content_w = num_size.w > k_size.w ? num_size.w : k_size.w;
-	if (content_w < 10)
-		content_w = 10;
-	if (content_w > flank_w)
-		content_w = flank_w;
-	int slot_left = flank_left + (flank_w - content_w) / 2 - 1;
-	if (slot_left < flank_left)
-		slot_left = flank_left;
+	    "K", k_font, GRect(0, 0, 100, k_h),
+	    GTextOverflowModeWordWrap, GTextAlignmentLeft);
+	int content_w = (num_size.w > k_size.w ? num_size.w : k_size.w) + text_pad;
+	int slot_left = flank_right - content_w;
+	if (slot_left < min_left) {
+		slot_left = min_left;
+		content_w = flank_right - min_left;
+	}
+	(void)flank_w;
 
 	layer_set_frame(text_layer_get_layer(tl->step_label),
 	                GRect(slot_left, step_y, content_w, num_h));
@@ -310,6 +376,7 @@ TimeLayer *time_layer_create(GRect frame) {
 	tl->city_buf[0] = '\0';
 	tl->cond_glyph[0] = '\0';
 	tl->time_buf[0] = '\0';
+	tl->time_tmpl[0] = '\0';
 	tl->step_buf[0] = '\0';
 	tl->date_buf[0] = '\0';
 	tl->bt_connected = true;
@@ -356,13 +423,12 @@ TimeLayer *time_layer_create(GRect frame) {
 	// Shift the time label up by TL_TIME_PAD so visible digits start flush with
 	// city text
 	int time_y = TL_SMALL_H - TL_TIME_PAD - 1;
-	tl->time_label = text_layer_create(GRect(0, time_y, w, TL_TIME_H));
-	text_layer_set_background_color(tl->time_label, GColorClear);
-	text_layer_set_text_color(tl->time_label, GColorWhite);
-	text_layer_set_font(tl->time_label, time_font);
-	text_layer_set_text_alignment(tl->time_label, GTextAlignmentCenter);
-	text_layer_set_text(tl->time_label, tl->time_buf);
-	layer_add_child(tl->container, text_layer_get_layer(tl->time_label));
+	(void)time_font;
+	tl->time_color = GColorWhite;
+	tl->time_label = layer_create_with_data(GRect(0, time_y, w, TL_TIME_H), sizeof(TimeLayer *));
+	*(TimeLayer **)layer_get_data(tl->time_label) = tl;
+	layer_set_update_proc(tl->time_label, prv_time_update_proc);
+	layer_add_child(tl->container, tl->time_label);
 
 	// Step count — number with "K" stacked under it in the right flank
 	int tz_ampm_y = time_y + TL_TIME_PAD + (TL_TIME_H - TL_TIME_PAD - 18) / 2;
@@ -421,7 +487,7 @@ void time_layer_destroy(TimeLayer *layer) {
 	text_layer_destroy(layer->date_label);
 	text_layer_destroy(layer->step_k_label);
 	text_layer_destroy(layer->step_label);
-	text_layer_destroy(layer->time_label);
+	layer_destroy(layer->time_label);
 	text_layer_destroy(layer->city_label);
 	text_layer_destroy(layer->cond_label);
 	layer_destroy(layer->container);
@@ -480,7 +546,7 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	layer->show_silent_mode = settings->show_silent_mode;
 	layer_mark_dirty(layer->status_layer);
 	prv_update_location_row(layer);
-	text_layer_set_text_color(layer->time_label, text_color);
+	layer->time_color = text_color;
 	text_layer_set_text_color(layer->date_label, text_color);
 	text_layer_set_text_color(layer->step_label, sub_color);
 	text_layer_set_text_color(layer->step_k_label, sub_color);
@@ -498,7 +564,8 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 		strncpy(layer->time_buf, src, sizeof(layer->time_buf) - 1);
 		layer->time_buf[sizeof(layer->time_buf) - 1] = '\0';
 	}
-	text_layer_set_text(layer->time_label, layer->time_buf);
+	prv_time_template(layer->time_buf, layer->time_tmpl, sizeof(layer->time_tmpl));
+	layer_mark_dirty(layer->time_label);
 	prv_layout_step_label(layer);
 	bool hide_steps = !settings->show_step_count || layer->step_buf[0] == '\0';
 	layer_set_hidden(text_layer_get_layer(layer->step_label), hide_steps);

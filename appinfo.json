@@ -100,7 +100,11 @@
     "SETTING_THUNDER_LEVEL": 10086,
     "SETTING_SNOW_LEVEL": 10087,
     "SETTING_FOG_LEVEL": 10088,
-    "WEATHER_STORM": 10089
+    "WEATHER_STORM": 10089,
+    "SETTING_RAIN_HEIGHT": 10090,
+    "WEATHER_PRECIP_MM": 10091,
+      "SETTING_CLOUD_THICK": 10092,
+      "WEATHER_CLOUD_THICK": 10093
   },
   "resources": {
     "media": [
@@ -133,7 +137,7 @@
   "name": "carbon-ion",
   "shortName": "Carbon Ion",
   "longName": "Carbon Ion",
-  "versionLabel": "2.9.5",
+  "versionLabel": "3.0.2",
   "companyName": "Nils Reich",
   "appKeys": {
     "WEATHER_REQUEST": 10000,
@@ -220,6 +224,10 @@
     "SETTING_THUNDER_LEVEL": 10086,
     "SETTING_SNOW_LEVEL": 10087,
     "SETTING_FOG_LEVEL": 10088,
-    "WEATHER_STORM": 10089
+    "WEATHER_STORM": 10089,
+    "SETTING_RAIN_HEIGHT": 10090,
+    "WEATHER_PRECIP_MM": 10091,
+      "SETTING_CLOUD_THICK": 10092,
+      "WEATHER_CLOUD_THICK": 10093
   }
 }

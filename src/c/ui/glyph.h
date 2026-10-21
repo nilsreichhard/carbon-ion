@@ -40,6 +40,8 @@ static inline GPoint gx_pt(const GlyphXf *t, int dx, int dy) {
 /* Bit mask glyph: rows[y] bit x set = pixel at local (ox + x, oy + y). */
 void gx_mask(GContext *ctx, const GlyphXf *t, const uint16_t *rows, int w, int h, int ox, int oy,
              GColor c);
+void gx_mask2(GContext *ctx, const GlyphXf *t, const uint16_t *rows, int w, int h, int ox, int oy,
+              GColor c, GColor c2);
 void gx_fill_rect(GContext *ctx, const GlyphXf *t, GRect r, GColor c);
 /* 1 px outline with the 4 corner pixels cut (graphics_draw_round_rect r=1). */
 void gx_round_rect1(GContext *ctx, const GlyphXf *t, GRect r, GColor c);

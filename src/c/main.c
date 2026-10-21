@@ -17,6 +17,7 @@
 #include "modules/touch.h"
 #include "ui/graph_common.h"
 #include "ui/precip_layer.h"
+#include "modules/precip_map.h"
 #include "ui/temp_layer.h"
 #include "ui/time_layer.h"
 #include <pebble.h>
@@ -26,11 +27,16 @@
 #define STORAGE_KEY_WEATHER 2
 #define STORAGE_KEY_WEATHER_PART2 3
 #define STORAGE_KEY_WEATHER_PART3 5
+#define STORAGE_KEY_WEATHER_PART4 10 /* 2.9.6: WeatherData grew past 768 bytes */
 #define STORAGE_KEY_EVENTS 4
 /* Weather header {version, size, fetch_time}: fetch_time lives here so the
  * three data blocks are only rewritten when the forecast itself changes. */
 #define STORAGE_KEY_WEATHER_HDR 8
-#define WEATHER_PERSIST_VERSION 5 /* 3: + fog_bits, wx_flags (2.8.0); 4: + wind_bits (2.9.3); 5: + storm_bits (2.9.4) */
+#define WEATHER_PERSIST_VERSION 7 /* 3: + fog_bits, wx_flags (2.8.0); 4: + wind_bits (2.9.3); 5: + storm_bits (2.9.4); 6: + precip_mm (2.9.6); 7: + thick_bits (3.0.0) */
+/* Oldest layout that is a prefix of the current one (fields only appended):
+ * such data is kept and the newer fields start zeroed (3.0.0). */
+#define WEATHER_PERSIST_MIN_PREFIX 5
+#define WEATHER_BLOCKS 4
 typedef struct {
 	uint16_t version;
 	uint16_t size;
@@ -46,14 +52,19 @@ typedef struct {
  * outer edge, clouds 6 rows under the track); band depth 55. */
 #define DAYLIGHT_H 13
 #define CLOUD_H 15
-#define PRECIP_H 15
+/* 2.9.6: rain ring 15 -> 19 (band depth 59); the ring's inner edge still
+ * clears the city line by 23 px at the top centre. */
+#define PRECIP_H 19
 #define EVENT_H 12
 #elif defined(PBL_PLATFORM_EMERY) || (defined(PBL_DISPLAY_HEIGHT) && PBL_DISPLAY_HEIGHT >= 228)
 #define DAYLIGHT_H 18
 #define CLOUD_H 14
-#define PRECIP_H 26
+/* 2.9.6: rain chart 26 -> 29: the 3 px TIME_BLOCK_TOP_GAP moved into it.
+ * The city line keeps its y (ink at row 76); the event row's lowest ink
+ * (row 72) still clears it by 3 px of the font's own top padding. */
+#define PRECIP_H 29
 #define EVENT_H 12
-// Sums to 70 — +4px into former gap so time stays put with TIME_BLOCK_TOP_GAP 3
+// Sums to 73 — time block stays at y 73 with TIME_BLOCK_TOP_GAP 0
 #elif defined(PBL_PLATFORM_CHALK)
 #define DAYLIGHT_H 14
 #define CLOUD_H 15
@@ -69,7 +80,11 @@ typedef struct {
 #endif
 #define GRAPH_LAYERS_H_BASE (DAYLIGHT_H + CLOUD_H + PRECIP_H + EVENT_H)
 /* Gap between bottom of rain/events stack and top of time block (city). */
+#if defined(PBL_PLATFORM_EMERY)
+#define TIME_BLOCK_TOP_GAP 0 /* 2.9.6: was 3, given to the rain chart */
+#else
 #define TIME_BLOCK_TOP_GAP 3
+#endif
 
 #if defined(PBL_PLATFORM_EMERY)
 #define TEMP_H 56
@@ -96,6 +111,10 @@ typedef struct {
 #else
 #define CLOUD_LIFT 0
 #endif
+/* 2.9.6: clouds (and their sun rays) sit CLOUD_RAISE px higher, closer to the
+ * timeline; the rain chart starts that much higher too and gains the rows.
+ * Event row, city line and everything below keep their positions. */
+#define CLOUD_RAISE 2
 
 /* Frame for a full-width row at y..y+h (screen coords). */
 static GRect prv_row_frame(GRect bounds, int y, int h) {
@@ -136,7 +155,8 @@ static uint32_t s_minutes_since_launch;
 
 // Forward declarations
 static void prv_request_weather(void);
-static void prv_push_weather_to_layers(struct tm *now);
+/* 3.0.0: views are static (14 x 73 B off the stack); memset below. */
+	static void prv_push_weather_to_layers(struct tm *now);
 static void prv_relayout_graph_stack(void);
 static void prv_update_steps(void);
 static void prv_apply_timeline_events(DictionaryIterator *iter);
@@ -252,15 +272,17 @@ static void prv_push_weather_to_layers(struct tm *now) {
 		copy_len = WEATHER_HOURLY_COUNT - start_idx;
 
 	// Shifted views: window starting at past_needed hours ago
-	uint8_t precip_view[MAX_GRAPH_HOURS + 1];
-	int8_t temp_view[MAX_GRAPH_HOURS + 1];
-	int8_t appar_view[MAX_GRAPH_HOURS + 1];
-	uint8_t cloud_view[MAX_GRAPH_HOURS + 1];
-	uint8_t cloud_low_view[MAX_GRAPH_HOURS + 1];
-	uint8_t cloud_mid_view[MAX_GRAPH_HOURS + 1];
-	uint8_t cloud_high_view[MAX_GRAPH_HOURS + 1];
-	uint8_t code_view[MAX_GRAPH_HOURS + 1];
-	uint8_t shortwave_view[MAX_GRAPH_HOURS + 1];
+	static uint8_t precip_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
+	static int8_t temp_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
+	static int8_t appar_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
+	static uint8_t cloud_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
+	static uint8_t cloud_low_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
+	static uint8_t cloud_mid_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
+	static uint8_t cloud_high_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
+	static uint8_t code_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
+	static uint8_t shortwave_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
+	static uint8_t mm_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
+	static uint8_t thick_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
 	memset(precip_view, 0, sizeof(precip_view));
 	memset(temp_view, 0, sizeof(temp_view));
 	memset(appar_view, 0, sizeof(appar_view));
@@ -270,6 +292,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	memset(cloud_high_view, 0, sizeof(cloud_high_view));
 	memset(code_view, 0, sizeof(code_view));
 	memset(shortwave_view, 0, sizeof(shortwave_view));
+	memset(mm_view, 0, sizeof(mm_view));
 
 	memcpy(precip_view, &s_weather.precip_prob[start_idx], copy_len);
 	memcpy(temp_view, &s_weather.temp_hourly[start_idx], copy_len);
@@ -280,20 +303,26 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	memcpy(cloud_high_view, &s_weather.cloud_cover_high[start_idx], copy_len);
 	memcpy(code_view, &s_weather.hourly_weather_code[start_idx], copy_len);
 	memcpy(shortwave_view, &s_weather.shortwave_radiation[start_idx], copy_len);
+	memcpy(mm_view, &s_weather.precip_mm[start_idx], copy_len);
+	memset(thick_view, 0, sizeof(thick_view));
+	for (int i = 0; i < copy_len; i++) {
+		int k = start_idx + i;
+		thick_view[i] = cloud_thick_unpack(s_weather.thick_bits, k);
+	}
 
-	uint8_t fog_view[MAX_GRAPH_HOURS + 1];
+	static uint8_t fog_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
 	memset(fog_view, 0, sizeof(fog_view));
 	for (int i = 0; i < copy_len; i++) {
 		int k = start_idx + i;
 		fog_view[i] = (s_weather.fog_bits[k >> 3] >> (k & 7)) & 1;
 	}
-	uint8_t wind_view[MAX_GRAPH_HOURS + 1];
+	static uint8_t wind_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
 	memset(wind_view, 0, sizeof(wind_view));
 	for (int i = 0; i < copy_len; i++) {
 		int k = start_idx + i;
 		wind_view[i] = (s_weather.wind_bits[k >> 3] >> (k & 7)) & 1;
 	}
-	uint8_t storm_view[MAX_GRAPH_HOURS + 1];
+	static uint8_t storm_view[MAX_GRAPH_HOURS + 1]; /* static: off the stack (3.0.0) */
 	memset(storm_view, 0, sizeof(storm_view));
 	for (int i = 0; i < copy_len; i++) {
 		int k = start_idx + i;
@@ -363,8 +392,10 @@ static void prv_push_weather_to_layers(struct tm *now) {
 	                        s_weather.sunset_minute, current_hour, false, false);
 	cloud_layer_set_data(s_cloud_layer, cloud_view, code_view, shortwave_view,
 	                       cloud_low_view, cloud_mid_view, cloud_high_view,
-	                       fog_view, current_hour);
-	precip_layer_set_data(s_precip_layer, precip_view, code_view, current_hour);
+	                       thick_view, mm_view, (s_weather.wx_flags & WX_FLAG_HAS_MM) != 0,
+	                       current_hour);
+	precip_layer_set_data(s_precip_layer, precip_view, code_view, mm_view,
+	                      (s_weather.wx_flags & WX_FLAG_HAS_MM) != 0, current_hour);
 	event_layer_set_data(s_event_layer, code_view, fog_view, wind_view, storm_view, hours_remaining);
 	time_layer_set_condition(s_time_layer,
 	                         stale ? WEATHER_CONDITION_UNKNOWN
@@ -401,8 +432,9 @@ static void prv_persist_write_if_changed(uint32_t key, const void *data, int len
 	persist_write_data(key, data, len);
 }
 
-static const uint32_t s_weather_keys[3] = {
-	STORAGE_KEY_WEATHER, STORAGE_KEY_WEATHER_PART2, STORAGE_KEY_WEATHER_PART3};
+static const uint32_t s_weather_keys[WEATHER_BLOCKS] = {
+	STORAGE_KEY_WEATHER, STORAGE_KEY_WEATHER_PART2, STORAGE_KEY_WEATHER_PART3,
+	STORAGE_KEY_WEATHER_PART4};
 
 static WeatherData s_weather_scratch; /* static: keep ~700 B off the stack */
 
@@ -412,7 +444,7 @@ static void prv_weather_persist(void) {
 	s_weather_scratch.fetch_time = 0;
 	const uint8_t *raw = (const uint8_t *)&s_weather_scratch;
 	int remain = (int)sizeof(s_weather_scratch);
-	for (int i = 0; i < 3 && remain > 0; i++) {
+	for (int i = 0; i < WEATHER_BLOCKS && remain > 0; i++) {
 		int n = remain < PERSIST_DATA_MAX_LENGTH ? remain : PERSIST_DATA_MAX_LENGTH;
 		prv_persist_write_if_changed(s_weather_keys[i], raw + i * PERSIST_DATA_MAX_LENGTH, n);
 		remain -= n;
@@ -422,11 +454,12 @@ static void prv_weather_persist(void) {
 	prv_persist_write_if_changed(STORAGE_KEY_WEATHER_HDR, &hdr, sizeof(hdr));
 }
 
-/* Read all blocks into dst; false unless every block has exactly the expected size. */
-static bool prv_weather_read_blocks(WeatherData *dst) {
+/* Read `size` bytes of blocks into dst; false unless every block has exactly
+ * the expected size. */
+static bool prv_weather_read_blocks(WeatherData *dst, int size) {
 	uint8_t *raw = (uint8_t *)dst;
-	int remain = (int)sizeof(WeatherData);
-	for (int i = 0; i < 3 && remain > 0; i++) {
+	int remain = size;
+	for (int i = 0; i < WEATHER_BLOCKS && remain > 0; i++) {
 		int n = remain < PERSIST_DATA_MAX_LENGTH ? remain : PERSIST_DATA_MAX_LENGTH;
 		if (!persist_exists(s_weather_keys[i]) || persist_get_size(s_weather_keys[i]) != n ||
 		    persist_read_data(s_weather_keys[i], raw + i * PERSIST_DATA_MAX_LENGTH, n) != n)
@@ -441,19 +474,34 @@ static void prv_weather_restore(void) {
 	bool have_hdr = persist_exists(STORAGE_KEY_WEATHER_HDR) &&
 	                persist_get_size(STORAGE_KEY_WEATHER_HDR) == (int)sizeof(hdr) &&
 	                persist_read_data(STORAGE_KEY_WEATHER_HDR, &hdr, sizeof(hdr)) == (int)sizeof(hdr);
-	if (have_hdr && (hdr.version != WEATHER_PERSIST_VERSION || hdr.size != sizeof(WeatherData)))
-		return; /* unknown layout: start empty rather than misread */
-	if (!prv_weather_read_blocks(&s_weather_scratch))
+	int size = (int)sizeof(WeatherData);
+	if (have_hdr && (hdr.version != WEATHER_PERSIST_VERSION || hdr.size != sizeof(WeatherData))) {
+		/* 3.0.0: an older appended-only layout keeps its data; the newer
+		 * tail (e.g. precip_mm, thick_bits) starts zeroed = "no data". */
+		if (hdr.version < WEATHER_PERSIST_MIN_PREFIX || hdr.version >= WEATHER_PERSIST_VERSION ||
+		    hdr.size == 0 || hdr.size >= sizeof(WeatherData))
+			return; /* unknown layout: start empty rather than misread */
+		size = hdr.size;
+	}
+	memset(&s_weather_scratch, 0, sizeof(s_weather_scratch));
+	if (!prv_weather_read_blocks(&s_weather_scratch, size))
 		return; /* missing or partial (pre-2.7.6 sizes differ only if layout changed) */
 	s_weather_scratch.city_name[sizeof(s_weather_scratch.city_name) - 1] = '\0';
+	/* Fields newer than the stored layout may sit in its tail padding: clear them. */
+	if (have_hdr && hdr.version < 7)
+		memset(s_weather_scratch.thick_bits, 0, sizeof(s_weather_scratch.thick_bits));
+	if (have_hdr && hdr.version < 6) {
+		memset(s_weather_scratch.precip_mm, 0, sizeof(s_weather_scratch.precip_mm));
+		s_weather_scratch.wx_flags &= (uint8_t)~WX_FLAG_HAS_MM;
+	}
 	if (s_weather_scratch.valid_hours > WEATHER_HOURLY_COUNT)
 		s_weather_scratch.valid_hours = WEATHER_HOURLY_COUNT;
 	if (have_hdr)
 		s_weather_scratch.fetch_time = (time_t)hdr.fetch_time;
 	/* else: pre-2.7.6 blob already carries fetch_time; migrate to the header format. */
 	s_weather = s_weather_scratch;
-	if (!have_hdr)
-		prv_weather_persist();
+	if (!have_hdr || size != (int)sizeof(WeatherData))
+		prv_weather_persist(); /* rewrite in the current layout */
 }
 
 static void prv_clear_timeline_events(void) {
@@ -721,6 +769,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 			{MESSAGE_KEY_WEATHER_CLOUD_COVER_HIGH, s_weather.cloud_cover_high},
 			{MESSAGE_KEY_WEATHER_HOURLY_CODE, s_weather.hourly_weather_code},
 			{MESSAGE_KEY_WEATHER_SHORTWAVE_RADIATION, s_weather.shortwave_radiation},
+			{MESSAGE_KEY_WEATHER_PRECIP_MM, s_weather.precip_mm},
 		};
 		for (unsigned i = 0; i < ARRAY_LENGTH(arrs); i++) {
 			t = dict_find(iter, arrs[i].key);
@@ -786,6 +835,13 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 			int len = t->length < (int)sizeof(s_weather.storm_bits) ? t->length
 			                                                        : (int)sizeof(s_weather.storm_bits);
 			memcpy(s_weather.storm_bits, t->value->data, len);
+		}
+		t = dict_find(iter, MESSAGE_KEY_WEATHER_CLOUD_THICK); /* 3.0.0 */
+		memset(s_weather.thick_bits, 0, sizeof(s_weather.thick_bits));
+		if (t && t->type == TUPLE_BYTE_ARRAY && t->length > 0) {
+			int len = t->length < (int)sizeof(s_weather.thick_bits) ? t->length
+			                                                        : (int)sizeof(s_weather.thick_bits);
+			memcpy(s_weather.thick_bits, t->value->data, len);
 		}
 		t = dict_find(iter, MESSAGE_KEY_WEATHER_FLAGS);
 		s_weather.wx_flags = t ? (uint8_t)settings_tuple_int(t) : 0;
@@ -950,11 +1006,11 @@ static void prv_relayout_graph_stack(void) {
 	int y = STACK_TOP + DAYLIGHT_H;
 
 	layer_set_frame(cloud_layer_get_layer(s_cloud_layer),
-	                prv_row_frame(bounds, y - CLOUD_LIFT, cloud_h));
+	                prv_row_frame(bounds, y - CLOUD_LIFT - CLOUD_RAISE, cloud_h));
 	y += cloud_h;
 
 	layer_set_frame(precip_layer_get_layer(s_precip_layer),
-	                prv_row_frame(bounds, y - CLOUD_LIFT, precip_h + CLOUD_LIFT));
+	                prv_row_frame(bounds, y - CLOUD_LIFT - CLOUD_RAISE, precip_h + CLOUD_LIFT + CLOUD_RAISE));
 	y += precip_h;
 
 	layer_set_frame(event_layer_get_layer(s_event_layer),
@@ -993,12 +1049,12 @@ static void prv_window_load(Window *window) {
 	// Cloud + precip — Split grows clouds, shrinks rain; stack height fixed
 	int cloud_h, precip_h, event_h;
 	prv_top_strip_heights(&cloud_h, &precip_h, &event_h);
-	s_cloud_layer = cloud_layer_create(prv_row_frame(bounds, y - CLOUD_LIFT, cloud_h));
+	s_cloud_layer = cloud_layer_create(prv_row_frame(bounds, y - CLOUD_LIFT - CLOUD_RAISE, cloud_h));
 	layer_add_child(root, cloud_layer_get_layer(s_cloud_layer));
 	y += cloud_h;
 
 	// Precip graph (grows when Split clouds or weather events are off)
-	s_precip_layer = precip_layer_create(prv_row_frame(bounds, y - CLOUD_LIFT, precip_h + CLOUD_LIFT));
+	s_precip_layer = precip_layer_create(prv_row_frame(bounds, y - CLOUD_LIFT - CLOUD_RAISE, precip_h + CLOUD_LIFT + CLOUD_RAISE));
 	layer_add_child(root, precip_layer_get_layer(s_precip_layer));
 	y += precip_h;
 

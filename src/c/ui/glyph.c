@@ -55,6 +55,14 @@ void gx_round_rect1(GContext *ctx, const GlyphXf *t, GRect r, GColor c) {
 
 void gx_mask(GContext *ctx, const GlyphXf *t, const uint16_t *rows, int w, int h, int ox, int oy,
              GColor c) {
+	gx_mask2(ctx, t, rows, w, h, ox, oy, c, c);
+}
+
+/* 3.0.1: as gx_mask, with c2 on every other screen pixel (checker), so a
+ * 1 px glyph reads as a mid tone between c and c2 without gaps. */
+void gx_mask2(GContext *ctx, const GlyphXf *t, const uint16_t *rows, int w, int h, int ox, int oy,
+              GColor c, GColor c2) {
+	bool two = !gcolor_equal(c, c2);
 	graphics_context_set_stroke_color(ctx, c);
 	int ext = (w > h ? w : h) + 2;
 	const int32_t H = TRIG_MAX_RATIO / 2;
@@ -68,6 +76,8 @@ void gx_mask(GContext *ctx, const GlyphXf *t, const uint16_t *rows, int w, int h
 			py -= oy;
 			if (px < 0 || px >= w || py < 0 || py >= h || !(rows[py] & (1u << px)))
 				continue;
+			if (two)
+				graphics_context_set_stroke_color(ctx, (((t->x + X) + (t->y + Y)) & 1) ? c2 : c);
 			graphics_draw_pixel(ctx, GPoint(t->x + X, t->y + Y));
 		}
 	}

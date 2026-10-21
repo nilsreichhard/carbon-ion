@@ -83,7 +83,7 @@ var worst = { precip_prob: arr(100), temp_hourly: arr(-40), apparent_temp_hourly
 	cloud_cover_mid: arr(100), cloud_cover_high: arr(100), hourly_weather_code: arr(99), shortwave_radiation: arr(1000),
 	city_name: 'Ünterwäldnerstrassenbürg-Långnamn', temp_unit: 'fahrenheit', current_temp: -40, high_temp: 120, low_temp: -40,
 	weather_code: 99, sunrise_hour: 6, sunset_hour: 20, sunrise_minute: 59, sunset_minute: 59, fetch_time: 4e9,
-	fog_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], wind_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], storm_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], wx_flags: 1, valid_hours: 72, timeline_events: evs };
+	fog_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], wind_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], storm_bits: [255, 255, 255, 255, 255, 255, 255, 255, 255], precip_mm: arr(255), wx_flags: 3, valid_hours: 72, timeline_events: evs };
 var wb = dictBytes(wxsend.buildWeatherDict(worst));
 console.log('   weather dict worst case = ' + wb + ' bytes');
 check('Worst-case weather dict fits 2048-byte inbox (with 10% headroom)', wb <= 2048 * 0.9, true);
@@ -108,7 +108,7 @@ check('Fog and wind still refetch (phone-side)', [settings.weatherSettingsChange
 var capsT = require('../src/pkjs/weather/caps.js');
 check('Tornado toggle shown only for providers reporting WMO 19/99', Object.keys(capsT).filter(function (k) { return capsT[k].tornado; }).sort(), ['geosphere', 'openmeteo', 'owm']);
 var setSrc = require('fs').readFileSync(__dirname + '/../src/c/modules/settings.h', 'utf8');
-check('Settings struct: event_hide appended last (upgrade keeps default 0)', /uint8_t event_hide;[^\n]*\n\} Settings;/.test(setSrc), true);
+check('Settings struct: event_hide, rain_height, cloud_thick appended last (upgrade keeps defaults 0)', /uint8_t event_hide;[^\n]*\n\tuint8_t rain_height;[^\n]*\n\tuint8_t cloud_thick;[^\n]*\n[^\n]*\n\} Settings;/.test(setSrc), true);
 check('Watch event-flag key matches package.json', Number((/KEY_SETTING_EVENT_FLAGS (\d+)/.exec(setSrc) || [])[1]), pkg.pebble.messageKeys.SETTING_EVENT_FLAGS);
 
 /* ---- 2.9.4: event sensitivity levels ---- */
@@ -150,7 +150,7 @@ var evC = require('fs').readFileSync(__dirname + '/../src/c/ui/event_layer.c', '
 check('Watch: snow levels any/moderate+/heavy code sets', [/level >= 2\)\s*return code == 75 \|\| code == 86;/.test(evC), /level == 1\)\s*return code == 73 \|\| code == 75 \|\| code == 86;/.test(evC)], [true, true]);
 check('Watch: Strong only = hail code or storm bit', /EVENT_THUNDER_STRONG\)\s*\|\|\s*code >= 96 \|\| strong/.test(evC), true);
 check('Watch flag bits match phone packing', [/EVENT_THUNDER_STRONG 0x08/.test(setSrc), /EVENT_SNOW_LVL_SHIFT 4/.test(setSrc), /EVENT_SNOW_LVL_MASK 0x30/.test(setSrc), /EVENT_FLAGS_MASK 0x3f/.test(setSrc)], [true, true, true, true]);
-check('Weather persist version bumped for storm_bits', /WEATHER_PERSIST_VERSION 5/.test(require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8')), true);
+check('Weather persist version bumped for thick_bits (7), prefix migration from 5', /WEATHER_PERSIST_VERSION 7[\s\S]*WEATHER_PERSIST_MIN_PREFIX 5/.test(require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8')), true);
 
 /* ---- 2.8.5: weather without a current temperature ---- */
 var noT = { precip_prob: arr(10), temp_hourly: arr(12), hourly_weather_code: arr(2), valid_hours: 60, fetch_time: 1760540400 };
@@ -196,7 +196,45 @@ var bBt = bitsOf('s_bt_off_bits'), bQt = bitsOf('s_quiet_bits');
 check('Status icons: both 15x17 maps', [bBt.length, bQt.length, bBt.every(function (r) { return r.length === 15; }), bQt.every(function (r) { return r.length === 15; })], [17, 17, true, true]);
 check('Status icons: identical badge outline (same drawn pixels)', bBt.map(function (r) { return r.replace(/[#.]/g, 'x'); }), bQt.map(function (r) { return r.replace(/[#.]/g, 'x'); }));
 check('Status icons: same slash diagonal (1,2)-(13,14) in both', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].every(function (i) { return bBt[i + 1][i] === '.'; }) && [1, 2, 3, 13].every(function (i) { return bQt[i + 1][i] === '.'; }), true);
-check('Version 2.9.5 everywhere', [pkg.version, require('../appinfo.json').versionLabel, /version: '2\.9\.5'/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['2.9.5', '2.9.5', true]);
+check('Version 3.0.2 everywhere', [pkg.version, require('../appinfo.json').versionLabel, /version: '3\.0\.2'/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['3.0.2', '3.0.2', true]);
 
+/* ---- 2.9.6: rain bar height + hourly mm ---- */
+var mainSrc = require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8');
+var wxH = require('fs').readFileSync(__dirname + '/../src/c/modules/weather.h', 'utf8');
+check('Worst-case weather dict carries WEATHER_PRECIP_MM (72 bytes, capped 255)', [wxsend.buildWeatherDict(worst).WEATHER_PRECIP_MM.length, Math.max.apply(null, wxsend.buildWeatherDict(worst).WEATHER_PRECIP_MM)], [72, 255]);
+check('Rain bar height: default Probability 0, Amount 1, junk → 0', [settings.buildSettingsDict({}).SETTING_RAIN_HEIGHT, settings.buildSettingsDict({ SETTING_RAIN_HEIGHT: '1' }).SETTING_RAIN_HEIGHT, settings.buildSettingsDict({ SETTING_RAIN_HEIGHT: { value: 1 } }).SETTING_RAIN_HEIGHT, settings.buildSettingsDict({ SETTING_RAIN_HEIGHT: '7' }).SETTING_RAIN_HEIGHT], [0, 1, 1, 0]);
+check('Rain bar height change does not refetch weather', settings.weatherSettingsChanged({ SETTING_RAIN_HEIGHT: '0' }, { SETTING_RAIN_HEIGHT: '1' }), false);
+check('Watch rain-height + mm keys match package.json', [Number((/KEY_SETTING_RAIN_HEIGHT (\d+)/.exec(setSrc) || [])[1]), pkg.pebble.messageKeys.WEATHER_PRECIP_MM], [pkg.pebble.messageKeys.SETTING_RAIN_HEIGHT, 10091]);
+check('appinfo.json carries the new keys', [require('../appinfo.json').appKeys ? 1 : 1, JSON.stringify(require('../appinfo.json')).indexOf('WEATHER_PRECIP_MM') > 0], [1, true]);
+check('Watch reads WEATHER_PRECIP_MM into precip_mm; HAS_MM flag 0x02', [/MESSAGE_KEY_WEATHER_PRECIP_MM, s_weather\.precip_mm/.test(mainSrc), /WX_FLAG_HAS_MM 0x02/.test(wxH)], [true, true]);
+check('WeatherData persisted in 4 blocks (new key 10)', [/WEATHER_BLOCKS 4/.test(mainSrc), /STORAGE_KEY_WEATHER_PART4 10/.test(mainSrc), /PERSIST_DATA_MAX_LENGTH \* 4/.test(wxH)], [true, true, true]);
+var rh = null; (function walk(a) { a.forEach(function (it) { if (it.messageKey === 'SETTING_RAIN_HEIGHT') rh = it; if (it.items) walk(it.items); }); })(require('../src/pkjs/config.js'));
+check('Clay "Rain bar height": Probability (default) / Amount', [rh && rh.defaultValue, rh && rh.options.map(function (o) { return o.label + '=' + o.value; }).join(',')], [0, 'Probability=0,Amount=1']);
+check('Clay hides Amount without mm (custom.js)', /c\.mm === false/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/config/custom.js', 'utf8')), true);
+var cc = require('child_process').spawnSync('sh', ['-c', 'cc -std=c99 -Wall -Wextra -Werror -o /tmp/carbon_test_precip_map ' + __dirname + '/test_precip_map.c && /tmp/carbon_test_precip_map'], { encoding: 'utf8' });
+console.log(cc.stdout.split('\n').filter(function (l) { return /FAIL|passed/.test(l); }).map(function (l) { return '   [C] ' + l; }).join('\n'));
+check('Precip mapping C tests (tools/test_precip_map.c) pass', cc.status, 0);
+
+/* ---- 2.9.6: cloud palette (size + heavy only) ---- */
+var cloudSrc = require('fs').readFileSync(__dirname + '/../src/c/ui/cloud_layer.c', 'utf8');
+check('Clouds: no Celeste snow colour, heavy = DarkGray (light) / LightGray (dark)', [/Celeste/.test(cloudSrc), /heavy\)\s*return is_light \? GColorDarkGray : GColorLightGray/.test(cloudSrc), /return is_light \? GColorLightGray : GColorWhite/.test(cloudSrc)], [false, true, true]);
+check('Clouds: dead Split lobe sizes removed; fog dotting gone (3.0.0)', [/return 1;\s*if \(cover < med_th\)\s*return 2;/.test(cloudSrc), /fog/.test(cloudSrc)], [false, false]);
+/* ---- 3.0.0: cloud thickness ---- */
+var wdT = wxsend.buildWeatherDict(worst);
+check('Weather dict carries WEATHER_CLOUD_THICK (18 bytes, also without phone data)', [wdT.WEATHER_CLOUD_THICK.length, wxsend.buildWeatherDict({}).WEATHER_CLOUD_THICK.length], [18, 18]);
+check('Worst case with thickness <= 90 % of the inbox', dictBytes(wxsend.buildWeatherDict(Object.assign({ cloud_thick: arr(255).slice(0, 18) }, worst))) <= 2048 * 0.9, true);
+check('Cloud thickness setting: default On 0, Off 1, junk → 0', [settings.buildSettingsDict({}).SETTING_CLOUD_THICK, settings.buildSettingsDict({ SETTING_CLOUD_THICK: '1' }).SETTING_CLOUD_THICK, settings.buildSettingsDict({ SETTING_CLOUD_THICK: '5' }).SETTING_CLOUD_THICK], [0, 1, 0]);
+check('Watch cloud-thickness keys match package.json', [Number((/KEY_SETTING_CLOUD_THICK (\d+)/.exec(setSrc) || [])[1]), pkg.pebble.messageKeys.WEATHER_CLOUD_THICK], [pkg.pebble.messageKeys.SETTING_CLOUD_THICK, 10093]);
+check('appinfo.json carries the 3.0.0 keys in both key maps', (JSON.stringify(require('../appinfo.json')).match(/WEATHER_CLOUD_THICK/g) || []).length, 2);
+check('Watch reads WEATHER_CLOUD_THICK into thick_bits (18 bytes)', [/MESSAGE_KEY_WEATHER_CLOUD_THICK/.test(mainSrc), /thick_bits\[WEATHER_HOURLY_COUNT \/ 4\]/.test(wxH)], [true, true]);
+check('Thick palette: LightGray + DarkGray checker; light = background checker', [/\*base = GColorLightGray;\s*\*dither = GColorDarkGray;/.test(cloudSrc), /is_light \? GColorWhite : GColorBlack/.test(cloudSrc)], [true, true]);
+
+/* ---- 3.0.1 ---- */
+check('Time drawn on a fixed box (digits as 0), steps flank uses it too', [/prv_time_template\(layer->time_buf, layer->time_tmpl/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8')), /time_str = tl->time_tmpl\[0\]/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8'))], [true, true]);
+check('Light theme light rain = VividCerulean, heavy CobaltBlue; dark unchanged', /\(light \? GColorCobaltBlue : GColorPictonBlue\)\s*: \(light \? GColorVividCerulean : GColorCobaltBlue\)/.test(require('fs').readFileSync(__dirname + '/../src/c/ui/precip_layer.c', 'utf8')), true);
+var evSrc = require('fs').readFileSync(__dirname + '/../src/c/ui/event_layer.c', 'utf8');
+var tlSrc = require('fs').readFileSync(__dirname + '/../src/c/ui/time_layer.c', 'utf8');
+check('Fog: DarkGray checkered with Black (light) / LightGray (dark), icon and range', [/light_theme \? GColorBlack : GColorLightGray/.test(evSrc), /gx_mask2\(ctx, &t, mask, FOG_W/.test(evSrc), /prv_line2\(ctx, GPoint\(x_start, center_y\)/.test(evSrc)], [true, true, true]);
+check('Status icons 2 px clear of the digits (3.0.2), same gap and size', [/STATUS_ICON_X 3 /.test(tlSrc), /STATUS_ICON_GAP 6 /.test(tlSrc), /STATUS_ICON_W 15\n#define STATUS_ICON_H 17/.test(tlSrc)], [true, true, true]);
 console.log((n - fails) + '/' + n + ' passed');
 process.exit(fails ? 1 : 0);

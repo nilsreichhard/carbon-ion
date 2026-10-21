@@ -173,6 +173,11 @@ module.exports = function () {
 		/* 2.9.3: wind event needs hourly gusts from the provider. */
 		var gustItem = clayConfig.getItemByMessageKey('SETTING_WIND_GUST');
 		if (gustItem) { if (c.gust === false) gustItem.hide(); else gustItem.show(); }
+		/* 2.9.6: Amount bar height needs hourly mm; Probability stays. */
+		var rhItem = clayConfig.getItemByMessageKey('SETTING_RAIN_HEIGHT');
+		if (rhItem) {
+			if (c.mm === false) { if (Number(rhItem.get()) !== 0) rhItem.set(0); rhItem.hide(); } else rhItem.show();
+		}
 		/* 2.9.3: tornado only from providers that report funnel clouds / WMO 99. */
 		var tornItem = clayConfig.getItemByMessageKey('SETTING_EVENT_TORNADO');
 		if (tornItem) { if (c.tornado === false) tornItem.hide(); else tornItem.show(); }
