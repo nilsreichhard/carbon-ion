@@ -11,7 +11,7 @@ var P = require('./provider');
 var BASE = 'https://api.open-meteo.com/v1/forecast';
 var VARS = ['temperature_2m', 'apparent_temperature', 'precipitation_probability', 'precipitation',
 	'cloud_cover', 'cloud_cover_low', 'cloud_cover_mid', 'cloud_cover_high', 'weather_code',
-	'shortwave_radiation', 'visibility', 'wind_gusts_10m', 'cape'];
+	'shortwave_radiation', 'visibility', 'wind_gusts_10m', 'cape', 'snowfall', 'relative_humidity_2m'];
 /* id → { label, chain (merge order before best_match), source attribution } */
 var MODELS = {
 	best_match: { label: 'Best match', chain: [], src: '' },
@@ -38,7 +38,7 @@ function buildUrl(lat, lon, opts) {
 	var fc = opts.pastOnly ? 1 : 60;
 	var chain = MODELS[modelOf(opts)].chain;
 	return BASE + '?latitude=' + lat + '&longitude=' + lon +
-		(opts.pastOnly ? '' : '&current=temperature_2m,weather_code') +
+		(opts.pastOnly ? '' : '&current=temperature_2m,weather_code,precipitation,snowfall,relative_humidity_2m') +
 		'&hourly=' + VARS.join(',') +
 		'&past_hours=' + past + '&forecast_hours=' + fc +
 		(opts.pastOnly ? '' : '&daily=sunrise,sunset,temperature_2m_min,temperature_2m_max') +
@@ -50,7 +50,8 @@ function buildUrl(lat, lon, opts) {
  * best_match, per element (null → next source). */
 function col(block, name) {
 	if (!block) return null;
-	if (block[name]) return block[name];
+	/* 3.1.2: a 0 value (0 °C, clear sky, 0 mm) is data, not missing. */
+	if (block[name] !== undefined && block[name] !== null) return block[name];
 	var cols = [], best = block[name + '_best_match'];
 	Object.keys(block).forEach(function (k) {
 		if (k.indexOf(name + '_') === 0 && KNOWN[k.slice(name.length + 1)] && Array.isArray(block[k])) cols.push(k);
@@ -79,8 +80,9 @@ function parse(json, ctx) {
 	var map = { temp: 'temperature_2m', feels: 'apparent_temperature', pop: 'precipitation_probability',
 		precip: 'precipitation', cloud: 'cloud_cover', wmo_code: 'weather_code',
 		cloud_low: 'cloud_cover_low', cloud_mid: 'cloud_cover_mid', cloud_high: 'cloud_cover_high',
-		visibility_m: 'visibility', shortwave: 'shortwave_radiation', gust: 'wind_gusts_10m', cape: 'cape' };
+		visibility_m: 'visibility', shortwave: 'shortwave_radiation', gust: 'wind_gusts_10m', cape: 'cape', snowfall: 'snowfall', rh: 'relative_humidity_2m' };
 	var cols = {};
+	if (col(h, 'snowfall')) g.snowfall = P.nulls(); /* 3.1.2: snow sanity check (cm/h) */
 	Object.keys(map).forEach(function (k) { cols[k] = col(h, map[k]); });
 	for (var n = 0; n < h.time.length; n++) {
 		var i = P.slot(g, h.time[n]);
@@ -92,7 +94,14 @@ function parse(json, ctx) {
 	var ct = first(cur, 'temperature_2m');
 	if (ct !== null) g.current_temp = ct;
 	var cc = first(cur, 'weather_code');
-	if (cc !== null) g.current_code = cc;
+	if (cc !== null) { g.current_code = cc; g.current_live = true; }
+	/* 3.1.2: 15-min reading drives the current hour (mm per interval → mm/h). */
+	var cp = first(cur, 'precipitation'), iv = cur && cur.interval > 0 ? cur.interval : 900;
+	if (cp !== null) g.current_precip = Math.round(cp * 3600 / iv * 10) / 10;
+	var cs = first(cur, 'snowfall');
+	var crh = first(cur, 'relative_humidity_2m');
+	if (crh !== null) g.current_rh = crh;
+	if (cs !== null) g.current_snowfall = Math.round(cs * 3600 / iv * 100) / 100; /* cm per 15 min → cm/h */
 	var d = json.daily;
 	var tmax = first(d, 'temperature_2m_max'), tmin = first(d, 'temperature_2m_min');
 	if (tmax !== null) g.tmax = tmax;

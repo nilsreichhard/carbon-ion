@@ -409,6 +409,10 @@ Pebble.addEventListener('ready', function () {
 	}
 });
 
+function readWxKeys() {
+	try { return JSON.parse(localStorage.getItem(settings.WX_KEYS_STORE) || '{}') || {}; } catch (e) { return {}; }
+}
+
 Pebble.addEventListener('showConfiguration', function () {
 	settings.sanitizeClaySettingsStorage();
 	var userData = clay.meta.userData || {};
@@ -427,6 +431,11 @@ Pebble.addEventListener('showConfiguration', function () {
 	userData.wxCaps = weatherProviders.CAPS;
 	userData.lastFetch = readLastFetch();
 	userData.lastWxError = readWxError();
+	/* 3.1.2: per-provider API keys (seeded from the saved single key). */
+	var wxKeys = readWxKeys(), curS = readClaySettings();
+	wxKeys = settings.rememberProviderKey(wxKeys, getStringSetting(curS, 'SETTING_WEATHER_PROVIDER', 'openmeteo'),
+		getStringSetting(curS, 'SETTING_WEATHER_API_KEY', ''), weatherProviders.CAPS);
+	userData.wxKeys = wxKeys;
 
 	clay.meta.userData = userData;
 	Pebble.openURL(clay.generateUrl());
@@ -456,6 +465,8 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		repairCalUrl('SETTING_CALENDAR_ICS_URL_2', 'cached_calendar_url_2');
 		repairCalUrl('SETTING_CALENDAR_ICS_URL_3', 'cached_calendar_url_3');
 		localStorage.setItem('clay-settings', JSON.stringify(flatSettings));
+		localStorage.setItem(settings.WX_KEYS_STORE, JSON.stringify(settings.rememberProviderKey(readWxKeys(),
+			extractString(rawSettings['SETTING_WEATHER_PROVIDER']) || 'openmeteo', extractString(rawSettings['SETTING_WEATHER_API_KEY']), weatherProviders.CAPS)));
 
 		function cacheCalUrl(rawKey, cacheKey) {
 			var cleanUrl = extractString(rawSettings[rawKey]).trim();
@@ -472,6 +483,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		anyUrl = cacheCalUrl('SETTING_CALENDAR_ICS_URL_3', 'cached_calendar_url_3') || anyUrl;
 		if (!anyUrl) {
 			try { localStorage.removeItem('cached_timeline_events'); } catch (clearErr) { }
+			calendar.clearCalEventCaches(); /* 3.1.2 */
 		}
 	} catch (err) { }
 
@@ -490,6 +502,8 @@ Pebble.addEventListener('webviewclosed', function (e) {
 		['carbon.metno.v1', 'carbon.wxprev.v1', LAST_FETCH_KEY, LAST_WX_ERROR_KEY].forEach(function (k) {
 			try { localStorage.removeItem(k); } catch (e) { }
 		});
+		calendar.clearCalEventCaches(); /* 3.1.2: per-calendar caches too */
+		try { localStorage.removeItem('cached_timeline_events'); } catch (e) { }
 		eventLog.clear();
 		eventLog.log('cache_cleared', 'via_settings');
 
@@ -515,6 +529,10 @@ Pebble.addEventListener('webviewclosed', function (e) {
 	 * (calendar is re-read on that path), so saves can't burn provider quota. */
 	if (clearCacheRequested || settings.weatherSettingsChanged(oldSettings, newSettings)) {
 		localStorage.removeItem(CACHE_KEY);
+		/* 3.1.2: the saved past-hours grid belongs to the old provider. */
+		if (extractString(oldSettings['SETTING_WEATHER_PROVIDER']) !== extractString(newSettings['SETTING_WEATHER_PROVIDER'])) {
+			try { localStorage.removeItem('carbon.wxprev.v1'); } catch (e) { }
+		}
 		s_fetchStartedAt = 0;
 		eventLog.log('settings_refetch', 'weather_changed');
 	} else {

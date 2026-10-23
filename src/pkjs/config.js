@@ -77,7 +77,7 @@ module.exports = [
 						"value": "best_match"
 					},
 					{
-						"label": "MeteoSwiss ICON-CH1 · 1 km",
+						"label": "MeteoSwiss ICON-CH1 · 1 km (recommended for Switzerland / Alps)",
 						"value": "meteoswiss_icon_ch1"
 					},
 					{
@@ -93,11 +93,11 @@ module.exports = [
 						"value": "geosphere_arome_austria"
 					},
 					{
-						"label": "KNMI HARMONIE",
+						"label": "KNMI HARMONIE · 5.5 km Europe",
 						"value": "knmi_harmonie_arome_europe"
 					},
 					{
-						"label": "DMI HARMONIE",
+						"label": "DMI HARMONIE · 5.5 km Europe",
 						"value": "dmi_harmonie_arome_europe"
 					},
 					{
@@ -109,7 +109,7 @@ module.exports = [
 						"value": "ecmwf_ifs"
 					}
 				],
-				"description": "Regional models are sharper but shorter; missing hours come from Best match."
+				"description": "Regional models are sharper but shorter; missing hours come from Best match. Rain chance always comes from Open-Meteo (the chosen model where it has one, else Best match)."
 			},
 			{
 				"type": "input",
@@ -144,7 +144,7 @@ module.exports = [
 				"type": "select",
 				"messageKey": "SETTING_TEMP_UNIT",
 				"label": "Temperature unit",
-				"defaultValue": 0,
+				"defaultValue": -1,
 				"options": [
 					{
 						"label": "Auto (locale)",
@@ -353,7 +353,7 @@ module.exports = [
 						"value": 1
 					}
 				],
-				"description": "Shades clouds light (checkered pale), normal or thick (checkered dark) from how much sunlight gets through; at night and for providers without sunlight data from rain, cloud layers and cover. Thunderstorms and heavy rain/snow stay solid dark."
+				"description": "Shades clouds light (checkered pale), normal or thick (checkered dark) from how much sunlight gets through; at night it is estimated from rain, cloud layers and cover; greyed out for providers without that data (OpenWeatherMap, WeatherAPI). Thunderstorms and heavy rain/snow stay solid dark."
 			},
 			{
 				"type": "select",
@@ -633,7 +633,7 @@ module.exports = [
 						"value": 0
 					}
 				],
-				"description": "Up to 3 rows: an ICS link or the next alarm."
+				"description": "Up to 3 rows: an ICS link or the next alarm. http:// and webcal:// links are fetched over https; an http:// link falls back to plain http if https fails (some phones block plain http)."
 			},
 			{
 				"type": "text",

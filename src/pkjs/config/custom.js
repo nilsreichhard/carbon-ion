@@ -102,6 +102,9 @@ module.exports = function () {
 		}
 		if (!allow(String(item.get())) && best !== null) item.set(best);
 	}
+	/* 3.1.2: the user's own refresh choice, restored when a provider that
+	 * forced a higher minimum is switched away. */
+	var userInterval = null, forcingInterval = false;
 	/* For minimum-type limits (refresh): bump to the smallest allowed. */
 	function limitMin(item, min) {
 		if (!item || !item.$manipulatorTarget) return;
@@ -113,7 +116,24 @@ module.exports = function () {
 			o.disabled = !ok; o.hidden = !ok; o.style.display = ok ? '' : 'none';
 			if (ok && (lowest === null || Number(o.value) < Number(lowest))) lowest = o.value;
 		}
-		if (Number(item.get()) < min && lowest !== null) item.set(lowest);
+		if (userInterval === null) userInterval = String(item.get());
+		var want = Number(userInterval) >= min ? userInterval : lowest;
+		if (want !== null && String(item.get()) !== String(want)) {
+			forcingInterval = true;
+			try { item.set(want); } finally { forcingInterval = false; }
+		}
+	}
+	/* 3.1.2: plain-language fallback warning from the last recorded problem. */
+	function fallbackText(le) {
+		var m = /^fallback:\s*(\w+)[: ]\s*(.*)$/.exec(String(le.msg || ''));
+		if (!m) return '';
+		var lbl = (CAPS[m[1]] && CAPS[m[1]].label) || m[1], why = m[2];
+		var reason = /no API key/.test(why) ? 'has no API key' :
+			/key\/quota rejected/.test(why) ? 'rejected the API key (wrong key or quota used up)' :
+			/outside/.test(why) ? 'does not cover this location' : 'could not be reached';
+		var de = new Date(le.t);
+		return '<br><b>⚠ ' + pad2(de.getHours()) + ':' + pad2(de.getMinutes()) + ': ' + esc(lbl) + ' ' + reason +
+			', so Open-Meteo data is shown instead.</b>' + (/key/.test(reason) ? ' Check the API key above.' : '');
 	}
 
 	/** Adapt every weather-dependent setting to the provider's real limits. */
@@ -161,8 +181,12 @@ module.exports = function () {
 		}
 		var le = ud.lastWxError;
 		if (le && le.t && le.msg) {
-			var de = new Date(le.t);
-			last += '<br>Last problem ' + pad2(de.getHours()) + ':' + pad2(de.getMinutes()) + ': ' + esc(le.msg) + '.';
+			var fb = fallbackText(le);
+			if (fb) last += fb;
+			else {
+				var de = new Date(le.t);
+				last += '<br>Last problem ' + pad2(de.getHours()) + ':' + pad2(de.getMinutes()) + ': ' + esc(le.msg) + '.';
+			}
 		}
 		if (attr) attr.set('<small>Weather data: ' + esc(src) + '.' + last + '</small>');
 
@@ -170,6 +194,9 @@ module.exports = function () {
 		limitOptions(clayConfig.getItemByMessageKey('SETTING_CLOUD_DISPLAY_MODE'), function (m) { return c.layers || Number(m) === 0; });
 		limitOptions(clayConfig.getItemByMessageKey('SETTING_FLICK_ACTION'), function (a) { return c.layers || Number(a) === 0; });
 		limitMin(clayConfig.getItemByMessageKey('SETTING_FETCH_INTERVAL'), c.minInterval || 15);
+		/* 3.1.2: cloud thickness greyed out (kept visible) without the data for it. */
+		var thickItem = clayConfig.getItemByMessageKey('SETTING_CLOUD_THICK');
+		if (thickItem && thickItem.enable && thickItem.disable) { if (c.thick === false) thickItem.disable(); else thickItem.enable(); }
 		/* 2.9.3: wind event needs hourly gusts from the provider. */
 		var gustItem = clayConfig.getItemByMessageKey('SETTING_WIND_GUST');
 		if (gustItem) { if (c.gust === false) gustItem.hide(); else gustItem.show(); }
@@ -202,7 +229,26 @@ module.exports = function () {
 
 	clayConfig.on(clayConfig.EVENTS.AFTER_BUILD, function () {
 		var provItem = clayConfig.getItemByMessageKey('SETTING_WEATHER_PROVIDER');
-		if (provItem) { applyProviderVisibility(); provItem.on('change', applyProviderVisibility); }
+		/* 3.1.2: keep one API key per keyed provider while switching. */
+		var keyItem = clayConfig.getItemByMessageKey('SETTING_WEATHER_API_KEY');
+		var wxKeys = {}, uk = ud.wxKeys || {};
+		Object.keys(uk).forEach(function (k) { wxKeys[k] = uk[k]; });
+		var prevProv = provItem ? String(provItem.get()) : '';
+		function onProviderChange() {
+			var p = String(provItem.get());
+			if (keyItem && p !== prevProv) {
+				if (CAPS[prevProv] && CAPS[prevProv].key) {
+					var cur = String(keyItem.get() || '').trim();
+					if (cur) wxKeys[prevProv] = cur; else delete wxKeys[prevProv];
+				}
+				if (CAPS[p] && CAPS[p].key) keyItem.set(wxKeys[p] || '');
+			}
+			prevProv = p;
+			applyProviderVisibility();
+		}
+		if (provItem) { applyProviderVisibility(); provItem.on('change', onProviderChange); }
+		var intervalItem = clayConfig.getItemByMessageKey('SETTING_FETCH_INTERVAL');
+		if (intervalItem) intervalItem.on('change', function () { if (!forcingInterval) userInterval = String(intervalItem.get()); });
 		var modelItem = clayConfig.getItemByMessageKey('SETTING_OM_MODEL');
 		if (modelItem) modelItem.on('change', applyProviderVisibility);
 		var ocItem = clayConfig.getItemByMessageKey('SETTING_OWM_ONECALL');

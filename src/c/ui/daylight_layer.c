@@ -601,8 +601,10 @@ static void prv_draw_battery(const DrawCtx *d, DaylightLayer *dl) {
 	bool is_light = d->is_light;
 
 #if defined(PBL_COLOR)
-	GColor batt_y = GColorYellow;
-	GColor batt_o = GColorOrange;
+	/* 3.1.2: darker 20%/10% markers on the light theme (Yellow/Orange were
+	 * barely visible on white). */
+	GColor batt_y = is_light ? GColorChromeYellow : GColorYellow;
+	GColor batt_o = is_light ? GColorWindsorTan : GColorOrange;
 	GColor batt_r = GColorRed;
 	GColor batt_e = is_light ? GColorDarkCandyAppleRed : GColorFolly;
 #else
@@ -648,6 +650,10 @@ static void prv_draw_events(const DrawCtx *d, DaylightLayer *dl, TimelineEventMo
 			if (spans) /* durations are time: they follow the arc length */
 				prv_draw_event_span(d->ctx, x, prv_dx(d, end_sec - now), d->line_y, col, place);
 		} else if (bars) {
+			/* 3.1.2: an ongoing event that started before the window shows
+			 * its bar at the window start instead of off the chart. */
+			if (start_sec < window_start)
+				x = prv_dx(d, window_start - now);
 			prv_draw_event_bar(d, x, col, place);
 		}
 	}

@@ -39,6 +39,9 @@ function parse(json, ctx) {
 		P.setAt(g, 'feels', i, at(h.felttemperature, n));
 		P.setAt(g, 'pop', i, at(h.precipitation_probability, n));
 		P.setAt(g, 'precip', i, at(h.precipitation, n));
+		if (h.relativehumidity) P.setAt(g, 'rh', i, at(h.relativehumidity, n));
+		/* 3.1.2: snowfraction (0-1, basic-1h) × water mm × 0.7 ≈ snow cm. */
+		if (h.snowfraction) { var sf = at(h.snowfraction, n), pr = at(h.precipitation, n); if (!g.snowfall) g.snowfall = P.nulls(); g.snowfall[i] = (sf === null || pr === null) ? null : sf * pr * 0.7; }
 		P.setAt(g, 'cloud', i, at(h.totalcloudcover, n));
 		if (layers) {
 			P.setAt(g, 'cloud_low', i, at(h.lowclouds, n));

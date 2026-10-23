@@ -68,6 +68,8 @@ typedef enum {
 	WEATHER_EVENT_NONE = 2,        // hide; rain expands
 } WeatherEventDisplay;
 
+#define DEFAULT_FETCH_INTERVAL_MIN 15 /* 3.1.2: single default (JS: settings.js) */
+
 typedef enum {
 	SUN_SENS_VERY = 0,        // weak sun still shows; full scale ~500 W/m²
 	SUN_SENS_SENSITIVE = 1,   // prior on-toggle feel; full ~800
@@ -190,7 +192,9 @@ typedef struct {
 	bool show_step_count;
 	TimelineEventMode timeline_event;
 	CloudSensitivity cloud_sensitivity;
-	bool sunlight_rays; /* legacy toggle; migrated into sunlight_sensitivity */
+	bool sunlight_rays; /* legacy toggle, kept only as persist padding so the
+	                     * stored Settings layout stays compatible; the live
+	                     * value is sunlight_sensitivity. */
 	SunlightSensitivity sunlight_sensitivity;
 	CloudDisplayMode cloud_display_mode; /* append for persist compat */
 	StepSize step_size; /* append for persist compat */

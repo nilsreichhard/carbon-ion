@@ -46,7 +46,8 @@ function emptyGrid(provider, nowSec) {
 		temp: nulls(), feels: nulls(), pop: nulls(), precip: nulls(), cloud: nulls(),
 		cloud_low: null, cloud_mid: null, cloud_high: null, visibility_m: null,
 		wmo_code: nulls(), fog: nulls(), shortwave: null, gust: null, cape: null, thunder_prob: null,
-		cloud_base: null, lat: null, lon: null,
+		cloud_base: null, snowfall: null, rh: null, lat: null, lon: null,
+		current_live: false, current_observed: false, current_precip: null, current_snowfall: null, current_rh: null,
 		sunrise: null, sunset: null, tmin: null, tmax: null,
 		current_temp: null, current_code: null, valid_hours: 0, has_layers: false,
 	};
@@ -151,13 +152,45 @@ function fillFrom(g, src, maxSlot) {
 		var j = slot(src, g.time[i]);
 		if (j < 0 || src.temp[j] === null) continue;
 		fields.forEach(function (f) { if (src[f]) g[f][i] = src[f][j]; });
-		['cloud_low', 'cloud_mid', 'cloud_high', 'visibility_m', 'shortwave', 'gust', 'cape', 'thunder_prob'].forEach(function (f) {
-			if (src[f] && !g[f] && (f === 'gust' || f === 'cape' || f === 'thunder_prob')) g[f] = nulls();
+		['cloud_low', 'cloud_mid', 'cloud_high', 'visibility_m', 'shortwave', 'gust', 'cape', 'thunder_prob', 'snowfall', 'rh'].forEach(function (f) {
+			if (src[f] && !g[f] && (f === 'gust' || f === 'cape' || f === 'thunder_prob' || f === 'snowfall' || f === 'rh')) g[f] = nulls();
 			if (g[f] && src[f]) g[f][i] = src[f][j];
 		});
 	}
 	return g;
 }
+
+/* 3.1.2: models sometimes call snow when it is too warm for it to reach
+ * the ground (Villars 23 Oct 2026: ICON-CH1 heavy snow at 5-6 °C). Only
+ * snow codes change; sleet/freezing codes are never touched.
+ * With humidity (wet-bulb, Stull 2011): Tw >= 2 °C rain, Tw <= 0.5 °C snow,
+ * between: rain and snow mixed (68/69).
+ * Without humidity, from temperature and snowfall (cm per hour):
+ *   < 3 °C unchanged; 3-5 °C rain if no snowfall, mix if snowfall;
+ *   5-7 °C mix if snowfall >= 0.05 cm, else rain; >= 7 °C rain.
+ *   No snowfall amount: unchanged below 5 °C, rain from 5 °C. */
+var SNOW_TO_RAIN = { 71: 61, 73: 63, 75: 65, 77: 51, 85: 80, 86: 81 };
+var SNOW_TO_MIX = { 71: 68, 73: 69, 75: 69, 77: 68, 85: 68, 86: 69 };
+var SNOW_MIN_TEMP = 3, SNOW_MAX_TEMP = 5, SNOW_RAIN_TEMP = 7, SNOWFALL_EPS_CM = 0.05;
+var TW_RAIN = 2, TW_SNOW = 0.5;
+function wetBulb(t, rh) {
+	if (t === null || t === undefined || rh === null || rh === undefined || isNaN(rh) || rh <= 0) return null;
+	rh = Math.min(100, rh);
+	return t * Math.atan(0.151977 * Math.sqrt(rh + 8.313659)) + Math.atan(t + rh) - Math.atan(rh - 1.676331) +
+		0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh) - 4.686035;
+}
+function saneSnow(code, temp, snowfallCm, rh) {
+	if (code === null || code === undefined || !SNOW_TO_RAIN[code]) return code;
+	if (temp === null || temp === undefined) return code;
+	var tw = wetBulb(temp, rh);
+	if (tw !== null) return tw >= TW_RAIN ? SNOW_TO_RAIN[code] : tw <= TW_SNOW ? code : SNOW_TO_MIX[code];
+	if (temp < SNOW_MIN_TEMP) return code;
+	if (temp >= SNOW_RAIN_TEMP) return SNOW_TO_RAIN[code];
+	var known = snowfallCm !== null && snowfallCm !== undefined;
+	if (!known) return temp >= SNOW_MAX_TEMP ? SNOW_TO_RAIN[code] : code;
+	return snowfallCm < SNOWFALL_EPS_CM ? SNOW_TO_RAIN[code] : SNOW_TO_MIX[code];
+}
+function isPrecipWmo(c) { return c !== null && c !== undefined && c >= 50; }
 
 /* Derive fog, valid_hours, current, tmin/tmax, sunrise fallback. */
 function finalize(g, nowSec, lat, lon) {
@@ -170,6 +203,35 @@ function finalize(g, nowSec, lat, lon) {
 	}
 	if (g.current_temp === null && nowSlot >= 0) g.current_temp = g.temp[nowSlot];
 	if (g.current_code === null && nowSlot >= 0) g.current_code = g.wmo_code[nowSlot];
+	/* 3.1.2: snow sanity check on every hour (idempotent: finalize can run twice). */
+	for (var si = 0; si < HOURS; si++) {
+		g.wmo_code[si] = saneSnow(g.wmo_code[si], g.temp[si], g.snowfall ? g.snowfall[si] : null, g.rh ? g.rh[si] : null);
+	}
+	/* The watch draws slot PAST as the current local hour (fetch_time's hour),
+	 * so use that slot, not the nearest hour (round() picks the next from :30). */
+	var curSlot = Math.floor((nowSec - g.start) / 3600);
+	if (curSlot < 0 || curSlot >= HOURS) curSlot = -1;
+	/* Observed current conditions (OWM, WeatherAPI) are not second-guessed;
+	 * model "current" values (Open-Meteo 15-min) get the same snow check. */
+	if (!g.current_observed) {
+		g.current_code = saneSnow(g.current_code, g.current_temp,
+			g.current_snowfall !== null ? g.current_snowfall : (g.snowfall && curSlot >= 0 ? g.snowfall[curSlot] : null),
+			g.current_rh !== null ? g.current_rh : (g.rh && curSlot >= 0 ? g.rh[curSlot] : null));
+	}
+	/* 3.1.2: the live/15-min current reading overrides the current hour. */
+	if (g.current_live && curSlot >= 0 && g.current_code !== null) {
+		var wet = isPrecipWmo(g.current_code);
+		g.wmo_code[curSlot] = g.current_code;
+		if (g.current_precip !== null) {
+			/* A precipitation code with 0 mm still shows a minimal bar, so the
+			 * hour never has a rain icon/colour without a bar. */
+			g.precip[curSlot] = wet ? Math.max(0.1, g.current_precip) : g.current_precip;
+		} else if (wet) g.precip[curSlot] = Math.max(0.1, g.precip[curSlot] || 0);
+		else if (g.precip[curSlot] !== null) g.precip[curSlot] = 0;
+		/* Not falling now: rain chance capped at 10 % (the rest of the hour may still turn wet). */
+		if (!wet && g.pop[curSlot] !== null) g.pop[curSlot] = Math.min(g.pop[curSlot], 10);
+		if (g.snowfall && g.current_snowfall !== null) g.snowfall[curSlot] = g.current_snowfall;
+	}
 	/* Rolling next 24 h from now (2.8.5; the watch recomputes the same). */
 	g.tmin = null; g.tmax = null;
 	for (var k = Math.max(0, nowSlot); k < HOURS && k < Math.max(0, nowSlot) + 24; k++) {
@@ -387,7 +449,7 @@ function toPayload(g, unit, fogOn, nowSec, windKmh, fogVis) {
 module.exports = {
 	HOURS: HOURS, PAST: PAST, KEYED_FAIL_RE: KEYED_FAIL_RE,
 	gridStart: gridStart, emptyGrid: emptyGrid, slot: slot, setAt: setAt, num: num,
-	nulls: nulls, isFogWmo: isFogWmo, apparentTemp: apparentTemp, sunTimes: sunTimes,
+	nulls: nulls, isFogWmo: isFogWmo, saneSnow: saneSnow, wetBulb: wetBulb, apparentTemp: apparentTemp, sunTimes: sunTimes,
 	fillFrom: fillFrom, finalize: finalize, toPayload: toPayload,
 	packMm: packMm, hasMm: hasMm, sunElevation: sunElevation, clearSkyGhi: clearSkyGhi, thickLevel: thickLevel, thickBits: thickBits,
 	THICK_LIGHT_KT: THICK_LIGHT_KT, THICK_THICK_KT: THICK_THICK_KT, THICK_MIN_ELEV: THICK_MIN_ELEV, THICK_RAIN_MM: THICK_RAIN_MM, msToKmh: msToKmh, windBits: windBits, stormBits: stormBits, STRONG_CAPE: STRONG_CAPE, STRONG_THUNDER_PROB: STRONG_THUNDER_PROB,

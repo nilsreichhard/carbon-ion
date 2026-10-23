@@ -52,6 +52,9 @@ function getTempUnit() {
  *
  * @returns {number}
  */
+/* 3.1.2: one default refresh interval (matches Clay default and main.c). */
+var DEFAULT_FETCH_INTERVAL = require('./constants').DEFAULT_FETCH_INTERVAL;
+
 function getFetchIntervalMin() {
 	try {
 		var raw = localStorage.getItem('clay-settings');
@@ -63,7 +66,7 @@ function getFetchIntervalMin() {
 			}
 		}
 	} catch (e) { }
-	return 30;
+	return DEFAULT_FETCH_INTERVAL;
 }
 
 /** Selected weather provider id from saved Clay settings. */
@@ -412,9 +415,9 @@ function buildSettingsDict(rawSettings) {
 	}
 	if (stepDisplay < 0 || stepDisplay > 2) stepDisplay = 1;
 	dict['SETTING_STEP_DISPLAY'] = stepDisplay;
-	/* Keep legacy keys in sync for older firmwares */
-	dict['SETTING_SHOW_STEP_COUNT'] = stepDisplay !== 0;
-	dict['SETTING_STEP_SIZE'] = (stepDisplay === 2) ? 1 : 0;
+	/* 3.1.2: the legacy SETTING_SHOW_STEP_COUNT / SETTING_STEP_SIZE keys are no
+	 * longer sent; the watch reads SETTING_STEP_DISPLAY (legacy keys are only
+	 * read above, to migrate old Clay settings). */
 
 	var timelineEvent = extractInt(rawSettings['SETTING_TIMELINE_EVENT']);
 	if (!isNaN(timelineEvent) && timelineEvent >= 0 && timelineEvent <= 2) {
@@ -482,7 +485,7 @@ function buildSettingsDict(rawSettings) {
 	dict['SETTING_FLICK_ACTION'] = flickAction === 1 ? 1 : 0;
 	/* 2.8.2: never refresh faster than the provider allows (quota/cadence). */
 	var provider = extractString(rawSettings['SETTING_WEATHER_PROVIDER']) || 'openmeteo';
-	var eff = weatherProviders.effectiveInterval(provider, dict['SETTING_FETCH_INTERVAL'] || 30);
+	var eff = weatherProviders.effectiveInterval(provider, dict['SETTING_FETCH_INTERVAL'] || DEFAULT_FETCH_INTERVAL);
 	dict['SETTING_FETCH_INTERVAL'] = eff;
 	return dict;
 }
@@ -507,10 +510,23 @@ function weatherSettingsChanged(oldS, newS) {
 	return false;
 }
 
+/* 3.1.2: API keys remembered per keyed provider, so switching provider
+ * no longer sends one provider's key to another (401 → silent fallback). */
+var WX_KEYS_STORE = 'carbon.wxkeys.v1';
+function rememberProviderKey(map, provider, key, caps) {
+	map = map && typeof map === 'object' ? map : {};
+	if (caps && caps[provider] && caps[provider].key) {
+		var k = String(key || '').trim();
+		if (k) map[provider] = k; else delete map[provider];
+	}
+	return map;
+}
+
 module.exports = {
+	rememberProviderKey: rememberProviderKey, WX_KEYS_STORE: WX_KEYS_STORE,
 	weatherSettingsChanged: weatherSettingsChanged, WEATHER_SETTING_KEYS: WEATHER_SETTING_KEYS,
 	shouldUseFahrenheit: shouldUseFahrenheit, getTempUnit: getTempUnit,
-	getFetchIntervalMin: getFetchIntervalMin, getWeatherProvider: getWeatherProvider, getLocalityLanguage: getLocalityLanguage,
+	getFetchIntervalMin: getFetchIntervalMin, DEFAULT_FETCH_INTERVAL: DEFAULT_FETCH_INTERVAL, getWeatherProvider: getWeatherProvider, getLocalityLanguage: getLocalityLanguage,
 	readClaySettings: readClaySettings, flattenClaySettings: flattenClaySettings,
 	sanitizeClaySettingsStorage: sanitizeClaySettingsStorage, unwrapSettingValue: unwrapSettingValue,
 	getBoolSetting: getBoolSetting, getStringSetting: getStringSetting,

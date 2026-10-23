@@ -125,6 +125,7 @@ function packAlarmRows(settings) {
 
 function clearCachedTimelineEvents() {
 	try { localStorage.removeItem('cached_timeline_events'); } catch (e) { }
+	clearCalEventCaches();
 }
 
 function getTimelineEventWindow() {
@@ -241,6 +242,45 @@ function resolveTimelineEvents(timelineEvent, parsedEvents, windowStart, windowE
 	return [];
 }
 
+/* 3.1.2: per-calendar cache, keyed by a hash of the URL (the URL itself is a
+ * secret and is not used as the key). One failing link falls back to its own
+ * last good events instead of dropping or replacing the others. */
+function calCacheKey(url) {
+	var h = 5381;
+	for (var i = 0; i < url.length; i++) h = ((h * 33) ^ url.charCodeAt(i)) >>> 0;
+	return 'cached_cal_events_' + h.toString(36);
+}
+var CAL_CACHE_INDEX = 'cached_cal_events_index';
+function writeCalCache(url, events) {
+	var key = calCacheKey(url);
+	try {
+		localStorage.setItem(key, JSON.stringify(events));
+		var idx = JSON.parse(localStorage.getItem(CAL_CACHE_INDEX) || '[]');
+		if (idx.indexOf(key) < 0) { idx.push(key); localStorage.setItem(CAL_CACHE_INDEX, JSON.stringify(idx)); }
+	} catch (e) { }
+}
+/* Remove every per-calendar cache, including links that were since removed:
+ * keys come from the index plus a localStorage scan where supported. */
+function clearCalEventCaches() {
+	var keys = [];
+	try { keys = JSON.parse(localStorage.getItem(CAL_CACHE_INDEX) || '[]'); } catch (e) { }
+	try {
+		var n = localStorage.length;
+		for (var i = 0; typeof n === 'number' && i < n; i++) {
+			var k = localStorage.key(i);
+			if (k && k.indexOf('cached_cal_events_') === 0) keys.push(k);
+		}
+	} catch (e2) { }
+	keys.push(CAL_CACHE_INDEX);
+	keys.forEach(function (k) { try { localStorage.removeItem(k); } catch (e3) { } });
+}
+function readCalCache(url) {
+	try {
+		var v = JSON.parse(localStorage.getItem(calCacheKey(url)) || 'null');
+		return Array.isArray(v) ? v : null;
+	} catch (e) { return null; }
+}
+
 function fetchCalendarEvents(payload, callback) {
 	var settings = readClaySettings();
 	var calendars = getConfiguredCalendars(settings);
@@ -294,6 +334,9 @@ function fetchCalendarEvents(payload, callback) {
 			var parsed = parseIcsEvents(
 				text, MAX_TIMELINE_EVENTS, win.windowStart, win.windowEnd
 			);
+			writeCalCache(cal.url, parsed.map(function (e) {
+				return { start: e.start, end: e.end, allDay: !!e.allDay };
+			}));
 			for (var i = 0; i < parsed.length; i++) {
 				merged.push({
 					start: parsed[i].start,
@@ -308,14 +351,44 @@ function fetchCalendarEvents(payload, callback) {
 		}
 		/* Direct fetch only (no third-party proxies: the ICS URL is a secret).
 		 * One retry; on failure the last good cache is used. */
+		function failed(err) {
+			eventLog.log('cal_fail', err || 'not ics');
+			anyFail = true;
+			var cached = readCalCache(cal.url);
+			if (cached) {
+				var kept = filterTimelineEventsInWindow(cached, win.windowStart, win.windowEnd);
+				for (var j = 0; j < kept.length; j++) {
+					merged.push({ start: kept[j].start, end: kept[j].end, allDay: !!kept[j].allDay,
+						color: cal.color, place: cal.place });
+				}
+				eventLog.log('cal_cache1', 'n=' + kept.length + ' ' + maskUrl(cal.url));
+				anyOk = true; /* this calendar is served from its own cache */
+			}
+			finishOne();
+		}
+		function isIcs(err, text) {
+			return !err && text && text.indexOf('BEGIN:VCALENDAR') >= 0;
+		}
 		retryXhr(cal.url, 2, 2000, 'calendar fetch', function (err, responseText) {
-			if (!err && responseText && responseText.indexOf('BEGIN:VCALENDAR') >= 0) {
+			if (isIcs(err, responseText)) {
 				accept(responseText);
 				return;
 			}
-			eventLog.log('cal_fail', err || 'not ics');
-			anyFail = true;
-			finishOne();
+			/* 3.1.2: an http:// link is tried over https first; if that fails,
+			 * try the original http:// once (some phones allow it). */
+			if (s_httpsLogged[cal.url] && /^https:\/\//i.test(cal.url)) {
+				var plain = 'http://' + cal.url.substring(8);
+				retryXhr(plain, 1, 0, 'calendar fetch http', function (err2, text2) {
+					if (isIcs(err2, text2)) {
+						eventLog.log('cal_http', 'fell back to http');
+						accept(text2);
+						return;
+					}
+					failed(err || err2);
+				});
+				return;
+			}
+			failed(err);
 		});
 	}
 
@@ -328,4 +401,5 @@ module.exports = {
 	fetchCalendarEvents: fetchCalendarEvents, packAlarmRows: packAlarmRows,
 	getConfiguredCalendars: getConfiguredCalendars, resolveTimelineEvents: resolveTimelineEvents,
 	getTimelineEventWindow: getTimelineEventWindow,
+	_calCacheKey: calCacheKey, clearCalEventCaches: clearCalEventCaches,
 };

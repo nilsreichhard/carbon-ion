@@ -101,7 +101,7 @@ static const char *prv_hour_event(const uint8_t *codes, const uint8_t *fog,
 	if (icon)
 		return icon;
 	if (wind && wind[i]) {
-		*out_color = GColorPurple;
+		*out_color = GColorIslamicGreen;
 		*out_kind = EVENT_KIND_WIND;
 		return ""; /* drawn as a bit mask, not a glyph */
 	}
@@ -212,13 +212,20 @@ static void prv_draw_bolt_icon(GContext *ctx, int cx, int cy, GColor col, int32_
 	gx_mask(ctx, &t, s_mask_bolt, 9, 13, -4, -6, col);
 }
 
-/* Wind (2.9.3): two gust lines with curled ends and a short middle line,
- * 10 x 9 px (the fog/snow footprint). Row y, bit x. */
-static const uint16_t s_mask_wind[9] = {0x1c0, 0x200, 0x1ff, 0x000, 0x07f, 0x000, 0x1ff, 0x200, 0x1c0};
+/* Wind (3.1.2, adapted from the Lucide "wind" icon, ISC licence): two gust
+ * lines, the upper with a flat hook rising 3 rows and turning back 4 px, the
+ * lower with an open curl dropping 3 rows. 12 x 10 px drawn at cx-6..cx+5,
+ * cy-4..cy+5, so the empty rows 4-5 take the range line both on gabbro and
+ * on emery (icon lifted 1 px above the line). Row y, bit x. */
+#define WIND_W 12
+#define WIND_H 10
+#define WIND_OX (-6)
+#define WIND_OY (-4)
+static const uint16_t s_mask_wind[WIND_H] = {0x780, 0x800, 0x800, 0x7ff, 0x000, 0x000, 0x1ff, 0x200, 0x200, 0x1c0};
 
 static void prv_draw_wind_icon(GContext *ctx, int cx, int cy, GColor col, int32_t angle) {
 	GlyphXf t = {(int16_t)cx, (int16_t)cy, cos_lookup(angle), sin_lookup(angle)};
-	gx_mask(ctx, &t, s_mask_wind, 10, 9, -5, -4, col);
+	gx_mask(ctx, &t, s_mask_wind, WIND_W, WIND_H, WIND_OX, WIND_OY, col);
 }
 
 #if defined(PBL_PLATFORM_EMERY)
@@ -268,9 +275,10 @@ static GColor prv_span_color(const EventSpan *span) {
 	 * prv_fog_second() (see there). */
 	if (span->kind == EVENT_KIND_FOG)
 		return GColorDarkGray;
-	/* 2.9.3: wind is violet, apart from thunder tan, snow blue, tornado orange. */
+	/* 3.1.2: wind is green (was violet), apart from thunder tan, snow blue,
+	 * tornado orange and the blue/teal rain colours. */
 	if (span->kind == EVENT_KIND_WIND)
-		return light ? GColorPurple : GColorLavenderIndigo;
+		return light ? GColorIslamicGreen : GColorScreaminGreen;
 	if (span->kind == EVENT_KIND_STORM)
 		return light ? GColorWindsorTan : GColorYellow; /* dark amber */
 	if (span->kind == EVENT_KIND_SNOW)
@@ -344,6 +352,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		int icon_size = 12;
 		int icon_gap =
 		    icon_size / 2 + 1; // Add gap between icon and extent lines.
+		if (span->kind == EVENT_KIND_WIND)
+			icon_gap = -WIND_OX + 2; /* 12 px wind icon: keep 1 px clear each side */
 		GColor icon_color = prv_span_color(span);
 
 		graphics_context_set_stroke_width(ctx, 1);
@@ -393,7 +403,7 @@ static bool prv_draw_mask_icon(GContext *ctx, const EventSpan *span, GPoint p, i
 	} else if (span->kind == EVENT_KIND_TORNADO) {
 		m = s_mask_tornado; w = 7; h = 9; ox = -3; oy = -4;
 	} else if (span->kind == EVENT_KIND_WIND) {
-		m = s_mask_wind; w = 10; h = 9; ox = -5; oy = -4;
+		m = s_mask_wind; w = WIND_W; h = WIND_H; ox = WIND_OX; oy = WIND_OY;
 	} else {
 		return false;
 	}

@@ -48,6 +48,8 @@ function parse(json, ctx) {
 			P.setAt(g, 'feels', i, P.num(h.feelslike_c));
 			P.setAt(g, 'pop', i, Math.max(P.num(h.chance_of_rain) || 0, P.num(h.chance_of_snow) || 0));
 			P.setAt(g, 'precip', i, P.num(h.precip_mm));
+			P.setAt(g, 'rh', i, P.num(h.humidity));
+			if (h.snow_cm !== undefined) { if (!g.snowfall) g.snowfall = P.nulls(); g.snowfall[i] = P.num(h.snow_cm); } /* 3.1.2 */
 			P.setAt(g, 'cloud', i, P.num(h.cloud));
 			P.setAt(g, 'gust', i, P.num(h.gust_kph));
 			P.setAt(g, 'visibility_m', i, visKm === null ? null : visKm * 1000);
@@ -60,7 +62,8 @@ function parse(json, ctx) {
 	if (d0 && d0.day) { g.tmax = P.num(d0.day.maxtemp_c); g.tmin = P.num(d0.day.mintemp_c); }
 	if (json.current) {
 		g.current_temp = P.num(json.current.temp_c);
-		if (json.current.condition) g.current_code = codeToWmo(json.current.condition.code, P.num(json.current.vis_km));
+		if (json.current.condition) { g.current_code = codeToWmo(json.current.condition.code, P.num(json.current.vis_km)); g.current_live = true; g.current_observed = true; }
+		if (json.current.precip_mm !== undefined) g.current_precip = P.num(json.current.precip_mm);
 	}
 	var sr = d0 && d0.astro && clock(d0.astro.sunrise), ss = d0 && d0.astro && clock(d0.astro.sunset);
 	if (sr && ss) { g.sunriseLocal = sr; g.sunsetLocal = ss; g.sunrise = 0; g.sunset = 0; }

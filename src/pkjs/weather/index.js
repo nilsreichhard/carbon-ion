@@ -8,6 +8,7 @@
  * @license GPL-3.0-or-later
  */
 var P = require('./provider');
+var DEFAULT_FETCH_INTERVAL = require('../constants').DEFAULT_FETCH_INTERVAL;
 var PROVIDERS = {
 	openmeteo: require('./openmeteo'),
 	metno: require('./metno'),
@@ -124,15 +125,19 @@ function run(prov, o, deps, cb) {
 			return;
 		}
 		if (!prov.needsPastFill || !missingPast(g)) { finish(g, o, deps, cb); return; }
-		var prev = readJson(deps.store, PREV_GRID);
-		if (prev && prev.grid && sameCoords(prev, o, 2)) P.fillFrom(g, prev.grid, P.PAST);
-		if (!missingPast(g)) { P.finalize(g, o.now, o.lat, o.lon); finish(g, o, deps, cb); return; }
+		/* 3.1.2: past hours from Open-Meteo's latest run first (the previous
+		 * fetch's saved grid holds old forecasts); the saved grid only fills
+		 * what is still missing. A failed extra request is not a provider error. */
 		var om = PROVIDERS.openmeteo;
 		deps.get(om.buildUrl(o.lat, o.lon, { pastOnly: true }), {}, function (e2, t2) {
 			if (!e2) {
-				try { P.fillFrom(g, om.parse(JSON.parse(t2), o), P.PAST); } catch (e) { }
+				try { P.fillFrom(g, om.parse(JSON.parse(t2), o), P.PAST); } catch (e) { e2 = 'parse'; }
 			}
-			if (e2) deps.log('wx_past', 'open-meteo past fill failed');
+			if (e2) deps.log('wx_past', 'open-meteo past fill unavailable, using saved grid');
+			if (missingPast(g)) {
+				var prev = readJson(deps.store, PREV_GRID);
+				if (prev && prev.grid && sameCoords(prev, o, 2)) P.fillFrom(g, prev.grid, P.PAST);
+			}
 			g.valid_hours = 0;
 			P.finalize(g, o.now, o.lat, o.lon);
 			finish(g, o, deps, cb);
@@ -163,7 +168,7 @@ function fetchWeather(o, deps, cb) {
 /** Effective refresh interval (minutes) for a provider: never below its minimum. */
 function effectiveInterval(provider, chosenMin) {
 	var c = CAPS[provider] || CAPS.openmeteo;
-	var v = Number(chosenMin) || 30;
+	var v = Number(chosenMin) || DEFAULT_FETCH_INTERVAL;
 	return Math.max(v, c.minInterval || 15);
 }
 

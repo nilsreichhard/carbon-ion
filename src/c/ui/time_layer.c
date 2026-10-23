@@ -336,6 +336,10 @@ static void prv_step_metrics(StepSize size, GFont *num_font, GFont *k_font,
 
 /* Center the step stack in the flank between time digits and the right edge.
  * Same math for Normal and Bold — do not widen/shift the slot by weight. */
+#define TL_STEP_INK_DY (-2) /* 3.1.1 */
+#define TL_STEP_2D_DX 2      /* 3.1.2 */
+#define TL_STEP_INK_SLACK 2  /* 3.1.2: blank right of the number's ink */
+
 static void prv_layout_step_label(TimeLayer *tl) {
 	if (!tl || !tl->container || !tl->step_label || !tl->step_k_label)
 		return;
@@ -347,10 +351,16 @@ static void prv_layout_step_label(TimeLayer *tl) {
 	prv_step_metrics(settings_get()->step_size, &num_font, &k_font, &num_h, &k_h);
 	text_layer_set_font(tl->step_label, num_font);
 	text_layer_set_font(tl->step_k_label, k_font);
-	int num_k_gap = -2;
+	/* 3.1.1: both weights show 3 px between the number and the K (Bold's
+	 * K box is 18 px, Normal's 14 px). */
+	int num_k_gap = settings_get()->step_size == STEP_SIZE_LARGE ? -4 : -2;
 	int stack_h = num_h + num_k_gap + k_h;
 	int band_h = TL_TIME_H - TL_TIME_PAD;
 	int step_y = time_y + TL_TIME_PAD + (band_h - stack_h) / 2;
+	/* 3.1.1: the font boxes carry more blank below the ink than above, so the
+	 * box-centred stack sat 2.5 px low; centre on the visible ink of the time
+	 * digits (measured: within 0.5 px on emery and gabbro, both weights). */
+	step_y += TL_STEP_INK_DY;
 	if (step_y < time_y)
 		step_y = time_y;
 
@@ -390,13 +400,14 @@ static void prv_layout_step_label(TimeLayer *tl) {
 		flank_left = w / 2;
 	int flank_right = w - edge;
 
-	const char *num_str = tl->step_buf[0] ? tl->step_buf : "0";
 	/* Never ellipsize, never shrink the font (Nils, 3.0.3): 1K-99K all use
 	 * the same face and flank_right stays at w - edge. If the count does not
 	 * fit, the gap to the time gives way, down to 2 px of visible blank. */
 	int text_pad = 2; /* TextLayer needs a little slack or it ellipsizes */
+	/* 3.1.1: the stack box is sized for "00" in this weight and both lines
+	 * are centred in it, so the K never moves between 1 and 2 digits. */
 	GSize num_size = graphics_text_layout_get_content_size(
-	    num_str, num_font, GRect(0, 0, 100, num_h),
+	    "00", num_font, GRect(0, 0, 100, num_h),
 	    GTextOverflowModeWordWrap, GTextAlignmentLeft);
 	/* The last '0' cell has 3 px of blank right of its ink (emery: ink ends
 	 * at x=177, box at 180), so 2 px into the box still leaves >= 2 px visible. */
@@ -413,8 +424,28 @@ static void prv_layout_step_label(TimeLayer *tl) {
 		content_w = flank_right - min_left;
 	}
 
+	/* 3.1.2: two-digit counts (10K-99K) nudge only the number right, away
+	 * from the minutes; the K box stays where it is. */
+	int num_dx = 0;
+	if (tl->step_buf[0] && tl->step_buf[1]) {
+		/* Fit check incl. the nudge: the shifted number's right edge (its real
+		 * width, centred in the box) must stay inside flank_right, which
+		 * already holds the edge/bezel margin. Shrink the nudge if not. */
+		GSize real = graphics_text_layout_get_content_size(
+		    tl->step_buf, num_font, GRect(0, 0, 100, num_h),
+		    GTextOverflowModeWordWrap, GTextAlignmentLeft);
+		int num_right = slot_left + (content_w + real.w) / 2;
+		/* The measured box ends 2 px right of the last digit's ink
+		 * (side bearing), so +2 still leaves >= 3 px visible on emery
+		 * (edge 4) and >= 5 px to the gabbro rim (measured). */
+		num_dx = flank_right + TL_STEP_INK_SLACK - num_right;
+		if (num_dx > TL_STEP_2D_DX)
+			num_dx = TL_STEP_2D_DX;
+		if (num_dx < 0)
+			num_dx = 0;
+	}
 	layer_set_frame(text_layer_get_layer(tl->step_label),
-	                GRect(slot_left, step_y, content_w, num_h));
+	                GRect(slot_left + num_dx, step_y, content_w, num_h));
 	text_layer_set_text_alignment(tl->step_label, GTextAlignmentCenter);
 	layer_set_frame(text_layer_get_layer(tl->step_k_label),
 	                GRect(slot_left, step_y + num_h + num_k_gap, content_w, k_h));

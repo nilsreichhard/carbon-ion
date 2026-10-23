@@ -62,6 +62,17 @@ var t14t=Date.now(), t14=ics.parseEvents(big,U('2026-10-14T00:00Z'),U('2026-10-1
 check('ICS > 2 MB rejected quickly', [t14.length, !!t14.tooLarge, Date.now()-t14t<200], [0,true,true]);
 var many=[]; for(var k=0;k<2500;k++) many=many.concat(ev(['UID:m'+k,'DTSTART:20261015T120000Z']));
 check('VEVENT cap 2000', ics.parseEvents(cal(many),U('2026-10-14T00:00Z'),U('2026-10-17T00:00Z')).length, 2000);
+/* 3.1.2: large unsorted feed: 5000 old events, in-window events at #1235 and #5001, plus an old daily series */
+var big=[]; for(var k2=0;k2<5000;k2++){ var mo=('0'+(1+k2%12)).slice(-2); big=big.concat(ev(['UID:o'+k2,'DTSTART:2019'+mo+'10T120000Z','DTEND:2019'+mo+'10T130000Z']));
+ if(k2===1234||k2===4999) big=big.concat(ev(['UID:now'+k2,'DTSTART:20261015T120000Z','DTEND:20261015T130000Z'])); }
+big=big.concat(ev(['UID:rr','DTSTART:20200101T080000Z','DTEND:20200101T083000Z','RRULE:FREQ=DAILY']));
+/* 3.1.2 re-check: DURATION without DTEND, started 5 days before the window (P10D) must survive the prefilter */
+var tdur=ics.parseEvents(cal([].concat(big.slice(0,0),ev(['UID:dur','DTSTART;VALUE=DATE:20261010','DURATION:P10D']),ev(['UID:durT','DTSTART:20261009T080000Z','DURATION:P7DT2H']))),U('2026-10-14T00:00Z'),U('2026-10-17T00:00Z'));
+check('Prefilter keeps multi-day DURATION events (P10D all-day, P7DT2H timed)', tdur.length, 2);
+var tdur2=ics.parseEvents(cal(ev(['UID:durOld','DTSTART:20261001T080000Z','DURATION:PT1H'])),U('2026-10-14T00:00Z'),U('2026-10-17T00:00Z'));
+check('Prefilter still drops a short old DURATION event', tdur2.length, 0);
+var tb=ics.parseEvents(cal(big),U('2026-10-14T00:00Z'),U('2026-10-17T00:00Z'));
+check('large unsorted feed: in-window singles past the cap + recurring kept', [tb.filter(function(e){return e.start===U('2026-10-15T12:00Z');}).length, tb.filter(function(e){return e.end-e.start===1800;}).length], [2,3]);
 var t15t=Date.now(), t15=ics.parseEvents(cal([].concat(ev(['UID:b1','DTSTART:19000101T090000Z','RRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR,SA,SU;COUNT=99999999']),ev(['UID:b2','DTSTART:20261015T120000Z']))),U('2026-10-14T00:00Z'),U('2026-10-17T00:00Z'),{recurBudget:1000});
 check('Recurrence budget stops runaway series, singles survive', [t15.length, Date.now()-t15t<500], [1,true]);
 /* 2.8.5: COUNT series skip ahead (counting skipped instances) */

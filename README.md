@@ -221,6 +221,7 @@ This will update `src/c/generated/icons.h` with the icon names and codepoints, w
   - Dual temperature spline curves (bold actual curve vs parallel dashed apparent curve) with non-overflowing solid thermal infill shading and dynamic window min/max scale readouts.
   - Configurable timeline battery milestones and hourly axis ticks.
   - Standalone Rebble CloudPebble vendoring and dynamic AppMessage payloads.
+- **Wind icon**: the high-wind event icon (3.1.2) is a hand-pixelled adaptation of the **[Lucide](https://lucide.dev)** `wind` icon. Lucide is © Lucide Icons and Contributors, released under the [ISC License](https://github.com/lucide-icons/lucide/blob/main/LICENSE): *Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.*
 
 ## License
 

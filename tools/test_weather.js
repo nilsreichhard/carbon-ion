@@ -54,7 +54,7 @@ ts.push({ time: iso(Date.UTC(2026, 9, 18, 6) / 1000), data: { instant: { details
 var gm = W.PROVIDERS.metno.parse({ properties: { timeseries: ts } }, CTX);
 check('MET past empty, forecast from now slot', [gm.temp[11], gm.temp[12] !== null], [null, true]);
 check('MET fog: fog_area_fraction>=50 / fog symbol', [gm.fog[15], gm.fog[17], gm.fog[16]], [1, 1, 0]);
-check('MET symbols → WMO', [gm.wmo_code[13], gm.wmo_code[18], gm.wmo_code[19], gm.wmo_code[20]], [2, 45, 97, 85]); /* 3.0.3: next_1_hours → slot + 1 */ /* 2.9.6: heavy thunder 97, not hail 96 */
+check('MET symbols → WMO', [gm.wmo_code[13], gm.wmo_code[18], gm.wmo_code[19], gm.wmo_code[20]], [2, 45, 97, 80]); /* 3.1.2: 85 at ~11 °C → sanity 80 */ /* 3.0.3: next_1_hours → slot + 1 */ /* 2.9.6: heavy thunder 97, not hail 96 */
 var capG = W.PROVIDERS.metno.parse({ properties: { timeseries: ts.map(function (e, i) {
 	if (i !== 0 || !e.data.instant.details.cloud_area_fraction) return e;
 	var c = JSON.parse(JSON.stringify(e)); var d = c.data.instant.details;
@@ -90,7 +90,7 @@ var ow = { current: { temp: 15, weather: [{ id: 802 }], visibility: 10000, sunri
 var go = W.PROVIDERS.owm.parse(ow, CTX);
 check('OWM fog: 741, 701+vis<1000 (701 at 10 km = no)', [go.fog[13], go.fog[14], go.fog[15]], [1, 1, 0]);
 check('OWM 48h → valid 60, pad no-data', [go.valid_hours, go.temp[60], go.temp[59]], [60, null, 14]);
-check('OWM pop 0..1 → %, rain → precip, 501 → 63', [go.pop[12], go.precip[16], go.wmo_code[16]], [35, 1.5, 63]);
+check('OWM pop 0..1 → %, rain → precip, 501 → 63', [go.pop[13], go.precip[16], go.wmo_code[16]], [35, 1.5, 63]);
 check('OWM payload valid_hours', P.toPayload(go, 'celsius', true, NOW).valid_hours, 60);
 
 /* ---- WeatherAPI.com ---- */
@@ -171,12 +171,16 @@ check('fetchWeather passes model + attribution', out, [null, 'Weather data by Op
 var gts = hours(Date.UTC(2026, 9, 15, 16) / 1000, 57);
 var geo = { timestamps: gts.map(function (t) { return new Date(t * 1000).toISOString().slice(0, 16) + '+00:00'; }),
 	features: [{ properties: { parameters: {
-		t2m: { data: gts.map(function (_, i) { return 15 + i * 0.1; }) },
-		tcc: { data: gts.map(function (_, i) { return i === 0 ? 1 : 0.5; }) },
-		rr_acc: { data: gts.map(function (_, i) { return i < 3 ? 0 : 1.2 * (i - 2); }) },
-		grad: { data: gts.map(function (_, i) { return 3600 * 100 * i; }) } } } }] };
+		'2t': { data: gts.map(function (_, i) { return 15 + i * 0.1; }) },
+		'2r': { data: gts.map(function () { return 70; }) },
+		tcc: { data: gts.map(function (_, i) { return i === 0 ? 100 : 50; }) },
+		tp: { data: gts.map(function (_, i) { return i < 3 ? 0 : 1.2; }) },
+		sf: { data: gts.map(function () { return 0; }) },
+		ssrd: { data: gts.map(function () { return 100; }) },
+		'10fg': { data: gts.map(function () { return 10; }) },
+		cape: { data: gts.map(function () { return 50; }) } } } }] };
 var GEO = W.PROVIDERS.geosphere;
-check('GeoSphere URL', GEO.buildUrl(46.3, 7), 'https://dataset.api.hub.geosphere.at/v1/timeseries/forecast/nwp-v1-1h-2500m?lat_lon=46.3000,7.0000&parameters=t2m,tcc,rr_acc,grad&output_format=geojson');
+check('GeoSphere URL', GEO.buildUrl(46.3, 7), 'https://dataset.api.hub.geosphere.at/v1/timeseries/forecast/nwp-v2-1h-1km?lat_lon=46.3000,7.0000&parameters=2t,2r,tcc,tp,sf,ssrd,10fg,cape&output_format=geojson');
 logs = [];
 W.fetchWeather({ provider: 'geosphere', lat: 46.3, lon: 7, now: NOW, unit: 'celsius', fogOn: true },
 	deps([[/geosphere\.at/, null, JSON.stringify(geo)], [/open-meteo/, null, JSON.stringify(om)]], logs),
@@ -205,7 +209,7 @@ function mbFix(withClouds) {
 }
 var MB = W.PROVIDERS.meteoblue;
 var gb = MB.parse(mbFix(true), CTX);
-check('Meteoblue pictocodes → WMO', [gb.wmo_code[12], gb.wmo_code[13], gb.wmo_code[14], gb.wmo_code[15], gb.wmo_code[16], gb.wmo_code[17]], [2, 45, 3, 95, 65, 71]);
+check('Meteoblue pictocodes → WMO', [gb.wmo_code[12], gb.wmo_code[13], gb.wmo_code[14], gb.wmo_code[15], gb.wmo_code[16], gb.wmo_code[17]], [2, 45, 3, 95, 65, 61]); /* 3.1.2: snow at 11 °C → 61 */
 check('Meteoblue fog: picto 16-18 / fog_probability ≥50 / vis <1 km', [gb.fog[13], gb.fog[14], gb.fog[18], gb.fog[12]], [1, 1, 1, 0]);
 check('Meteoblue clouds-1h → 3 layers, 7 d covers grid', [gb.has_layers, gb.cloud_mid[20], gb.valid_hours, gb.precip[16], gb.feels[12]], [true, 20, 72, 2.5, 9]);
 var gb2 = MB.parse(mbFix(false), CTX);
@@ -274,19 +278,19 @@ check('Gust OM URL asks wind_gusts_10m in km/h', [/wind_gusts_10m/.test(W.PROVID
 check('Wind bits >= 50 km/h (49.9 not)', P.toPayload(gG, 'celsius', true, NOW, 50).wind_bits, [0, 0, 0, 1, 0, 0, 0, 0, 0]);
 check('Wind bits off (0) / threshold 40', [P.toPayload(gG, 'celsius', true, NOW, 0).wind_bits.join(''), P.toPayload(gG, 'celsius', true, NOW, 40).wind_bits[3]], ['000000000', 3]);
 check('Wind bits: no gust data never triggers', P.windBits(P.emptyGrid('meteoblue', NOW), 40), [0, 0, 0, 0, 0, 0, 0, 0, 0]);
-var tsG = [{ time: iso(H0 + 13 * 3600), data: { instant: { details: { air_temperature: 5, wind_speed_of_gust: 15 } }, next_1_hours: { summary: { symbol_code: 'lightsnow' }, details: { precipitation_amount: 0.3 } } } },
-	{ time: iso(H0 + 14 * 3600), data: { instant: { details: { air_temperature: 5, wind_speed_of_gust: 5 } }, next_1_hours: { summary: { symbol_code: 'snow' }, details: { precipitation_amount: 1 } } } },
-	{ time: iso(H0 + 15 * 3600), data: { instant: { details: { air_temperature: 5 } }, next_1_hours: { summary: { symbol_code: 'cloudy' }, details: { precipitation_amount: 0 } } } }]; /* 3.0.3: trailing hourly step so the last window shifts */
+var tsG = [{ time: iso(H0 + 13 * 3600), data: { instant: { details: { air_temperature: 0, wind_speed_of_gust: 15 } }, next_1_hours: { summary: { symbol_code: 'lightsnow' }, details: { precipitation_amount: 0.3 } } } },
+	{ time: iso(H0 + 14 * 3600), data: { instant: { details: { air_temperature: 0, wind_speed_of_gust: 5 } }, next_1_hours: { summary: { symbol_code: 'snow' }, details: { precipitation_amount: 1 } } } },
+	{ time: iso(H0 + 15 * 3600), data: { instant: { details: { air_temperature: 0 } }, next_1_hours: { summary: { symbol_code: 'cloudy' }, details: { precipitation_amount: 0 } } } }]; /* 3.0.3: trailing hourly step so the last window shifts */
 var gmG = W.PROVIDERS.metno.parse({ properties: { timeseries: tsG } }, CTX);
 check('Gust MET wind_speed_of_gust m/s → km/h', [gmG.gust[13], gmG.gust[14]], [54, 18]);
-var gtG = W.PROVIDERS.tomorrow.parse({ timelines: { hourly: [{ time: iso(H0 + 13 * 3600), values: { temperature: 5, windGust: 20, weatherCode: 5100 } }, { time: iso(H0 + 14 * 3600), values: { temperature: 5, windGust: 1, weatherCode: 5000 } }] } }, CTX);
+var gtG = W.PROVIDERS.tomorrow.parse({ timelines: { hourly: [{ time: iso(H0 + 13 * 3600), values: { temperature: 0, windGust: 20, weatherCode: 5100 } }, { time: iso(H0 + 14 * 3600), values: { temperature: 0, windGust: 1, weatherCode: 5000 } }] } }, CTX);
 check('Gust Tomorrow windGust m/s → km/h', gtG.gust[13], 72);
-var owG = W.PROVIDERS.owm.parse({ list: [{ dt: H0 + 12 * 3600, main: { temp: 5, feels_like: 3 }, pop: 0, clouds: { all: 50 }, visibility: 10000, wind: { gust: 14 }, weather: [{ id: 600 }] },
-	{ dt: H0 + 15 * 3600, main: { temp: 5, feels_like: 3 }, pop: 0, clouds: { all: 50 }, visibility: 10000, wind: { gust: 20 }, weather: [{ id: 601 }] }] }, CTX);
+var owG = W.PROVIDERS.owm.parse({ list: [{ dt: H0 + 12 * 3600, main: { temp: 0, feels_like: 3 }, pop: 0, clouds: { all: 50 }, visibility: 10000, wind: { gust: 14 }, weather: [{ id: 600 }] },
+	{ dt: H0 + 15 * 3600, main: { temp: 0, feels_like: 3 }, pop: 0, clouds: { all: 50 }, visibility: 10000, wind: { gust: 20 }, weather: [{ id: 601 }] }] }, CTX);
 check('Gust OWM 2.5 wind.gust m/s → km/h, interpolated', [owG.gust[12], owG.gust[15], Math.round(owG.gust[13] * 10) / 10], [50.4, 72, 57.6]);
-var ocG = W.PROVIDERS.owm.parse({ hourly: [{ dt: H0 + 12 * 3600, temp: 5, feels_like: 3, clouds: 50, wind_gust: 12, weather: [{ id: 800 }] }] }, CTX);
+var ocG = W.PROVIDERS.owm.parse({ hourly: [{ dt: H0 + 12 * 3600, temp: 0, feels_like: 3, clouds: 50, wind_gust: 12, weather: [{ id: 800 }] }] }, CTX);
 check('Gust OWM One Call wind_gust m/s → km/h', ocG.gust[12], 43.2);
-var waG = W.PROVIDERS.weatherapi.parse({ forecast: { forecastday: [{ hour: [{ time_epoch: H0 + 13 * 3600, temp_c: 5, feelslike_c: 3, cloud: 50, gust_kph: 61, condition: { code: 1210 } }, { time_epoch: H0 + 14 * 3600, temp_c: 5, feelslike_c: 3, cloud: 50, gust_kph: 10, condition: { code: 1219 } }] }] } }, CTX);
+var waG = W.PROVIDERS.weatherapi.parse({ forecast: { forecastday: [{ hour: [{ time_epoch: H0 + 13 * 3600, temp_c: 0, feelslike_c: 3, cloud: 50, gust_kph: 61, condition: { code: 1210 } }, { time_epoch: H0 + 14 * 3600, temp_c: 0, feelslike_c: 3, cloud: 50, gust_kph: 10, condition: { code: 1219 } }] }] } }, CTX);
 check('Gust WeatherAPI gust_kph', [waG.gust[13], waG.gust[14]], [61, 10]);
 var geoG = P.emptyGrid('geosphere', NOW); for (var gi = 12; gi < 40; gi++) geoG.temp[gi] = 5;
 W.blend(geoG, gG);
@@ -399,5 +403,97 @@ check('Thickness packing: 18 bytes, 2 bits/hour, hour 0 in the low bits', [tb.le
 check('Payload carries cloud_thick (OM fixture, 18 bytes, values 0-3)', [p.cloud_thick.length, p.cloud_thick.every(function (b) { return b >= 0 && b <= 255; })], [18, true]);
 var tmr = W.PROVIDERS.tomorrow.parse({ timelines: { hourly: [{ time: iso(NOW - 1200), values: { temperature: 10, cloudCover: 95, cloudBase: 0.4, weatherCode: 1001 } }] } }, CTX);
 check('Tomorrow.io cloudBase km → m on the grid', tmr.cloud_base[P.slot(tmr, NOW - 1200)], 400);
+/* ---- 3.1.2: snow sanity check ---- */
+check('saneSnow: >=5 °C → rain equivalents', [71, 73, 75, 77, 85, 86].map(function (c) { return P.saneSnow(c, 6, 0); }), [61, 63, 65, 51, 80, 81]);
+check('saneSnow (no humidity): <3 °C kept; 5-7 °C with snowfall → mix; 3-5 °C: snowfall → mix 68/69, none → rain, unknown → kept', [P.saneSnow(75, 1, 0), P.saneSnow(75, 2.9, null), P.saneSnow(75, 6, 0.8), P.saneSnow(73, 5, null), P.saneSnow(73, 4, 0.3), P.saneSnow(71, 4, 0.3), P.saneSnow(73, 4, 0), P.saneSnow(73, 4, null)], [75, 75, 69, 63, 69, 68, 63, 73]);
+check('saneSnow: sleet/freezing/rain/null untouched', [56, 57, 66, 67, 68, 69, 61, null].map(function (c) { return P.saneSnow(c, 8, 0); }), [56, 57, 66, 67, 68, 69, 61, null]);
+/* Villars-sur-Ollon 23 Oct 2026 (ICON-CH1): heavy snow code at 4-6 °C. */
+var omS = JSON.parse(JSON.stringify(om));
+omS.hourly.temperature_2m = t72.map(function (_, i) { return i < 20 ? 4 : -2; });
+omS.hourly.weather_code = t72.map(function () { return 75; });
+omS.hourly.snowfall = t72.map(function (_, i) { return i === 5 ? 0.9 : 0; });
+omS.current = { temperature_2m: 6, weather_code: 75, precipitation: 0, snowfall: 0, interval: 900 };
+var gS = W.PROVIDERS.openmeteo.parse(omS, CTX);
+var omU = W.PROVIDERS.openmeteo.buildUrl(46.3, 7.05, {});
+check('OM URL requests hourly snowfall/rain + current precip/snowfall', /hourly=[^&]*snowfall,relative_humidity_2m/.test(omU) && /current=[^&]*precipitation,snowfall,relative_humidity_2m/.test(omU) && !/[,=]rain[,&]/.test(omU), true);
+check('OM 75 at 4 °C: 0 snowfall → 65, snowfall → 69; cold stays 75', [gS.wmo_code[14], gS.wmo_code[5], gS.wmo_code[25]], [65, 69, 75]);
+check('OM current 75 at 6 °C → 65', gS.current_code, 65);
+
+/* ---- 3.1.2: current 15-min reading drives the current hour ---- */
+var omC = JSON.parse(JSON.stringify(om));
+omC.hourly.weather_code = t72.map(function () { return 61; });
+omC.hourly.precipitation = t72.map(function () { return 1.6; });
+omC.hourly.precipitation_probability = t72.map(function () { return 80; });
+omC.current = { temperature_2m: 6, weather_code: 3, precipitation: 0, snowfall: 0, interval: 900 };
+var gC = W.PROVIDERS.openmeteo.parse(omC, CTX);
+check('OM current overcast → slot 12 code 3, 0 mm, pop ≤10; next hour untouched', [gC.wmo_code[12], gC.precip[12], gC.pop[12], gC.wmo_code[13], gC.precip[13]], [3, 0, 10, 61, 1.6]);
+var omR = JSON.parse(JSON.stringify(omC)); omR.current = { temperature_2m: 6, weather_code: 61, precipitation: 0.2, interval: 900 };
+var gC2 = W.PROVIDERS.openmeteo.parse(omR, CTX);
+check('OM current 0.2 mm/15 min → slot 12 0.8 mm/h, code 61, pop kept', [gC2.wmo_code[12], gC2.precip[12], gC2.pop[12]], [61, 0.8, 80]);
+check('Payload hourly code at slot 12 follows current', P.toPayload(gC, 'celsius', true, NOW).hourly_weather_code[12], 3);
+var mC = P.emptyGrid('metno', NOW); for (var mi = 0; mi < 72; mi++) { mC.temp[mi] = 6; mC.wmo_code[mi] = 61; mC.precip[mi] = 1; mC.pop[mi] = 80; }
+P.finalize(mC, NOW, 46.3, 7.05);
+check('Providers without a live current reading keep the hourly slot', [mC.wmo_code[12], mC.precip[12]], [61, 1]);
+/* Live 16:15 reading, ICON-CH1: 73 at 5.5 °C, 0.07 cm per 15 min (0.28 cm/h) → rain. */
+var omL = JSON.parse(JSON.stringify(omC)); omL.current = { temperature_2m: 5.5, weather_code: 73, precipitation: 0.1, snowfall: 0.07, interval: 900 };
+var gL = W.PROVIDERS.openmeteo.parse(omL, CTX);
+check('OM current snowfall → cm/h; 73 at 5.5 °C with snowfall, no humidity → mix 69', [gL.current_snowfall, gL.current_code, gL.wmo_code[12]], [0.28, 69, 69]);
+omL.current = { temperature_2m: 4, weather_code: 73, precipitation: 0.1, snowfall: 0.07, interval: 900 };
+check('OM current 73 at 4 °C with snowfall → mix 69', W.PROVIDERS.openmeteo.parse(omL, CTX).current_code, 69);
+var NOW40 = Date.UTC(2026, 9, 15, 14, 40) / 1000; /* 16:40 Zurich */
+var gN = W.PROVIDERS.openmeteo.parse(omC, { now: NOW40, lat: 46.3, lon: 7.0 });
+check('Current override at :40 hits slot 12 (watch current hour), not nearest slot 13', [P.slot(gN, NOW40), gN.wmo_code[12], gN.precip[12], gN.wmo_code[13], gN.precip[13]], [13, 3, 0, 61, 1.6]);
+/* Snowfall sources: WeatherAPI snow_cm, Meteoblue snowfraction. */
+var waS = W.PROVIDERS.weatherapi.parse({ forecast: { forecastday: [{ hour: [{ time_epoch: H0 + 13 * 3600, temp_c: 4, feelslike_c: 3, cloud: 90, precip_mm: 1, snow_cm: 0, condition: { code: 1219 } }, { time_epoch: H0 + 14 * 3600, temp_c: 4, feelslike_c: 3, cloud: 90, precip_mm: 1, snow_cm: 0.6, condition: { code: 1219 } }] }] } }, CTX);
+check('WeatherAPI snow_cm: 73 at 4 °C, 0 cm → 63, 0.6 cm → 69', [waS.wmo_code[13], waS.wmo_code[14]], [63, 69]);
+check('OM current 0 values kept (0 °C, code 0 clear sky)', (function () { var o = JSON.parse(JSON.stringify(om)); o.current = { temperature_2m: 0, weather_code: 0 }; var gg = W.PROVIDERS.openmeteo.parse(o, CTX); return [gg.current_temp, gg.current_code]; })(), [0, 0]);
+/* ---- 3.1.2 (review 2): wet-bulb, observed current, PoP, past-fill order ---- */
+check('wetBulb (Stull): 20 °C/50 % ≈ 13.7, 5.5 °C/95 % ≈ 5.0', [Math.round(P.wetBulb(20, 50) * 10) / 10, Math.round(P.wetBulb(5.5, 95) * 10) / 10], [13.7, 4.9]);
+check('saneSnow wet-bulb: Tw>=2 rain, Tw<=0.5 snow, between mix (any snowfall)', [P.saneSnow(73, 5.5, 0.3, 95), P.saneSnow(73, 4, 0.3, 40), P.saneSnow(73, 2.5, 0.3, 80), P.saneSnow(75, 8, 0.5, 15)], [63, 73, 69, 75]);
+check('saneSnow fallback: 6 °C no snowfall → rain, >=7 °C rain even with snowfall, 4 °C unknown → kept', [P.saneSnow(73, 6, 0), P.saneSnow(73, 7, 1), P.saneSnow(73, 4, null)], [63, 63, 73]);
+var omH = JSON.parse(JSON.stringify(omL)); omH.current = { temperature_2m: 5.5, weather_code: 73, precipitation: 0.1, snowfall: 0.07, relative_humidity_2m: 95, interval: 900 };
+check('OM live CH1 reading with humidity 95 %: 73 at 5.5 °C → 63', W.PROVIDERS.openmeteo.parse(omH, CTX).current_code, 63);
+var owO = W.PROVIDERS.owm.parse({ current: { temp: 6, weather: [{ id: 601 }], visibility: 10000 }, hourly: hours(H0 + 12 * 3600, 3).map(function (t) { return { dt: t, temp: 6, humidity: 90, clouds: 90, weather: [{ id: 601 }] }; }) }, CTX);
+check('OWM observed current snow kept (no second-guessing); hourly model snow at 6 °C/90 % → rain; missing snow → null', [owO.current_code, owO.wmo_code[13], owO.snowfall[13], owO.wmo_code[12]], [73, 63, null, 73]);
+var omP = JSON.parse(JSON.stringify(omC));
+omP.hourly.precipitation_probability = t72.map(function (_, i) { return i === 13 ? 15 : 80; });
+check('PoP: live 0 mm + next hour <20 % → still capped 10 (0 % rule removed)', W.PROVIDERS.openmeteo.parse(omP, CTX).pop[12], 10);
+omP.hourly.precipitation_probability = t72.map(function () { return 80; });
+check('PoP: live 0 mm + next hour 80 % → capped 10', W.PROVIDERS.openmeteo.parse(omP, CTX).pop[12], 10);
+omP.current = { temperature_2m: 6, weather_code: 51, precipitation: 0, interval: 900 };
+check('Live drizzle code with 0 mm → minimal 0.1 mm bar (icon and bar agree)', W.PROVIDERS.openmeteo.parse(omP, CTX).precip[12], 0.1);
+var fA = P.emptyGrid('metno', NOW), fB = P.emptyGrid('openmeteo', NOW); fB.snowfall = P.nulls(); fB.rh = P.nulls(); fB.temp[3] = 1; fB.snowfall[3] = 0.4; fB.rh[3] = 88;
+P.fillFrom(fA, fB, P.PAST);
+check('fillFrom copies snowfall and humidity', [fA.snowfall && fA.snowfall[3], fA.rh && fA.rh[3]], [0.4, 88]);
+function pastRun(omOk) {
+	var d = deps([[/met\.no/, null, JSON.stringify({ properties: { timeseries: ts } })]].concat(omOk ? [[/open-meteo.*forecast_hours=1/, null, JSON.stringify(omPast)]] : []), []);
+	var pg = P.emptyGrid('metno', NOW); for (var q = 0; q < 72; q++) { pg.temp[q] = 99; pg.wmo_code[q] = 3; }
+	d.store.set('carbon.wxprev.v1', JSON.stringify({ lat: 46.3, lon: 7, grid: pg }));
+	var r; W.fetchWeather({ provider: 'metno', lat: 46.3, lon: 7, now: NOW, unit: 'celsius', fogOn: true }, d, function (e, pl, gg) { r = [e, gg.temp[0], gg.temp[11], pl.provider]; });
+	return r;
+}
+check('Past hours: Open-Meteo latest run preferred over saved forecast', pastRun(true), [null, 0, 11, 'metno']);
+check('Past hours: Open-Meteo past fails → saved grid, no provider error', pastRun(false), [null, 99, 99, 'metno']);
+/* ---- 3.1.2: GeoSphere nwp-v2-1h-1km ---- */
+var gv = GEO.parse(geo, CTX);
+check('GeoSphere v2: tcc % kept, tp per hour, ssrd W/m², 10fg m/s → km/h, 2r, cape, sf → cm', [gv.cloud[12], gv.cloud[13], gv.precip[14], gv.precip[15], gv.shortwave[12], gv.gust[12], gv.rh[12], gv.cape[12], gv.snowfall[12]], [100, 50, 0, 1.2, 100, 36, 70, 50, 0]);
+check('GeoSphere v2 domain 43.0-51.5 N, 5.03-22.57 E', [GEO.inDomain(46.3, 7.05), GEO.inDomain(46, 5.2), GEO.inDomain(51.7, 10), GEO.inDomain(46, 4.9)], [true, true, false, false]);
+/* Live sample 23 Oct 2026 20:00 Zurich (run 12 UTC): 3.3 °C, 91.6 %, sf 0; Open-Meteo code 73 → wet-bulb ≈ 2.6 → rain. */
+var t20 = Date.UTC(2026, 9, 23, 18) / 1000, ctx20 = { now: t20, lat: 46.3, lon: 7.05 };
+var gLive = GEO.parse({ timestamps: ['2026-10-23T18:00+00:00'], features: [{ properties: { parameters: { '2t': { data: [3.3] }, '2r': { data: [91.62] }, tcc: { data: [100] }, tp: { data: [0.123] }, sf: { data: [0] }, ssrd: { data: [0] }, '10fg': { data: [5.9] }, cape: { data: [20.9] } } } }] }, ctx20);
+var omLive = P.emptyGrid('openmeteo', t20); omLive.temp[12] = 4; omLive.wmo_code[12] = 73; omLive.pop[12] = 90;
+W.blend(gLive, omLive); P.finalize(gLive, t20, 46.3, 7.05);
+check('GeoSphere v2 live sample: blended snow code 73 at 3.3 °C/92 % → 63', [gLive.wmo_code[12], gLive.precip[12], gLive.gust[12]], [63, 0.1, 21.2]);
+check('GeoSphere legacy dataset gone', /nwp-v1|rr_acc|grad|t2m/.test(GEO.buildUrl(46.3, 7.05)), false);
+/* ---- 3.1.2 review 3 ---- */
+var omW = JSON.parse(JSON.stringify(omC)); omW.hourly.precipitation = t72.map(function () { return 0; });
+omW.current = { temperature_2m: 6, weather_code: 61, interval: 900 }; /* wet, no current precipitation */
+check('Wet live code without current precip → hour gets ≥ 0.1 mm (0 → 0.1)', W.PROVIDERS.openmeteo.parse(omW, CTX).precip[12], 0.1);
+omW.hourly.precipitation = t72.map(function () { return 1.6; });
+check('Wet live code without current precip keeps a larger hourly amount', W.PROVIDERS.openmeteo.parse(omW, CTX).precip[12], 1.6);
+var o3 = { city: { timezone: 7200 }, list: [{ dt: H0 + 12 * 3600, main: { temp: 0, feels_like: -2 }, pop: 0.9, clouds: { all: 100 }, visibility: 10000, snow: { '3h': 3 }, weather: [{ id: 601 }] },
+	{ dt: H0 + 15 * 3600, main: { temp: 0, feels_like: -2 }, pop: 0.9, clouds: { all: 100 }, visibility: 10000, weather: [{ id: 500 }] }] };
+var g3 = W.PROVIDERS.owm.parse(o3, CTX);
+check('OWM 3 h free: snow 3 mm/3h → 0.7 cm/h; missing snow → null (not 0); in between takes the nearer step', [Math.round(g3.snowfall[12] * 100) / 100, g3.snowfall[15], Math.round(g3.snowfall[13] * 100) / 100, g3.snowfall[14]], [0.7, null, 0.7, null]);
 console.log((n - fails) + '/' + n + ' passed');
 process.exit(fails ? 1 : 0);

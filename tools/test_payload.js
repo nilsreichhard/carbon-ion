@@ -43,6 +43,17 @@ check('Settings dict keeps 15 min for Open-Meteo', d['SETTING_FETCH_INTERVAL'], 
 /* ---- migration of old saved settings (2.6.x) ---- */
 d = settings.buildSettingsDict({ SETTING_SHOW_STEP_COUNT: { value: true }, SETTING_STEP_SIZE: '1', SETTING_SUNLIGHT_RAYS: { value: true } });
 check('Legacy steps (size 1) → Bold; legacy rays → Sensitive', [d['SETTING_STEP_DISPLAY'], d['SETTING_SUNLIGHT_SENSITIVITY']], [2, 1]);
+/* 3.1.2 */
+check('Legacy step keys are not sent (STEP_DISPLAY only)', ['SETTING_SHOW_STEP_COUNT' in d, 'SETTING_STEP_SIZE' in d], [false, false]);
+d = settings.buildSettingsDict({});
+check('Default refresh interval is 15 min', d['SETTING_FETCH_INTERVAL'], 15);
+(function () {
+	var src = require('fs').readFileSync(__dirname + '/../src/pkjs/config.js', 'utf8');
+	var m = /"messageKey": "SETTING_TEMP_UNIT",[^}]*?"defaultValue": (-?\d+)/.exec(src);
+	check('Clay temperature unit defaults to Auto (-1)', m && +m[1], -1);
+	var cal = require('../src/pkjs/calendar.js');
+	check('Per-calendar cache keys differ per URL', cal._calCacheKey('https://a/x.ics') !== cal._calCacheKey('https://a/y.ics'), true);
+})();
 store['clay-settings'] = JSON.stringify({ SETTING_METEOSWISS: true, SETTING_FORECAST_HOURS: '36' });
 settings.sanitizeClaySettingsStorage();
 check('MeteoSwiss toggle → ICON-CH1 model, other keys kept', [JSON.parse(store['clay-settings']).SETTING_OM_MODEL, JSON.parse(store['clay-settings']).SETTING_FORECAST_HOURS], ['meteoswiss_icon_ch1', '36']);
@@ -196,7 +207,7 @@ var bBt = bitsOf('s_bt_off_bits'), bQt = bitsOf('s_quiet_bits');
 check('Status icons: both 15x17 maps', [bBt.length, bQt.length, bBt.every(function (r) { return r.length === 15; }), bQt.every(function (r) { return r.length === 15; })], [17, 17, true, true]);
 check('Status icons: identical badge outline (same drawn pixels)', bBt.map(function (r) { return r.replace(/[#.]/g, 'x'); }), bQt.map(function (r) { return r.replace(/[#.]/g, 'x'); }));
 check('Status icons: same slash diagonal (1,2)-(13,14) in both', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].every(function (i) { return bBt[i + 1][i] === '.'; }) && [1, 2, 3, 13].every(function (i) { return bQt[i + 1][i] === '.'; }), true);
-check('Version 3.1.0 everywhere', [pkg.version, require('../appinfo.json').versionLabel, require('../src/pkjs/constants').APP_VERSION === '3.1.0' && /version: C\.APP_VERSION/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['3.1.0', '3.1.0', true]);
+check('Version 3.1.3 everywhere', [pkg.version, require('../appinfo.json').versionLabel, require('../src/pkjs/constants').APP_VERSION === '3.1.3' && /version: C\.APP_VERSION/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['3.1.3', '3.1.3', true]);
 
 /* ---- 2.9.6: rain bar height + hourly mm ---- */
 var mainSrc = require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8');

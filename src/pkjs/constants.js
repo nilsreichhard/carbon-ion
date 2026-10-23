@@ -7,7 +7,8 @@
  */
 
 module.exports = {
-	APP_VERSION: '3.1.0', /* 3.0.3: single JS copy of the version (MET User-Agent, debug info); test_payload checks it against package.json */
+	DEFAULT_FETCH_INTERVAL: 15, /* 3.1.2: single JS default refresh (min); C: DEFAULT_FETCH_INTERVAL_MIN */
+	APP_VERSION: '3.1.3', /* 3.0.3: single JS copy of the version (MET User-Agent, debug info); test_payload checks it against package.json */
 	WEATHER_BASE_URL: 'https://api.open-meteo.com/v1/forecast',
 	GEOCODE_BASE_URL: 'https://api.bigdatacloud.net/data/reverse-geocode-client',
 	CACHE_KEY: 'carbon.weather.v6',

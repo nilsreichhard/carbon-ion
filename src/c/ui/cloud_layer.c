@@ -242,7 +242,7 @@ static void prv_draw_band(GContext *ctx, CloudLayer *cl, const uint8_t *cover,
 	}
 }
 
-/* Sun-ray bars: angled for Total, vertical-from-top for Split.
+/* Sun-ray bars: vertical from the strip top (both modes since 3.1.2).
  * Fixed bar count (no gaps); intensity → length only (one color). */
 static void prv_draw_sun_rays(GContext *ctx, int cx, int strip_h, int intensity,
                               int min_intensity, bool is_light, bool vertical) {
@@ -367,7 +367,8 @@ static void prv_draw(CloudLayer *cl, GContext *ctx) {
 			int wm2 = (int)cl->shortwave[i] * 4; // unpack
 			int base = wm2 >= sun_full ? 255 : (wm2 * 255) / sun_full;
 			int intensity = prv_ray_intensity_for_cover(base, cl->cover[i]);
-			prv_draw_sun_rays(ctx, cx, h, intensity, sun_min, is_light, split);
+			/* 3.1.2: vertical rays in Total too (same as Split). */
+			prv_draw_sun_rays(ctx, cx, h, intensity, sun_min, is_light, true);
 		}
 	}
 }

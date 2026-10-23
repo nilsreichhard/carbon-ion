@@ -62,6 +62,8 @@ function parse25(json, ctx) {
 		return { t: s.dt, temp: P.num(s.main.temp), feels: P.num(s.main.feels_like),
 			pop: s.pop !== undefined ? Math.round(Number(s.pop) * 100) : null,
 			precip: (((s.rain && s.rain['3h']) || 0) + ((s.snow && s.snow['3h']) || 0)) / 3,
+			/* 3.1.2: 3-hour snow water mm → per hour, × 0.7 ≈ cm of snow (Open-Meteo's ratio); null when not reported. */
+			snow: s.snow && P.num(s.snow['3h']) !== null ? P.num(s.snow['3h']) / 3 * 0.7 : null,
 			cloud: s.clouds ? P.num(s.clouds.all) : null, vis: vis, id: id,
 			gust: s.wind ? P.msToKmh(P.num(s.wind.gust)) : null };
 	}
@@ -78,6 +80,8 @@ function parse25(json, ctx) {
 		var near = f < 0.5 ? a : b;
 		['temp', 'feels', 'pop', 'precip', 'cloud', 'gust'].forEach(function (fl) { P.setAt(g, fl, i, lerp(a[fl], b[fl], f)); });
 		P.setAt(g, 'visibility_m', i, lerp(a.vis, b.vis, f));
+		if (!g.snowfall) g.snowfall = P.nulls();
+		g.snowfall[i] = lerp(a.snow, b.snow, f);
 		var code = idToWmo(near.id, near.vis);
 		P.setAt(g, 'wmo_code', i, code === null ? 3 : code);
 		g.fog[i] = (near.id === 741 || (near.id === 701 && near.vis !== null && near.vis < 1000)) ? 1 : 0;
@@ -103,6 +107,11 @@ function parse(json, ctx) {
 		P.setAt(g, 'feels', i, P.num(h.feels_like));
 		P.setAt(g, 'pop', i, h.pop !== undefined ? Math.round(Number(h.pop) * 100) : null);
 		P.setAt(g, 'precip', i, ((h.rain && h.rain['1h']) || 0) + ((h.snow && h.snow['1h']) || 0));
+		/* 3.1.2: snow.1h is liquid water mm; × 0.7 gives cm of snow, the same ratio
+		 * Open-Meteo uses (7 cm snow = 10 mm water). Missing → null, not 0. */
+		if (!g.snowfall) g.snowfall = P.nulls();
+		g.snowfall[i] = h.snow && P.num(h.snow['1h']) !== null ? P.num(h.snow['1h']) * 0.7 : null;
+		P.setAt(g, 'rh', i, P.num(h.humidity));
 		P.setAt(g, 'cloud', i, P.num(h.clouds));
 		P.setAt(g, 'gust', i, P.msToKmh(P.num(h.wind_gust)));
 		P.setAt(g, 'visibility_m', i, vis);
@@ -113,7 +122,7 @@ function parse(json, ctx) {
 	if (typeof json.timezone_offset === 'number') g.utcOffsetS = json.timezone_offset; /* 2.8.7 */
 	if (json.current) {
 		g.current_temp = P.num(json.current.temp);
-		if (json.current.weather && json.current.weather[0]) g.current_code = idToWmo(json.current.weather[0].id, P.num(json.current.visibility));
+		if (json.current.weather && json.current.weather[0]) { g.current_code = idToWmo(json.current.weather[0].id, P.num(json.current.visibility)); g.current_live = true; g.current_observed = true; }
 		if (json.current.sunrise) { g.sunrise = json.current.sunrise; g.sunset = json.current.sunset; }
 	}
 	if (json.daily && json.daily[0] && json.daily[0].temp) {

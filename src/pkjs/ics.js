@@ -449,6 +449,33 @@ function iterateRule(rule, startWall, startDayWd, spanDays, winStartWall, winEnd
  * Parse ICS text into occurrences overlapping [windowStart, windowEnd] (UTC s).
  * @returns {{start:number,end:number,allDay:boolean}[]}
  */
+/* Cheap date test on the raw VEVENT body (no timezone math): keep anything
+ * recurring, any override, anything unparseable, and single events whose
+ * DTSTART..DTEND (or DTSTART) days touch the window +/- 2 days. */
+var RAW_DATE_RE = /^(DTSTART|DTEND)[^:\r\n]*:(\d{4})(\d{2})(\d{2})/gim;
+function prefilterVevents(bodies, windowStart, windowEnd) {
+	if (!(windowStart < windowEnd)) return bodies;
+	var lo = Math.floor(windowStart / DAY) - 2, hi = Math.floor(windowEnd / DAY) + 2;
+	return bodies.filter(function (b) {
+		if (/^(RRULE|RDATE|RECURRENCE-ID)[;:]/im.test(b)) return true;
+		var durM = /^DURATION[^:\r\n]*:(.+)$/im.exec(b);
+		var st = null, en = null, m;
+		RAW_DATE_RE.lastIndex = 0;
+		while ((m = RAW_DATE_RE.exec(b)) !== null) {
+			var d = dayNum(+m[2], +m[3], +m[4]);
+			if (m[1].toUpperCase() === 'DTSTART') st = d; else en = d;
+		}
+		if (st === null) return true;
+		if (en === null && durM) {
+			var ds = parseDuration(durM[1]);
+			if (ds === null) return true; /* unparseable: keep */
+			en = st + Math.ceil(Math.max(0, ds) / DAY);
+		}
+		if (en === null || en < st) en = st;
+		return en >= lo && st <= hi;
+	});
+}
+
 function parseEvents(icsText, windowStart, windowEnd, opts) {
 	opts = opts || {};
 	var out = [];
@@ -457,7 +484,10 @@ function parseEvents(icsText, windowStart, windowEnd, opts) {
 	var text = unfold(icsText);
 	var zones = parseVtimezones(text);
 	var devTz = opts.deviceTz !== undefined ? opts.deviceTz : deviceTz();
-	var events = components(text, 'VEVENT', MAX_VEVENTS).map(parseProps);
+	/* 3.1.2: filter by window / recurrence BEFORE capping, so a large feed
+	 * with years of old events first still yields today's events. */
+	var events = prefilterVevents(components(text, 'VEVENT'), windowStart, windowEnd)
+		.slice(0, MAX_VEVENTS).map(parseProps);
 	var budget = { left: opts.recurBudget || RECUR_BUDGET };
 
 	/* Overrides by UID → instance key → override props */

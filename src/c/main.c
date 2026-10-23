@@ -193,7 +193,7 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 	// launch and would take 4082 years of continuous operation to overflow.
 	s_minutes_since_launch += 1;
 	uint8_t interval = settings_get()->fetch_interval_min;
-	if (interval < 15) interval = 30;
+	if (interval < 15) interval = DEFAULT_FETCH_INTERVAL_MIN;
 	if (s_minutes_since_launch % interval == 0) {
 		prv_request_weather();
 	}
@@ -925,7 +925,9 @@ static void prv_send_weather_request(bool is_retry) {
 	}
 }
 
+static time_t s_last_req_time; /* 3.1.2: last weather request sent */
 static void prv_request_weather(void) {
+	s_last_req_time = time(NULL);
 	prv_send_weather_request(false);
 }
 
@@ -951,6 +953,21 @@ static void prv_bt_handler(bool connected) {
 	if (s_time_layer) {
 		time_layer_set_status(s_time_layer, connected, quiet_time_is_active());
 	}
+#if !defined(DEMO_SCENARIO)
+	/* 3.1.2: on reconnect, refresh right away if the data is older than the
+	 * refresh interval instead of waiting for the next interval tick. */
+	if (connected) {
+		int interval = settings_get()->fetch_interval_min;
+		if (interval < 15)
+			interval = DEFAULT_FETCH_INTERVAL_MIN;
+		time_t now_t = time(NULL);
+		/* Throttle: BT flapping must not spam AppMessages. */
+		bool recent_req = s_last_req_time > 0 && (long)(now_t - s_last_req_time) < 90;
+		if (!recent_req && (s_weather.fetch_time <= 0 ||
+		    (long)(now_t - s_weather.fetch_time) >= (long)interval * 60))
+			prv_request_weather();
+	}
+#endif
 }
 
 

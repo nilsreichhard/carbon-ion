@@ -38,6 +38,11 @@ function parse(json, ctx) {
 		var mm = (P.num(v.rainIntensity) || 0) + (P.num(v.snowIntensity) || 0) +
 			(P.num(v.sleetIntensity) || 0) + (P.num(v.freezingRainIntensity) || 0);
 		P.setAt(g, 'precip', i, mm);
+		/* 3.1.2: snowIntensity is liquid-equivalent mm/h; × 0.7 gives cm of snow,
+		 * the same ratio Open-Meteo uses (7 cm snow = 10 mm water). Missing → null. */
+		if (!g.snowfall) g.snowfall = P.nulls();
+		g.snowfall[i] = P.num(v.snowIntensity) !== null ? P.num(v.snowIntensity) * 0.7 : null;
+		P.setAt(g, 'rh', i, P.num(v.humidity));
 		P.setAt(g, 'cloud', i, P.num(v.cloudCover));
 		P.setAt(g, 'gust', i, P.msToKmh(P.num(v.windGust))); /* units=metric: m/s */
 		var cb = P.num(v.cloudBase); /* km; null without cloud (3.0.0: thickness) */

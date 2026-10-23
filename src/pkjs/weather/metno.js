@@ -51,6 +51,7 @@ function parse(json, ctx) {
 		var feels = P.num(d.apparent_air_temperature);
 		if (feels === null) feels = P.apparentTemp(temp, P.num(d.relative_humidity), P.num(d.wind_speed));
 		P.setAt(g, 'feels', i, feels);
+		P.setAt(g, 'rh', i, P.num(d.relative_humidity)); /* 3.1.2: wet-bulb snow check */
 		P.setAt(g, 'cloud', i, P.num(d.cloud_area_fraction));
 		P.setAt(g, 'cloud_low', i, P.num(d.cloud_area_fraction_low));
 		P.setAt(g, 'cloud_mid', i, P.num(d.cloud_area_fraction_medium));
