@@ -101,7 +101,8 @@ typedef enum {
 #define DEFAULT_FORECAST_HOURS 24
 typedef enum {
 	RAIN_HEIGHT_PROBABILITY = 0, /* bar height = chance (default) */
-	RAIN_HEIGHT_AMOUNT = 1,      /* 2.9.6: height = mm/h, chance as shading */
+	RAIN_HEIGHT_AMOUNT = 1,      /* 2.9.6: height = mm/h, chance as shading (dots) */
+	RAIN_HEIGHT_AMOUNT_LINE = 2, /* 3.1.3: height = mm/h, solid bars + orange chance line */
 } RainHeightMode;
 
 typedef enum {

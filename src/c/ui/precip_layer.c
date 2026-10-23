@@ -54,6 +54,40 @@ static void prv_fill_shaded(GContext *ctx, int x0, int w, int h, uint8_t shade) 
 	graphics_fill_rect(ctx, GRect(x0, h - 1, w, 1), 0, GCornerNone);
 }
 
+/* 3.1.3 Line style: chance across all hours, y measured down from the top
+ * like the bars (100 % = full bar height). Orange on light, ChromeYellow on
+ * dark: apart from the blues/teal/greys of the bars. */
+static void prv_draw_chance_line(GContext *ctx, PrecipLayer *pl, int graph_x,
+                                 int graph_w, int layer_h, int total_hours,
+                                 int min_prob) {
+#if defined(PBL_COLOR)
+	GColor c = settings_get()->light_theme ? GColorOrange : GColorChromeYellow;
+#else
+	GColor c = GColorWhite;
+#endif
+	graphics_context_set_stroke_color(ctx, c);
+	graphics_context_set_stroke_width(ctx, 1);
+	graphics_context_set_antialiased(ctx, false);
+	int span = layer_h - 2;
+	GPoint prev = GPointZero;
+	bool prev_on = false;
+	for (int i = 0; i < total_hours; i++) {
+		int x0 = graph_x + (long)i * graph_w / total_hours;
+		int x1 = graph_x + (long)(i + 1) * graph_w / total_hours;
+		int p = pl->prob[i] > 100 ? 100 : pl->prob[i];
+		GPoint pt = GPoint((x0 + x1 - 1) / 2, p * span / 100);
+		/* Dry stretches (both ends under the sensitivity floor) stay empty,
+		 * so no line runs along the top edge on dry days. */
+		bool on = pl->prob[i] >= min_prob;
+		if (i > 0 && (on || prev_on))
+			graphics_draw_line(ctx, prev, pt);
+		else if (on)
+			graphics_draw_pixel(ctx, pt);
+		prev = pt;
+		prev_on = on;
+	}
+}
+
 static int prv_precip_min_prob(PrecipSensitivity sens) {
 	switch (sens) {
 	case PRECIP_SENS_VERY: return 5;
@@ -83,7 +117,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	if (total_hours > MAX_GRAPH_HOURS) total_hours = MAX_GRAPH_HOURS;
 
 	int min_prob = prv_precip_min_prob(settings_get()->precip_sensitivity);
-	bool amount = pl->have_mm && settings_get()->rain_height == RAIN_HEIGHT_AMOUNT;
+	uint8_t rh = settings_get()->rain_height;
+	bool amount = pl->have_mm && (rh == RAIN_HEIGHT_AMOUNT || rh == RAIN_HEIGHT_AMOUNT_LINE);
+	/* 3.1.3 Amount + line: solid amount bars, chance as a 1 px line on top. */
+	bool line = amount && rh == RAIN_HEIGHT_AMOUNT_LINE;
 #if defined(PBL_COLOR)
 	bool light = settings_get()->light_theme;
 #endif
@@ -121,7 +158,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 #endif
 		graphics_context_set_fill_color(ctx, col);
 		graphics_context_set_stroke_color(ctx, col);
-		if (amount)
+		if (line)
+			graphics_fill_rect(ctx, GRect(x0, 0, bar_w, bar_h), 0, GCornerNone);
+		else if (amount)
 			prv_fill_shaded(ctx, x0, bar_w, bar_h, precip_prob_shade((uint8_t)prob));
 		else
 			graphics_fill_rect(ctx, GRect(x0, 0, bar_w, bar_h), 0, GCornerNone);
@@ -132,6 +171,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		}
 #endif
 	}
+	if (line)
+		prv_draw_chance_line(ctx, pl, graph_x, graph_w, layer_h, total_hours, min_prob);
 }
 
 PrecipLayer *precip_layer_create(GRect frame) {

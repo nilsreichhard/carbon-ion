@@ -136,6 +136,12 @@ var KT = mockClay(maxed('openmeteo'), { wxCaps: CAPS, wxKeys: {} });
 KT.SETTING_CLOUD_THICK.set('0');
 check('Cloud thickness: greyed out (not hidden, value kept) on OWM / WeatherAPI, enabled elsewhere', PROVS.map(function (p) { KT.SETTING_WEATHER_PROVIDER.set(p); return p + ':' + (KT.SETTING_CLOUD_THICK.enabled ? 'on' : 'grey') + (KT.SETTING_CLOUD_THICK.visible ? '' : ':hidden') + ':' + KT.SETTING_CLOUD_THICK.get(); }),
 	PROVS.map(function (p) { return p + ':' + (CAPS[p].thick === false ? 'grey' : 'on') + ':0'; }));
+/* ---- 3.1.3: Rain chart Amount + line falls back to Probability without amounts ---- */
+var noMm = PROVS.filter(function (p) { return CAPS[p].mm === false; });
+var KL = mockClay({ SETTING_RAIN_HEIGHT: '2' }, { wxCaps: CAPS, wxKeys: {} });
+var keptL = String(KL.SETTING_RAIN_HEIGHT.get());
+if (noMm.length) KL.SETTING_WEATHER_PROVIDER.set(noMm[0]);
+check('Rain chart: Amount + line (2) kept on Open-Meteo, reset to Probability + hidden without amounts', [keptL, noMm.length ? String(KL.SETTING_RAIN_HEIGHT.get()) : '0', noMm.length ? KL.SETTING_RAIN_HEIGHT.visible : false], ['2', '0', false]);
 /* ---- 3.1.2: fallback warning on the settings page ---- */
 function attrHtml(msg, prov) {
 	var ud = { wxCaps: CAPS, wxKeys: {}, lastWxError: { t: Date.UTC(2026, 9, 23, 16, 5), msg: msg },

@@ -77,7 +77,7 @@ module.exports = [
 						"value": "best_match"
 					},
 					{
-						"label": "MeteoSwiss ICON-CH1 · 1 km (recommended for Switzerland / Alps)",
+						"label": "MeteoSwiss ICON-CH1 · 1 km",
 						"value": "meteoswiss_icon_ch1"
 					},
 					{
@@ -415,7 +415,7 @@ module.exports = [
 			{
 				"type": "select",
 				"messageKey": "SETTING_RAIN_HEIGHT",
-				"label": "Rain bar height",
+				"label": "Rain chart",
 				"defaultValue": 0,
 				"options": [
 					{
@@ -423,11 +423,15 @@ module.exports = [
 						"value": 0
 					},
 					{
-						"label": "Amount",
+						"label": "Amount + checked dots probability",
 						"value": 1
+					},
+					{
+						"label": "Amount + line probability",
+						"value": 2
 					}
 				],
-				"description": "Probability: taller bar = higher chance. Amount: taller bar = more rain (full at 8 mm/h); the chance shows as shading (solid 70 %+, checkered 40 %+, dotted below)."
+				"description": "<b>Probability</b>: taller bar = higher chance.<br><b>Amount + checked dots</b>: taller bar = more rain (full at 8 mm/h); the chance is the shading inside the bar (solid 70 %+, checkered 40 %+, dotted below).<br><b>Amount + line</b>: solid bars for the amount and a thin orange line for the chance, drawn down from the top like the bars (lower line = higher chance)."
 			},
 			{
 				"type": "select",

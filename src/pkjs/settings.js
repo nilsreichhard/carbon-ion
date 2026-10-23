@@ -453,7 +453,9 @@ function buildSettingsDict(rawSettings) {
 	}
 
 	/* 2.9.6: rain bar height (0 probability, 1 amount); watch-side only, no refetch. */
-	dict['SETTING_RAIN_HEIGHT'] = extractInt(rawSettings['SETTING_RAIN_HEIGHT']) === 1 ? 1 : 0;
+	/* 3.1.3: 0 Probability, 1 Amount + dots, 2 Amount + line (old 0/1 unchanged). */
+	var rhv = extractInt(rawSettings['SETTING_RAIN_HEIGHT']);
+	dict['SETTING_RAIN_HEIGHT'] = rhv === 1 || rhv === 2 ? rhv : 0;
 	/* 3.0.0: cloud thickness (0 on, 1 off); watch-side only, no refetch. */
 	dict['SETTING_CLOUD_THICK'] = extractInt(rawSettings['SETTING_CLOUD_THICK']) === 1 ? 1 : 0;
 	/* 3.0.3: leading zero (0 auto, 1 on, 2 off); watch-side only, no refetch. */

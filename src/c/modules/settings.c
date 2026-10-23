@@ -97,6 +97,8 @@ void settings_init(void) {
 	s_settings.event_hide &= EVENT_FLAGS_MASK;
 	if (s_settings.leading_zero > LEADING_ZERO_OFF)
 		s_settings.leading_zero = LEADING_ZERO_AUTO;
+	if (s_settings.rain_height > RAIN_HEIGHT_AMOUNT_LINE)
+		s_settings.rain_height = RAIN_HEIGHT_PROBABILITY;
 }
 
 CloudDisplayMode settings_effective_cloud_mode(void) {
@@ -437,7 +439,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	t = dict_find(iter, KEY_SETTING_RAIN_HEIGHT);
 	if (t) {
 		int v = settings_tuple_int(t);
-		s_settings.rain_height = (v == RAIN_HEIGHT_AMOUNT) ? RAIN_HEIGHT_AMOUNT : RAIN_HEIGHT_PROBABILITY;
+		s_settings.rain_height = (v == RAIN_HEIGHT_AMOUNT || v == RAIN_HEIGHT_AMOUNT_LINE) ? (uint8_t)v : RAIN_HEIGHT_PROBABILITY;
 	}
 
 	t = dict_find(iter, KEY_SETTING_LEADING_ZERO); /* 3.0.3 */

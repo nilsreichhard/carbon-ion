@@ -69,6 +69,14 @@ int main(void) {
 	reset(); store_blob(&lzb, (int)sizeof(Settings)); settings_init();
 	CHECK("out-of-range leading_zero → Auto", settings_get()->leading_zero == LEADING_ZERO_AUTO);
 
+	/* 3.1.3 rain_height 2 = Amount + line kept; junk → Probability */
+	Settings rl = def; rl.rain_height = RAIN_HEIGHT_AMOUNT_LINE;
+	reset(); store_blob(&rl, (int)sizeof(Settings)); settings_init();
+	CHECK("rain_height Amount + line (2) kept", settings_get()->rain_height == RAIN_HEIGHT_AMOUNT_LINE);
+	rl.rain_height = 0x77;
+	reset(); store_blob(&rl, (int)sizeof(Settings)); settings_init();
+	CHECK("out-of-range rain_height → Probability", settings_get()->rain_height == RAIN_HEIGHT_PROBABILITY);
+
 	/* own keys: cloud override 1/2 accepted, others dropped */
 	reset(); persist_write_int(STORAGE_KEY_CLOUD_OVERRIDE, 2); settings_init();
 	CHECK("cloud override key 9 = 2 → Split/Total override honoured", settings_effective_cloud_mode() == (CloudDisplayMode)1);
