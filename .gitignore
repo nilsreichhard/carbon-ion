@@ -24,3 +24,17 @@ Thumbs.db
 # Dependencies / generated (3.0.3)
 node_modules/
 .buildinfo.json
+
+# Android widget prototype (android/)
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+android/.idea/
+android/captures/
+android/**/*.iml
+*.aab
+*.jks
+*.keystore

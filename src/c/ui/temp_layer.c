@@ -127,6 +127,26 @@ static void prv_draw_labels(GContext *ctx, int lh, int graph_x, int graph_w, int
 		}
 		return;
 	}
+#if PBL_DISPLAY_HEIGHT >= 228
+	/* Emery: lay the three labels out by their visible digit ink, not their
+	 * text boxes (Gothic 18 ink sits at box rows +7..+17, Gothic 24 Bold at
+	 * +10..+23). Max's ink starts LBL_TOP_PAD below the layer top, min's ink
+	 * ends LBL_BOT_PAD above the major hour ticks (bottom TICK_H rows), and
+	 * current is centred so both ink gaps are equal. Boxes may poke above
+	 * the layer; the ink stays inside. */
+	enum { SM_INK_TOP = 7, SM_INK_H = 11, MD_INK_TOP = 10, MD_INK_H = 14 };
+	enum { LBL_TOP_PAD = 2, LBL_BOT_PAD = 1, TICK_H = 5 };
+	(void)zone_h;
+	int ink_avail = (lh - TICK_H - LBL_BOT_PAD) - LBL_TOP_PAD; /* rows [top_pad, lh-tick-pad) */
+	int ink_spare = ink_avail - (2 * SM_INK_H + MD_INK_H);
+	if (ink_spare < 0)
+		ink_spare = 0;
+	int ink_gap = ink_spare / 2;
+	int hi_ink = LBL_TOP_PAD + (ink_spare - 2 * ink_gap); /* odd spare row goes on top */
+	int y_high = hi_ink - SM_INK_TOP;
+	int y_curr = hi_ink + SM_INK_H + ink_gap - MD_INK_TOP;
+	int y_low = hi_ink + SM_INK_H + ink_gap + MD_INK_H + ink_gap - SM_INK_TOP;
+#else
 	/* Place current + min first, then lift max so max→current gap matches
 	 * current→min gap (was 4px overlap above vs 0px below). */
 	const int label_lift = 3;
@@ -148,6 +168,7 @@ static void prv_draw_labels(GContext *ctx, int lh, int graph_x, int graph_w, int
 	/* Allow slight clip above layer so the mirrored gap can fit. */
 	if (y_high + sm_h > y_curr - gap_curr_min)
 		y_high = y_curr - sm_h - gap_curr_min;
+#endif
 
 	graphics_draw_text(ctx, high_buf, font_sm,
 	                   GRect(2, y_high, label_x, sm_h),

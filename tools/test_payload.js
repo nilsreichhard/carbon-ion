@@ -207,7 +207,7 @@ var bBt = bitsOf('s_bt_off_bits'), bQt = bitsOf('s_quiet_bits');
 check('Status icons: both 15x17 maps', [bBt.length, bQt.length, bBt.every(function (r) { return r.length === 15; }), bQt.every(function (r) { return r.length === 15; })], [17, 17, true, true]);
 check('Status icons: identical badge outline (same drawn pixels)', bBt.map(function (r) { return r.replace(/[#.]/g, 'x'); }), bQt.map(function (r) { return r.replace(/[#.]/g, 'x'); }));
 check('Status icons: same slash diagonal (1,2)-(13,14) in both', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].every(function (i) { return bBt[i + 1][i] === '.'; }) && [1, 2, 3, 13].every(function (i) { return bQt[i + 1][i] === '.'; }), true);
-check('Version 3.2.0 everywhere', [pkg.version, require('../appinfo.json').versionLabel, require('../src/pkjs/constants').APP_VERSION === '3.2.0' && /version: C\.APP_VERSION/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['3.2.0', '3.2.0', true]);
+check('Version 3.2.1 everywhere', [pkg.version, require('../appinfo.json').versionLabel, require('../src/pkjs/constants').APP_VERSION === '3.2.1' && /version: C\.APP_VERSION/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['3.2.1', '3.2.1', true]);
 
 /* ---- 2.9.6: rain bar height + hourly mm ---- */
 var mainSrc = require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8');
