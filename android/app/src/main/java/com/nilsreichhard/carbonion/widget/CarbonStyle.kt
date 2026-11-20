@@ -158,7 +158,7 @@ object CarbonStyle {
         // daylight_layer.c prv_draw_battery (3.1.2 light-theme colours)
         val batt20 = if (light) CHROME_YELLOW else YELLOW
         val batt10 = if (light) WINDSOR_TAN else ORANGE
-        val batt4 = RED
+        val batt5 = RED // the watch's 4 % (battery saver) marker; 5 % on the phone
         val batt0 = if (light) DARK_CANDY_APPLE_RED else FOLLY
         // event_layer.c prv_span_color / prv_fog_second
         val evStorm = if (light) WINDSOR_TAN else YELLOW

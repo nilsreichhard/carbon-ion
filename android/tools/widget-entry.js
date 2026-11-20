@@ -122,7 +122,7 @@ G.carbonFetchWeather = function (hostJson) {
 	if (!out) out = { error: 'weather callback did not complete (host HTTP bridge must be synchronous)' };
 	if (out.error) return J(out);
 	out.city = cityName(lat, lon, !!host.isStatic, wxSettings);
-	out.settings = settings.buildSettingsDict(settings.readClaySettings());
+	out.settings = androidDict(settings.readClaySettings());
 	return J(out);
 };
 
@@ -153,7 +153,7 @@ G.carbonLocation = function () {
 
 G.carbonSettingsDict = function () {
 	ensureSettingsSeeded();
-	return J(settings.buildSettingsDict(settings.readClaySettings()));
+	return J(androidDict(settings.readClaySettings()));
 };
 
 /* ---- settings page (Clay config + custom function, headless) ------------ */
@@ -167,6 +167,7 @@ var SKIP_KEYS = {
 	SETTING_CALENDAR_SOURCE_3: 1, SETTING_CALENDAR_ICS_URL_3: 1, SETTING_CALENDAR_COLOR_3: 1, SETTING_CALENDAR_PLACE_3: 1,
 	SETTING_BACKLIGHT_COLORS: 1, SETTING_SHOW_BT_ALERT: 1, SETTING_SHOW_SILENT_MODE: 1,
 	SETTING_STEP_DISPLAY: 1,
+	SETTING_PHONE_ALARM: 1, /* 3.3.0 watch face: the widget always shows the alarm */
 };
 var SKIP_TYPES = { 'debug-info': 1 };
 
@@ -190,12 +191,66 @@ function configDefaults() {
 	return d;
 }
 
+/* Android-only theme value: Follow system (also the default). 0 Dark / 1 Light as on the watch. */
+var THEME_SYSTEM = 2;
+var THEME_MIGRATED_KEY = 'carbon.android.theme.v2';
+/* Watch SETTING_TIMELINE_BATTERY values with no phone option (WidgetSettings.normalizeBattery). */
+var BATTERY_MIGRATE = { 3: 5, 4: 1 };
+
 function ensureSettingsSeeded() {
 	settings.sanitizeClaySettingsStorage();
 	var cur = settings.readClaySettings();
 	var d = configDefaults(), changed = false;
 	Object.keys(d).forEach(function (k) { if (cur[k] === undefined) { cur[k] = d[k]; changed = true; } });
+	/* 1.0.1: Follow system is the default. 1.0.0 seeded Light (1), so a stored Light becomes Follow system once. */
+	if (!localStorage.getItem(THEME_MIGRATED_KEY)) {
+		if (settings.extractInt(cur.SETTING_LIGHT_THEME) !== 0) { cur.SETTING_LIGHT_THEME = THEME_SYSTEM; changed = true; }
+		localStorage.setItem(THEME_MIGRATED_KEY, '1');
+	}
+	/* 1.1.1: watch-only battery values onto the phone list: "10 / 4 %" (4) → 10 / 5 / 0 %, "None" (3) → 0 % only. */
+	var oldBatt = settings.extractInt(cur.SETTING_TIMELINE_BATTERY);
+	if (BATTERY_MIGRATE[oldBatt] !== undefined) { cur.SETTING_TIMELINE_BATTERY = String(BATTERY_MIGRATE[oldBatt]); changed = true; }
 	if (changed) localStorage.setItem('clay-settings', J(cur));
+}
+
+/* settings.js buildSettingsDict keeps only 0/1 for the theme (the watch has no "system"); pass 2 through. */
+function androidDict(flat) {
+	var dict = settings.buildSettingsDict(flat);
+	if (BATTERY_MIGRATE[dict.SETTING_TIMELINE_BATTERY] !== undefined) dict.SETTING_TIMELINE_BATTERY = BATTERY_MIGRATE[dict.SETTING_TIMELINE_BATTERY];
+	var t = settings.extractInt(flat.SETTING_LIGHT_THEME);
+	dict.SETTING_LIGHT_THEME = (t === 0 || t === 1) ? t : THEME_SYSTEM;
+	return dict;
+}
+
+/* Options on the phone only (config.js, i.e. the watch's own list, is unchanged):
+ * `first`/`add` extend the watch's list, `replace` swaps it, `description` overrides its text. */
+var ANDROID_OPTIONS = {
+	SETTING_LIGHT_THEME: { first: [{ value: String(THEME_SYSTEM), label: 'Follow system (auto)' }] },
+	/* 1.1.1: phone levels 20 / 10 / 5 / 0 % (WidgetSettings.batteryLevels); same values as the watch where they match. */
+	SETTING_TIMELINE_BATTERY: {
+		replace: [
+			{ value: '0', label: '20 / 10 / 5 / 0 %' },
+			{ value: '1', label: '10 / 5 / 0 %' },
+			{ value: '2', label: '5 / 0 %' },
+			{ value: '6', label: '20 / 0 %' },
+			{ value: '7', label: '10 / 0 %' },
+			{ value: '5', label: '0 % only' },
+		],
+		description: 'When the phone battery is expected to reach each level (while not charging).',
+	},
+};
+
+function addAndroidOptions(key, options) {
+	var x = ANDROID_OPTIONS[key];
+	if (!x) return options;
+	function mk(o) { return { value: o.value, label: o.label, disabled: false, hidden: false, style: {} }; }
+	var out = (x.first || []).map(mk).concat(x.replace ? x.replace.map(mk) : options);
+	if (x.add) {
+		var at = -1;
+		out.forEach(function (o, i) { if (o.value === x.after) at = i; });
+		Array.prototype.splice.apply(out, [at < 0 ? out.length : at + 1, 0].concat(x.add.map(mk)));
+	}
+	return out;
 }
 
 var page = null; /* live settings page state */
@@ -215,13 +270,14 @@ function buildPage(userData) {
 		if (sec && !sectionKeep[CLAY_CONFIG.indexOf(sec)]) return;
 		var m = {
 			type: it.type, key: it.messageKey || null, id: it.id || null, label: it.label || '',
-			description: it.description || '', attributes: it.attributes || {},
+			description: (it.messageKey && ANDROID_OPTIONS[it.messageKey] && ANDROID_OPTIONS[it.messageKey].description) || it.description || '',
+			attributes: it.attributes || {},
 			value: it.messageKey ? (saved[it.messageKey] !== undefined ? saved[it.messageKey] : defaultValueOf(it)) : (it.defaultValue || ''),
 			hidden: false, disabled: false, options: null, _h: [],
 		};
 		if (it.type === 'select') {
 			m.value = String(m.value);
-			m.options = (it.options || []).map(function (o) { return { value: String(o.value), label: o.label, disabled: false, hidden: false, style: {} }; });
+			m.options = addAndroidOptions(it.messageKey, (it.options || []).map(function (o) { return { value: String(o.value), label: o.label, disabled: false, hidden: false, style: {} }; }));
 		}
 		if (it.type === 'toggle') m.value = settings.extractBool(m.value) === 1;
 		items.push(m);
@@ -307,5 +363,5 @@ G.carbonSettingsSave = function () {
 		flat.SETTING_CLEAR_CACHE = false; /* one-shot on the phone */
 		localStorage.setItem('clay-settings', J(flat));
 	}
-	return J(settings.buildSettingsDict(flat));
+	return J(androidDict(flat));
 };

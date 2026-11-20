@@ -1,6 +1,5 @@
 package com.nilsreichhard.carbonion.widget
 
-import android.Manifest
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.graphics.Color
@@ -17,7 +16,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -76,10 +74,22 @@ class SettingsActivity : AppCompatActivity() {
     private val primaryText by lazy { attrColor(android.R.attr.textColorPrimary) }
     private val secondaryText by lazy { attrColor(android.R.attr.textColorSecondary) }
     private val headingColor by lazy { attrColor(androidx.appcompat.R.attr.colorPrimary) }
+    private val fields by lazy { FieldStyle.forTheme(this) }
+
+    /** 1.1.2: dropdowns as tinted, outlined fields with an accent chevron and their own popup surface. */
+    private fun styleSpinner(sp: Spinner) {
+        fields.applyTo(sp)
+    }
+
+    /** Same field look for text inputs (outline turns accent and 2 dp on focus). */
+    private fun styleInput(et: EditText): EditText = et.also { fields.applyTo(it) }
+
+    private fun fieldAdapter(sp: Spinner, names: List<String>, typefaces: List<Typeface?>? = null) =
+        FieldStyle.Adapter(this, sp, names, fields, typefaces)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Light/dark like the expanded screen: follows the widget's Theme setting.
-        AppCompatDelegate.setDefaultNightMode(if (WidgetStore.settings(this).lightTheme) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES)
+        // Light/dark like the expanded screen: the Theme setting (Follow system by default).
+        AppCompatDelegate.setDefaultNightMode(WidgetStore.nightMode(WidgetStore.settings(this)))
         super.onCreate(savedInstanceState)
         widgetId = intent?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
@@ -98,7 +108,8 @@ class SettingsActivity : AppCompatActivity() {
             val it = state.getJSONObject(i)
             if (it.optString("type") == "submit") addWidgetSection()
             rows.add(buildRow(it))
-            if (it.optString("key") == "SETTING_STATIC_LON") addLocationRows()
+            // Location note + inline Allow button right under the Fixed coordinates switch.
+            if (it.optString("key") == "SETTING_USE_STATIC_LOCATION") addLocationRows()
         }
         applyState(state)
         val scroll = ScrollView(this).apply { addView(list); clipToPadding = false }
@@ -145,8 +156,8 @@ class SettingsActivity : AppCompatActivity() {
             "text" -> { labelView = text(14f, color = secondaryText).apply { movementMethod = LinkMovementMethod.getInstance() }; box.addView(labelView) }
             "select" -> {
                 labelView = text(16f).apply { this.text = label }; box.addView(labelView)
-                val sp = Spinner(this)
-                box.addView(sp)
+                val sp = Spinner(this).also { styleSpinner(it) }
+                box.addView(sp, fields.params())
                 input = sp
             }
             "toggle" -> {
@@ -165,12 +176,11 @@ class SettingsActivity : AppCompatActivity() {
                         else -> InputType.TYPE_CLASS_TEXT
                     }
                 }
-                box.addView(et); input = et
+                styleInput(et)
+                box.addView(et, fields.params()); input = et
             }
-            "submit" -> {
-                val b = Button(this).apply { this.text = label.ifEmpty { o.optString("value", "Save") }; setOnClickListener { save() } }
-                box.addView(b); input = b
-            }
+            // Save is in the action bar (onCreateOptionsMenu); the page's own submit row stays hidden.
+            "submit" -> box.visibility = View.GONE
         }
         val desc = if (description.isNotEmpty()) text(13f, color = secondaryText).apply { this.text = html(description) }.also { box.addView(it) } else null
         val row = Row(type, key, box, input, labelView, desc)
@@ -208,6 +218,7 @@ class SettingsActivity : AppCompatActivity() {
             for (i in 0 until minOf(state.length(), rows.size)) {
                 val o = state.getJSONObject(i)
                 val row = rows[i]
+                if (row.type == "submit") continue
                 row.container.visibility = if (o.optBoolean("hidden")) View.GONE else View.VISIBLE
                 val enabled = !o.optBoolean("disabled")
                 row.container.alpha = if (enabled) 1f else 0.4f
@@ -218,8 +229,7 @@ class SettingsActivity : AppCompatActivity() {
                         val values = (0 until opts.length()).map { opts.getJSONObject(it).optString("value") }
                         if (values != row.optionValues) {
                             row.optionValues = values
-                            v.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
-                                (0 until opts.length()).map { opts.getJSONObject(it).optString("label") })
+                            v.adapter = fieldAdapter(v, (0 until opts.length()).map { optionLabel(row.key, values[it], opts.getJSONObject(it).optString("label")) })
                         }
                         val idx = values.indexOf(o.optString("value"))
                         if (idx >= 0 && v.selectedItemPosition != idx) v.setSelection(idx, false)
@@ -233,18 +243,42 @@ class SettingsActivity : AppCompatActivity() {
         } finally { updating = false }
     }
 
+    /** Date formats preview today's date in the phone's language (the short-weekday one in its locale order). */
+    private fun optionLabel(key: String?, value: String, label: String): String =
+        if (key == "SETTING_DATE_FORMAT" && value.isNotEmpty())
+            runCatching { android.text.format.DateFormat.format(WidgetUpdater.localDatePattern(value), System.currentTimeMillis()).toString() }.getOrDefault(label)
+        else label
+
+    override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
+        // Accent-coloured so the only Save action reads as a button in light and dark.
+        val title = android.text.SpannableString(getString(R.string.settings_save)).apply {
+            setSpan(android.text.style.ForegroundColorSpan(headingColor), 0, length, 0)
+        }
+        menu.add(0, MENU_SAVE, 0, title).setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
+        if (item.itemId == MENU_SAVE) { save(); return true }
+        return super.onOptionsItemSelected(item)
+    }
+
     // ---------------------------------------------------- widget-only options
     private fun addLocationRows() {
         val box = block()
+        // The note and its Allow button side by side, so the fix is right where the problem is stated.
+        val note = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         locStatus = text(13f, color = secondaryText)
-        locAllow = Button(this).apply {
+        locAllow = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonTonalStyle).apply {
             text = getString(R.string.location_allow)
-            setOnClickListener { askLocation() }
+            setOnClickListener { LocationPermission.ask(this@SettingsActivity) }
         }
-        box.addView(locStatus); box.addView(locAllow)
+        note.addView(locStatus, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        note.addView(locAllow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(8f) })
+        box.addView(note)
         val place = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val q = EditText(this).apply { hint = getString(R.string.place_hint); isSingleLine = true }
-        place.addView(q, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val q = styleInput(EditText(this).apply { hint = getString(R.string.place_hint); isSingleLine = true })
+        place.addView(q, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(8f) })
         place.addView(Button(this).apply { text = getString(R.string.place_find); setOnClickListener { findPlace(q.text.toString()) } })
         box.addView(place)
         placeRow = place
@@ -253,36 +287,33 @@ class SettingsActivity : AppCompatActivity() {
     private fun updateLocationRows(fixed: Boolean) {
         if (!::locStatus.isInitialized) return
         val granted = LocationHelper.hasPermission(this)
+        val noFix = WidgetStore.placeSource(this) == LocationHelper.VILLARS.source
         locStatus.text = when {
             fixed -> getString(R.string.location_fixed)
+            granted && noFix -> getString(R.string.location_no_fix)
             granted -> getString(R.string.location_phone)
             else -> getString(R.string.location_denied)
         }
+        locStatus.setTextColor(if (!fixed && (!granted || noFix)) attrColor(androidx.appcompat.R.attr.colorError) else secondaryText)
         locAllow.visibility = if (!fixed && !granted) View.VISIBLE else View.GONE
         placeRow.visibility = if (fixed) View.VISIBLE else View.GONE
     }
 
-    /** Ask for location; after "Don't ask again" the system won't show the dialog, so open the app's settings page. */
-    private fun askLocation() {
-        val prefs = getSharedPreferences(WidgetStore.PREFS, MODE_PRIVATE)
-        val asked = prefs.getBoolean("loc_asked", false)
-        if (asked && !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_COARSE_LOCATION)) {
-            startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", packageName, null)))
-            return
-        }
-        prefs.edit().putBoolean("loc_asked", true).apply()
-        requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), 1)
-    }
+    private var hadPermission: Boolean? = null
 
     override fun onResume() {
         super.onResume()
-        // Back from the app's settings page: the permission may have changed there.
+        // Back from the app's settings page: the permission may have changed there (granted → fix + refresh).
+        val granted = LocationHelper.hasPermission(this)
+        if (hadPermission == false && granted) LocationPermission.onGranted(this)
+        hadPermission = granted
         rows.firstOrNull { it.key == "SETTING_USE_STATIC_LOCATION" }?.let { updateLocationRows((it.input as? Switch)?.isChecked ?: false) }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) LocationHelper.refreshInForeground(applicationContext)
+        hadPermission = LocationHelper.hasPermission(this)
+        if (requestCode == LocationPermission.REQUEST && grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) LocationPermission.onGranted(this)
         updateLocationRows(rows.firstOrNull { it.key == "SETTING_USE_STATIC_LOCATION" }?.let { (it.input as? Switch)?.isChecked } ?: false)
     }
 
@@ -316,16 +347,16 @@ class SettingsActivity : AppCompatActivity() {
         modeBox.addView(text(16f).apply { text = getString(R.string.bg_label) })
         val modes = listOf(WidgetStore.BG_TRANSPARENT, WidgetStore.BG_COLOR)
         val sp = Spinner(this).apply {
-            adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf(getString(R.string.bg_transparent), getString(R.string.bg_color)))
+            styleSpinner(this)
+            adapter = fieldAdapter(this, listOf(getString(R.string.bg_transparent), getString(R.string.bg_color)))
             setSelection(modes.indexOf(bg.mode).coerceAtLeast(0), false)
         }
-        modeBox.addView(sp)
+        modeBox.addView(sp, fields.params())
         modeBox.addView(text(13f, color = secondaryText).apply { text = getString(R.string.bg_desc) })
 
         val colorBox = block()
         val swatches = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val hex = EditText(this).apply { hint = "#RRGGBB"; isSingleLine = true; setText("#%06X".format(bg.color and 0xFFFFFF)) }
+        val hex = styleInput(EditText(this).apply { hint = "#RRGGBB"; isSingleLine = true; setText("#%06X".format(bg.color and 0xFFFFFF)) })
         val preview = View(this).apply { contentDescription = getString(R.string.bg_preview) }
         fun setColor(c: Int, fromHex: Boolean) {
             bg = bg.copy(color = c and 0xFFFFFF)
@@ -378,24 +409,16 @@ class SettingsActivity : AppCompatActivity() {
                        typefaces: List<Typeface?>? = null, onPick: (T) -> Unit) {
             val box = block()
             box.addView(text(16f).apply { text = label })
-            val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, names) {
-                private fun styled(v: View, pos: Int): View {
-                    // Set on every bind: recycled rows keep the previous row's typeface otherwise.
-                    if (typefaces != null && v is TextView) {
-                        v.typeface = typefaces.getOrNull(pos) ?: Typeface.DEFAULT
-                        v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-                    }
-                    return v
-                }
-                override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = styled(super.getView(position, convertView, parent), position)
-                override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = styled(super.getDropDownView(position, convertView, parent), position)
+            val sp = Spinner(this).apply {
+                styleSpinner(this)
+                adapter = fieldAdapter(this, names, typefaces)
+                setSelection(items.indexOf(current).coerceAtLeast(0), false)
             }
-            val sp = Spinner(this).apply { this.adapter = adapter; setSelection(items.indexOf(current).coerceAtLeast(0), false) }
             sp.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) { onPick(items[pos]) }
                 override fun onNothingSelected(p: AdapterView<*>?) {}
             }
-            box.addView(sp)
+            box.addView(sp, fields.params())
             if (desc != null) box.addView(text(13f, color = secondaryText).apply { text = desc })
         }
         val styles = UiOptions.Style.entries
@@ -432,6 +455,7 @@ class SettingsActivity : AppCompatActivity() {
     // -------------------------------------------------------------------- save
     private fun save() {
         val dict = js.call("carbonSettingsSave")
+        WidgetStore.markThemeChosen(this)
         WidgetStore.saveDict(this, dict)
         WidgetStore.saveBackground(this, bg)
         WidgetStore.saveUi(this, ui)
@@ -448,6 +472,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val MENU_SAVE = 1
         /** Background presets: white, black, Pixel dark grey, slate, navy, teal, warm sand. */
         val PRESETS = intArrayOf(0xFFFFFFFF.toInt(), 0xFF000000.toInt(), 0xFF202124.toInt(), 0xFF37474F.toInt(),
             0xFF1A237E.toInt(), 0xFF00695C.toInt(), 0xFFF3E5C8.toInt())

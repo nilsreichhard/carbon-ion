@@ -40,8 +40,8 @@ import com.google.android.material.R as M
  * The expanded screen (tap the widget, or the app icon): header with city,
  * temperature, condition and next alarm; the large Modern chart with
  * touch-to-inspect; the next days from the hourly forecast; when and where
- * the data came from; Refresh and Settings. Light/dark follows the widget's
- * theme setting; Material You colours on Android 12+.
+ * the data came from; Refresh and Settings in the toolbar. Light/dark follows
+ * the theme setting (Follow system by default); Material You colours on Android 12+.
  */
 class DetailActivity : AppCompatActivity() {
     private val dp get() = resources.displayMetrics.density
@@ -50,6 +50,7 @@ class DetailActivity : AppCompatActivity() {
     private lateinit var details: LinearLayout
     private var hours = 0
     private var light = true
+    private var hadPermission = false
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == null || key == "payload" || key == "dict" || key == "city" || key == "ui" || key == "place_source") runOnUiThread {
             if (WidgetStore.settings(this).lightTheme != light) recreate() else bind()
@@ -57,12 +58,15 @@ class DetailActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        light = WidgetStore.settings(this).lightTheme
-        AppCompatDelegate.setDefaultNightMode(if (light) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES)
+        val st = WidgetStore.settings(this)
+        light = st.lightTheme
+        // Follow system (default): AppCompat tracks the phone; Light / Dark force it.
+        AppCompatDelegate.setDefaultNightMode(WidgetStore.nightMode(st))
         DynamicColors.applyToActivityIfAvailable(this)
         super.onCreate(savedInstanceState)
         WidgetUpdater.ensureIconFont(this)
         hours = savedInstanceState?.getInt("hours") ?: 0
+        hadPermission = LocationHelper.hasPermission(this)
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; fitsSystemWindows = true }
         val bar = MaterialToolbar(this).apply {
@@ -143,9 +147,19 @@ class DetailActivity : AppCompatActivity() {
         }
         top.addView(text(p?.currentTemp?.let { DetailData.fmtTemp(it, true) } ?: "—", M.attr.textAppearanceDisplayMedium))
         hc.addView(top)
-        // No phone location: say so instead of silently showing the default place.
-        if (WidgetStore.placeSource(this) == LocationHelper.VILLARS.source)
-            hc.addView(text(getString(R.string.loc_unavailable), M.attr.textAppearanceBodyMedium, androidx.appcompat.R.attr.colorError).apply { setPadding(0, px(8), 0, 0) })
+        // No phone location: say so instead of silently showing the default place, with the fix right there.
+        when (LocationPermission.state(this)) {
+            LocationPermission.State.DENIED -> {
+                hc.addView(text(getString(R.string.loc_unavailable), M.attr.textAppearanceBodyMedium, androidx.appcompat.R.attr.colorError).apply { setPadding(0, px(8), 0, 0) })
+                hc.addView(MaterialButton(this, null, M.attr.materialButtonTonalStyle).apply {
+                    setText(R.string.location_allow)
+                    setOnClickListener { LocationPermission.ask(this@DetailActivity) }
+                }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = px(6) })
+            }
+            LocationPermission.State.NO_FIX ->
+                hc.addView(text(getString(R.string.loc_no_fix), M.attr.textAppearanceBodyMedium, androidx.appcompat.R.attr.colorError).apply { setPadding(0, px(8), 0, 0) })
+            LocationPermission.State.OK -> {}
+        }
         NextAlarm.info(this)?.let { a ->
             val label = NextAlarm.format(a.triggerMillis, now, DateFormat.is24HourFormat(this), s.leadingZero)
             val row = LinearLayout(this).apply {
@@ -225,12 +239,25 @@ class DetailActivity : AppCompatActivity() {
         val updated = p?.let { updatedLabel(it.fetchTime * 1000, now) } ?: "—"
         val src = if (provider.startsWith("openmeteo") || provider == "om") getString(R.string.detail_source_model, updated, providerName(provider), model)
             else getString(R.string.detail_source, updated, providerName(provider))
+        // Refresh / Settings live in the toolbar only.
         content.addView(text(src, M.attr.textAppearanceBodySmall, M.attr.colorOnSurfaceVariant).apply { setPadding(px(4), px(16), px(4), px(8)) })
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
-        actions.addView(MaterialButton(this, null, M.attr.materialButtonOutlinedStyle).apply { setText(R.string.detail_settings); setOnClickListener { openSettings() } })
-        actions.addView(MaterialButton(this).apply { setText(R.string.detail_refresh); setOnClickListener { refresh() } },
-            LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = px(8) })
-        content.addView(actions)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Back from the app's system settings page with location now allowed: fetch and redraw.
+        val granted = LocationHelper.hasPermission(this)
+        if (granted && !hadPermission && WidgetStore.placeSource(this) == LocationHelper.VILLARS.source) LocationPermission.onGranted(this)
+        if (granted != hadPermission) bind()
+        hadPermission = granted
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != LocationPermission.REQUEST) return
+        hadPermission = LocationHelper.hasPermission(this)
+        if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) LocationPermission.onGranted(this)
+        bind()
     }
 
     /** "14:05" today, "yesterday 14:05" / "Tue 14:05" otherwise, so an old forecast reads as old. */

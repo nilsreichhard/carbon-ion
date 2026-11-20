@@ -13,8 +13,8 @@ android {
         applicationId = "com.nilsreichhard.carbonion.widget"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 5
+        versionName = "1.1.2"
     }
 
     /*
@@ -74,6 +74,9 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.8.0")
     implementation("com.google.android.material:material:1.14.0")
     implementation("wang.harlon.quickjs:wrapper-android:3.2.3")
+    // 1.1.0: next phone alarm to the watch face (Core Devices Pebble app, PebbleKit Android 2)
+    // 1.2.0: the last release that builds against compileSdk 36 (1.3.x needs 37); same send/listen API.
+    implementation("io.rebble.pebblekit2:client:1.2.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.18.1")

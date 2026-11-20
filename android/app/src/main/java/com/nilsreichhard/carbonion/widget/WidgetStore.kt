@@ -45,7 +45,40 @@ object WidgetStore {
 
     fun city(ctx: Context): String = prefs(ctx).getString("city", null) ?: ""
 
-    fun settings(ctx: Context): WidgetSettings = WidgetSettings.fromDict(prefs(ctx).getString("dict", null))
+    /** The settings dict with the theme resolved: Follow system (the default) reads the phone's dark mode now. */
+    fun settings(ctx: Context): WidgetSettings {
+        val s = WidgetSettings.fromDict(prefs(ctx).getString("dict", null))
+        val mode = themeMode(ctx, s)
+        return s.copy(themeMode = mode, lightTheme = when (mode) {
+            WidgetSettings.THEME_DARK -> false
+            WidgetSettings.THEME_LIGHT -> true
+            else -> !systemDark()
+        })
+    }
+
+    /**
+     * 1.0.0 stored Light (1) as the seeded default, so until the user saves settings in 1.0.1+ a stored
+     * Light counts as Follow system (the JS migrates its copy the same way on its next run).
+     */
+    private fun themeMode(ctx: Context, s: WidgetSettings): Int =
+        if (s.themeMode == WidgetSettings.THEME_LIGHT && !prefs(ctx).getBoolean(THEME_CHOSEN, false)) WidgetSettings.THEME_SYSTEM
+        else s.themeMode
+
+    /** Set once the user saves the settings page, so an explicit Light is kept from then on. */
+    fun markThemeChosen(ctx: Context) = prefs(ctx).edit().putBoolean(THEME_CHOSEN, true).apply()
+    private const val THEME_CHOSEN = "theme_chosen"
+
+    /** The phone's current dark mode (system configuration, not an activity's AppCompat override). */
+    fun systemDark(): Boolean =
+        (android.content.res.Resources.getSystem().configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+
+    /** AppCompat night mode for the app screens. */
+    fun nightMode(s: WidgetSettings): Int = when (s.themeMode) {
+        WidgetSettings.THEME_DARK -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+        WidgetSettings.THEME_LIGHT -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+        else -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+    }
 
     fun background(ctx: Context): Background = prefs(ctx).let {
         Background(it.getString("bg_mode", BG_TRANSPARENT) ?: BG_TRANSPARENT, it.getInt("bg_color", 0xFFFFFF), it.getInt("bg_opacity", 100))

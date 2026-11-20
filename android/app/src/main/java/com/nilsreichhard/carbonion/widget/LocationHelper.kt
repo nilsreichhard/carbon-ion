@@ -59,14 +59,15 @@ object LocationHelper {
      */
     const val MOVED_M = 2_000f
 
-    fun refreshInForeground(ctx: Context) {
+    fun refreshInForeground(ctx: Context, force: Boolean = false) {
         if (!hasPermission(ctx)) return
         Thread {
-            val loc = current(ctx) ?: return@Thread
+            // Just granted: refresh even without a fresh fix (the fetch falls back to the last known one).
+            val loc = current(ctx) ?: run { if (force) WeatherWorker.runNow(ctx); return@Thread }
             val prev = WidgetStore.phoneLocation(ctx)
             WidgetStore.savePhoneLocation(ctx, loc.latitude, loc.longitude)
             val moved = prev == null || FloatArray(1).also { Location.distanceBetween(prev.first, prev.second, loc.latitude, loc.longitude, it) }[0] > MOVED_M
-            if (moved || WidgetStore.placeSource(ctx) == VILLARS.source) WeatherWorker.runNow(ctx)
+            if (force || moved || WidgetStore.placeSource(ctx) == VILLARS.source) WeatherWorker.runNow(ctx)
         }.start()
     }
 

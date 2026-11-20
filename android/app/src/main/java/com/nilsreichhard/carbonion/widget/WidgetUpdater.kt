@@ -59,11 +59,16 @@ object WidgetUpdater {
         mgr.updateAppWidget(id, forOptions(ctx, mgr, id))
     }
 
-    /** Size-mapped RemoteViews on 12+ (max two sizes, for bitmap memory), else portrait size. */
+    /**
+     * Size-mapped RemoteViews on 12+ (max two sizes, for bitmap memory), else portrait size.
+     * Follow-system theme carries a light and a dark bitmap per size ([dualTheme]), so it keeps the
+     * sizes whose bitmaps fit the launcher's budget ([fitSizes]).
+     */
     fun forOptions(ctx: Context, mgr: AppWidgetManager, id: Int): RemoteViews {
         val o = mgr.getAppWidgetOptions(id)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val sizes = sizesFrom(o).take(2)
+            val perSize = if (dualTheme(ctx, WidgetStore.settings(ctx))) 2 else 1
+            val sizes = fitSizes(sizesFrom(o).take(2), perSize, ctx.resources.displayMetrics)
             if (BuildConfig.DEBUG) Log.d(TAG, "widget $id sizes $sizes")
             if (sizes.size > 1) return RemoteViews(sizes.associateWith { build(ctx, Size(it.width.roundToInt(), it.height.roundToInt()), id) })
             if (sizes.size == 1) return build(ctx, Size(sizes[0].width.roundToInt(), sizes[0].height.roundToInt()), id)
@@ -75,6 +80,40 @@ object WidgetUpdater {
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
     fun sizesFrom(o: android.os.Bundle): List<SizeF> =
         androidx.core.os.BundleCompat.getParcelableArrayList(o, AppWidgetManager.OPTION_APPWIDGET_SIZES, SizeF::class.java)?.distinct().orEmpty()
+
+    /** Bitmap px per widget image: the Modern renderer caps at ~1.2 Mpx (ModernRenderer.Spec.forWidget). */
+    private const val MAX_BITMAP_PX = 1_200_000f
+
+    /**
+     * The first sizes whose chart bitmaps ([perSize] each: two for Follow system) stay within 80 % of the
+     * launcher's RemoteViews bitmap limit (1.5 × screen × 4 bytes); always at least one.
+     */
+    fun fitSizes(sizes: List<SizeF>, perSize: Int, dm: android.util.DisplayMetrics): List<SizeF> {
+        val budget = dm.widthPixels.toFloat() * dm.heightPixels * 4f * 1.5f * 0.8f
+        var used = 0f
+        val out = ArrayList<SizeF>()
+        for (sz in sizes) {
+            val bytes = min(sz.width * sz.height * dm.density * dm.density, MAX_BITMAP_PX) * 4f * perSize
+            if (out.isNotEmpty() && used + bytes > budget) break
+            used += bytes; out.add(sz)
+        }
+        return out
+    }
+
+    /**
+     * Follow system on Android 12+: the RemoteViews carry both themes (setIcon / setColorInt with a night
+     * variant), so the launcher switches them the moment dark mode changes, even with the app not running.
+     */
+    fun dualTheme(ctx: Context, s: WidgetSettings): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && s.themeMode == WidgetSettings.THEME_SYSTEM
+
+    /** strftime → ICU; the short-weekday option follows the locale's order ("Mon, Jan 15", "Mon 15 Jan", "Mo., 15. Jan."). */
+    fun localDatePattern(strftime: String, locale: java.util.Locale = java.util.Locale.getDefault()): String =
+        if (strftime == SHORT_WEEKDAY_FORMAT) DateFormat.getBestDateTimePattern(locale, "EEEMMMd")
+        else WidgetSettings.datePattern(strftime)
+
+    /** Android-only date format option (widget-entry.js ANDROID_OPTIONS). */
+    const val SHORT_WEEKDAY_FORMAT = "%a, %b %d"
 
     /** Portrait size: min width × max height (AppWidgetManager options). */
     fun sizeOf(mgr: AppWidgetManager, id: Int): Size {
@@ -118,8 +157,7 @@ object WidgetUpdater {
         val ui = WidgetStore.ui(ctx)
         val modern = ui.style == UiOptions.Style.MODERN
         val bg = WidgetStore.background(ctx)
-        // A solid colour background picks the palette by its luminance (WidgetColors); transparent keeps the Theme.
-        val s = WidgetStore.settings(ctx).let { it.copy(lightTheme = WidgetColors.effectiveLight(bg, it.lightTheme, modern)) }
+        val s = WidgetStore.settings(ctx)
         val clockFont = ui.clock()
         val textFont = ui.text()
         val clockTf = clockFont.typeface(ctx, clock = true)
@@ -137,20 +175,8 @@ object WidgetUpdater {
         val clockRows = clockRows(sample, widthRows, clockTf, ui.clockSize.factor)
         val battery = if (useBatteryOverride) batteryOverride else BatteryTracker.read(ctx)
         val payload = WidgetStore.payload(ctx, s.celsius)
-        val accent = accentColor(ctx, ui, s.lightTheme)
-        val ink = if (modern) ModernRenderer.Palette(s.lightTheme, accent).ink else CarbonStyle.Palette(s.lightTheme).ink
 
         val v = RemoteViews(ctx.packageName, layout.layoutRes)
-        val chart = if (modern) {
-            val spec = ModernRenderer.Spec.forWidget(size.wDp, size.hDp, density, layout, sample, clockRows, battery,
-                clockTf, textTf, ui.scrim && bg.mode == WidgetStore.BG_TRANSPARENT, accent, cornerRadiusPx(ctx),
-                textShadow = bg.mode == WidgetStore.BG_TRANSPARENT)
-            ModernRenderer.render(payload, s, spec, nowMillis)
-        } else {
-            val spec = WidgetRenderer.Spec.forWidget(size.wDp, size.hDp, density, layout, sample, clockRows, battery, clockTf)
-            WidgetRenderer.render(payload, s, spec, nowMillis)
-        }
-        v.setImageViewBitmap(R.id.chart, chart)
         v.setContentDescription(R.id.chart, chartDescription(ctx, payload))
         v.setInt(android.R.id.background, "setBackgroundColor", bg.argb)
 
@@ -165,7 +191,6 @@ object WidgetUpdater {
         val textRows = min(CarbonStyle.CITY_TEXT_ROWS * (if (modern) 0.92f else 1f), clockRows * 0.4f)
         textRv.setTextViewTextSize(R.id.city, TypedValue.COMPLEX_UNIT_DIP, textRows * rowDp)
         clockRv.setTextViewTextSize(R.id.clock, TypedValue.COMPLEX_UNIT_DIP, clockRows * rowDp)
-        textRv.setTextColor(R.id.city, ink); textRv.setTextColor(R.id.date, ink); clockRv.setTextColor(R.id.clock, ink)
         clockRv.setCharSequence(R.id.clock, "setFormat24Hour", clockPattern)
         clockRv.setCharSequence(R.id.clock, "setFormat12Hour", clockPattern)
         textRv.setViewVisibility(R.id.city_row, if (city.isEmpty()) View.INVISIBLE else View.VISIBLE)
@@ -173,7 +198,7 @@ object WidgetUpdater {
         // Date row: the date, then the next alarm "· [icon] 07:00" (weekday added beyond 24 h) in the
         // date's font, size and colour, centred as one row under the clock. Too wide: the short date,
         // then slightly smaller text; the alarm time is never truncated, the alarm hides only as a last resort.
-        val datePattern = WidgetSettings.datePattern(s.dateFormat)
+        val datePattern = localDatePattern(s.dateFormat)
         val shortPattern = AlarmBadge.shortPattern(datePattern)
         val datePx = textRows * rowDp * density
         val plan = AlarmBadge.plan(widestDate(datePattern, nowMillis, textTf, datePx), widestDate(shortPattern, nowMillis, textTf, datePx),
@@ -186,12 +211,7 @@ object WidgetUpdater {
         if (plan.showAlarm && alarm != null) {
             textRv.setTextViewText(R.id.alarm_sep, AlarmBadge.SEPARATOR)
             textRv.setTextViewText(R.id.alarm_time, alarm)
-            for (tv in intArrayOf(R.id.alarm_sep, R.id.alarm_time)) {
-                textRv.setTextViewTextSize(tv, TypedValue.COMPLEX_UNIT_DIP, rowTextDp)
-                textRv.setTextColor(tv, ink)
-            }
-            // Same shadow as the date's (text_*.xml).
-            textRv.setImageViewBitmap(R.id.alarm_icon, AlarmBadge.iconBitmap(textTf, datePx * plan.scale, ink, 0x40000000))
+            for (tv in intArrayOf(R.id.alarm_sep, R.id.alarm_time)) textRv.setTextViewTextSize(tv, TypedValue.COMPLEX_UNIT_DIP, rowTextDp)
             textRv.setContentDescription(R.id.date_alarm, ctx.getString(R.string.alarm_description_at, alarm))
             textRv.setViewVisibility(R.id.date_alarm, View.VISIBLE)
         } else textRv.setViewVisibility(R.id.date_alarm, View.GONE)
@@ -199,22 +219,65 @@ object WidgetUpdater {
         // Condition icon right of the city: IcoMoon 18 with the watch's 5-row gap.
         val iconPx = (18 * (if (modern) 0.92f else 1f) * rowDp * density).roundToInt().coerceAtLeast(8)
         val gapPx = (5 * rowDp * density).roundToInt()
-        val icon = WidgetRenderer.conditionIcon(payload, nowMillis, TimeZone.getDefault(), ink, iconPx)
+        val showAlarm = plan.showAlarm && alarm != null
+
+        /** Everything that depends on light/dark: chart (with bitmap text), ink, condition and alarm icons. */
+        class Look(val chart: Bitmap, val ink: Int, val cond: Bitmap?, val alarmIcon: Bitmap?)
+        fun look(themeLight: Boolean): Look {
+            // A solid colour background picks the palette by its luminance (WidgetColors); transparent keeps the theme.
+            val sv = s.copy(lightTheme = WidgetColors.effectiveLight(bg, themeLight, modern))
+            val accent = accentColor(ctx, ui, sv.lightTheme)
+            val ink = if (modern) ModernRenderer.Palette(sv.lightTheme, accent).ink else CarbonStyle.Palette(sv.lightTheme).ink
+            val chart = if (modern) {
+                val spec = ModernRenderer.Spec.forWidget(size.wDp, size.hDp, density, layout, sample, clockRows, battery,
+                    clockTf, textTf, ui.scrim && bg.mode == WidgetStore.BG_TRANSPARENT, accent, cornerRadiusPx(ctx),
+                    textShadow = bg.mode == WidgetStore.BG_TRANSPARENT)
+                ModernRenderer.render(payload, sv, spec, nowMillis)
+            } else {
+                val spec = WidgetRenderer.Spec.forWidget(size.wDp, size.hDp, density, layout, sample, clockRows, battery, clockTf)
+                WidgetRenderer.render(payload, sv, spec, nowMillis)
+            }
+            val icon = WidgetRenderer.conditionIcon(payload, nowMillis, TimeZone.getDefault(), ink, iconPx)
+            var cond: Bitmap? = null
+            if (bitmapText) {
+                BitmapText.draw(chart, layout, BitmapText.Item(city, DateFormat.format(rowPattern, nowMillis).toString(),
+                    textRows, textTf, ink, icon, 18 * 0.92f, bg.mode == WidgetStore.BG_TRANSPARENT,
+                    alarm = alarm.takeIf { plan.showAlarm }, dateScale = plan.scale))
+            } else if (icon != null) {
+                cond = Bitmap.createBitmap(iconPx + gapPx, iconPx, Bitmap.Config.ARGB_8888)
+                android.graphics.Canvas(cond).drawBitmap(icon, gapPx.toFloat(), 0f, null)
+            }
+            // Same shadow as the date's (text_*.xml).
+            val alarmIcon = if (showAlarm) AlarmBadge.iconBitmap(textTf, datePx * plan.scale, ink, 0x40000000) else null
+            return Look(chart, ink, cond, alarmIcon)
+        }
+
+        val inkViews = listOf(textRv to R.id.city, textRv to R.id.date, clockRv to R.id.clock, textRv to R.id.alarm_sep, textRv to R.id.alarm_time)
+        val dayLight = WidgetColors.effectiveLight(bg, true, modern)
+        val nightLight = WidgetColors.effectiveLight(bg, false, modern)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dualTheme(ctx, s) && dayLight != nightLight) {
+            // Follow system: both looks in one RemoteViews; the launcher picks by its night mode.
+            val day = look(true); val night = look(false)
+            fun icon(b: Bitmap) = android.graphics.drawable.Icon.createWithBitmap(b)
+            v.setIcon(R.id.chart, "setImageIcon", icon(day.chart), icon(night.chart))
+            for ((rv, id) in inkViews) rv.setColorInt(id, "setTextColor", day.ink, night.ink)
+            if (day.cond != null && night.cond != null) textRv.setIcon(R.id.cond, "setImageIcon", icon(day.cond), icon(night.cond))
+            if (day.alarmIcon != null && night.alarmIcon != null) textRv.setIcon(R.id.alarm_icon, "setImageIcon", icon(day.alarmIcon), icon(night.alarmIcon))
+            textRv.setViewVisibility(R.id.cond, if (!bitmapText && day.cond != null) View.VISIBLE else View.GONE)
+        } else {
+            val one = look(if (dualTheme(ctx, s)) dayLight else s.lightTheme)
+            v.setImageViewBitmap(R.id.chart, one.chart)
+            for ((rv, id) in inkViews) rv.setTextColor(id, one.ink)
+            one.cond?.let { textRv.setImageViewBitmap(R.id.cond, it) }
+            one.alarmIcon?.let { textRv.setImageViewBitmap(R.id.alarm_icon, it) }
+            textRv.setViewVisibility(R.id.cond, if (!bitmapText && one.cond != null) View.VISIBLE else View.GONE)
+        }
         if (bitmapText) {
             // Invisible views keep their size, so the city row is still a tap target.
             textRv.setViewVisibility(R.id.city, View.INVISIBLE)
             textRv.setViewVisibility(R.id.date, View.INVISIBLE)
             if (plan.showAlarm) textRv.setViewVisibility(R.id.date_alarm, View.INVISIBLE)
-            textRv.setViewVisibility(R.id.cond, View.GONE)
-            BitmapText.draw(chart, layout, BitmapText.Item(city, DateFormat.format(rowPattern, nowMillis).toString(),
-                textRows, textTf, ink, icon, 18 * 0.92f, bg.mode == WidgetStore.BG_TRANSPARENT,
-                alarm = alarm.takeIf { plan.showAlarm }, dateScale = plan.scale))
-        } else if (icon != null) {
-            val padded = Bitmap.createBitmap(iconPx + gapPx, iconPx, Bitmap.Config.ARGB_8888)
-            android.graphics.Canvas(padded).drawBitmap(icon, gapPx.toFloat(), 0f, null)
-            textRv.setImageViewBitmap(R.id.cond, padded)
-            textRv.setViewVisibility(R.id.cond, View.VISIBLE)
-        } else textRv.setViewVisibility(R.id.cond, View.GONE)
+        }
 
         // Taps: the clock and the alarm open the phone's alarms; anywhere else the expanded app screen.
         // The alarm part of the date row is its own click target; the date itself falls through to the

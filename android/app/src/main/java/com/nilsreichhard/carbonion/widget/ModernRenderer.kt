@@ -143,7 +143,14 @@ object ModernRenderer {
         var h0 = 0f
     }
 
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    /*
+     * Scratch paints are per thread: the widget (WeatherWorker / RedrawWorker / provider threads) and the
+     * app's chart (main thread) render at the same time after a refresh, and one shared Paint let a
+     * worker's reset() / style / shader land in the middle of the other's draw (open curves filled
+     * with a straight closing edge, fills in another shader's colours).
+     */
+    private val paintTL = ThreadLocal.withInitial { Paint(Paint.ANTI_ALIAS_FLAG) }
+    private val paint: Paint get() = paintTL.get()!!
     private val clear = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR) }
 
     private fun fillP(color: Int) = paint.apply { reset(); isAntiAlias = true; style = Paint.Style.FILL; this.color = color }
@@ -349,11 +356,10 @@ object ModernRenderer {
         if (b.charging || b.percent >= 100 || b.anchorSec <= 0) return
         val past = g.s.pastHours * 3600L; val fut = g.s.forecastHours * 3600L
         val anchorOff = b.anchorSec - nowSec
-        val tb = g.s.timelineBattery
-        val show = mapOf(20 to (tb == 0), 10 to (tb == 0 || tb == 1 || tb == 4), 4 to (tb != 3), 0 to (tb != 4 && tb != 3))
-        val marks = listOf(Triple(20, 0, 0.5f), Triple(10, 1, 0.25f), Triple(4, 2, 0.12f), Triple(0, 3, 0f))
+        val levels = g.s.batteryLevels
+        val marks = listOf(Triple(20, 0, 0.5f), Triple(10, 1, 0.25f), Triple(5, 2, 0.12f), Triple(0, 3, 0f))
         for ((m, ci, frac) in marks) {
-            if (show[m] != true) continue
+            if (m !in levels) continue
             val eta = anchorOff + (b.anchorPercent - m).toLong() * b.secsPerPct
             if (eta < -past || eta > fut) continue
             val x = dx(eta).coerceIn(g.left - MARKER_R + BATTERY_HALF, g.right + MARKER_R - BATTERY_HALF)
@@ -629,7 +635,7 @@ object ModernRenderer {
         val c = g.c
         val spans = WidgetRenderer.eventSpans(p, g.s, win.startSlot, win.hoursRemaining)
         val cy = (layerH - CarbonStyle.EVENT_ICON_LIFT) / 2f + CarbonStyle.EVENT_ICON_LIFT
-        val size = 10.5f
+        val size = EVENT_ICON_ROWS
         for (sp in spans.asReversed()) {
             val xs = g.colCenter(sp.start); val xe = g.colCenter(sp.end)
             val ix = (xs + xe) / 2f
@@ -647,6 +653,9 @@ object ModernRenderer {
             icon(g, sp.kind, ix, iy, size, col)
         }
     }
+
+    /** Event icon height in rows (was 10.5; ~16 % smaller so it doesn't crowd the rain bars). */
+    const val EVENT_ICON_ROWS = 8.8f
 
     /** Vector event icons, [size] rows tall, centred on (cx, cy). */
     fun icon(c: Canvas, kind: WidgetRenderer.EventKind, cx: Float, cy: Float, size: Float, col: Int, dpRows: Float) {
@@ -833,7 +842,8 @@ object ModernRenderer {
         for ((i, pl) in pos.withIndex()) label(g, pl.text + "°", pl.x, pl.baseline, if (i == 1) md else sm, i == 1, if (i == 1) g.pal.ink else g.pal.ink2)
     }
 
-    private val text = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val textTL = ThreadLocal.withInitial { Paint(Paint.ANTI_ALIAS_FLAG) }
+    private val text: Paint get() = textTL.get()!!
 
     private fun labelPaint(tf: Typeface, size: Float, bold: Boolean) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = if (bold) Typeface.create(tf, Typeface.BOLD) else tf; textSize = size

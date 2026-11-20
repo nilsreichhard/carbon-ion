@@ -31,6 +31,7 @@
     <string name="location_allow">Allow location</string>
     <string name="location_phone">Weather and city follow the phone\'s location.</string>
     <string name="location_denied">Location not allowed: the last saved place is used (Villars-sur-Ollon until then).</string>
+    <string name="location_no_fix">Location allowed, but no fix yet: check that location is turned on.</string>
     <string name="location_fixed">Using the coordinates below. Search a place to fill them.</string>
     <string name="place_hint">Find a place, e.g. Villars</string>
     <string name="place_find">Find</string>
@@ -41,6 +42,7 @@
     <string name="detail_refresh">Refresh</string>
     <string name="detail_refreshing">Refreshing the forecast…</string>
     <string name="detail_settings">Settings</string>
+    <string name="settings_save">Save</string>
     <string name="detail_no_data">No forecast yet</string>
     <string name="detail_high_low">H %1$s · L %2$s</string>
     <string name="detail_next_alarm">Next alarm %1$s</string>
@@ -73,7 +75,8 @@
     <string name="bg_swatch">Background colour %1$s</string>
     <string name="bg_preview">Selected background colour</string>
     <string name="loc_unavailable_short">no location</string>
-    <string name="loc_unavailable">Location unavailable: showing the default place. Allow location in Settings, or set fixed coordinates.</string>
+    <string name="loc_unavailable">Location unavailable: showing the default place. Allow location, or set fixed coordinates in Settings.</string>
+    <string name="loc_no_fix">No location fix yet: showing the default place. Check that location is turned on, or set fixed coordinates in Settings.</string>
     <string name="place_error">Place search failed. Check the connection and try again.</string>
     <string name="detail_yesterday">yesterday</string>
     <string name="chart_description">Weather chart: now %1$s, high %2$s, low %3$s</string>

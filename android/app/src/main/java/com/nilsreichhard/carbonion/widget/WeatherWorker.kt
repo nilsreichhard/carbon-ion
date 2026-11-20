@@ -19,6 +19,8 @@ import java.util.concurrent.TimeUnit
 class WeatherWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
 
     override fun doWork(): Result = try {
+        // 1.1.0: also a periodic resync of the phone alarm to the watch face (no network needed).
+        runCatching { PhoneAlarmSync.sendBlocking(applicationContext) }
         fetchNow(applicationContext, freshLocation = false)
         WidgetUpdater.updateAll(applicationContext)
         Result.success()

@@ -118,7 +118,9 @@ object WidgetRenderer {
         c.save(); c.translate(0f, y.toFloat()); c.clipRect(0, 0, w, h); draw(); c.restore()
     }
 
-    private val fill = Paint().apply { isAntiAlias = false; style = Paint.Style.FILL }
+    /** Per thread, like ModernRenderer's scratch paints (widget and app render concurrently). */
+    private val fillTL = ThreadLocal.withInitial { Paint().apply { isAntiAlias = false; style = Paint.Style.FILL } }
+    private val fill: Paint get() = fillTL.get()!!
     private val clear = Paint().apply { isAntiAlias = false; xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR) }
 
     private fun paintFor(color: Int): Paint = if (color == CarbonStyle.BG) clear else fill.also { it.color = color }
@@ -236,10 +238,9 @@ object WidgetRenderer {
                 batt.anchorPercent == m -> 0L
                 else -> (batt.anchorPercent - m).toLong() * batt.secsPerPct
             }
-            val tb = g.s.timelineBattery
-            val show = mapOf(20 to (tb == 0), 10 to (tb == 0 || tb == 1 || tb == 4), 4 to (tb != 3), 0 to (tb != 4 && tb != 3))
-            for ((m, col, fw) in listOf(Triple(20, g.pal.batt20, 4), Triple(10, g.pal.batt10, 2), Triple(4, g.pal.batt4, 1), Triple(0, g.pal.batt0, 0))) {
-                if (show[m] != true) continue
+            val levels = g.s.batteryLevels
+            for ((m, col, fw) in listOf(Triple(20, g.pal.batt20, 4), Triple(10, g.pal.batt10, 2), Triple(5, g.pal.batt5, 1), Triple(0, g.pal.batt0, 0))) {
+                if (m !in levels) continue
                 val eta = anchorOff + toMark(m)
                 if (eta < -past || eta > fut) continue
                 val bx = dx(eta).coerceIn(0, g.w)
@@ -575,7 +576,9 @@ object WidgetRenderer {
         }
     }
 
-    private val glyphPaint = Paint().apply { isAntiAlias = true; textAlign = Paint.Align.CENTER }
+    /** Per thread, like ModernRenderer's scratch paints (widget and app render concurrently). */
+    private val glyphPaintTL = ThreadLocal.withInitial { Paint().apply { isAntiAlias = true; textAlign = Paint.Align.CENTER } }
+    private val glyphPaint: Paint get() = glyphPaintTL.get()!!
 
     /** An IcoMoon glyph centred on (cx, cy), [size] rows (the watch font's px size). */
     private fun iconGlyph(c: Canvas, glyph: String, cx: Float, cy: Float, size: Float, color: Int) {
@@ -676,7 +679,9 @@ object WidgetRenderer {
         for ((i, pl) in pos.withIndex()) label(g, pl.text, pl.x, pl.baseline, if (i == 1) CarbonStyle.TEMP_FONT_MD else CarbonStyle.TEMP_FONT_SM, i == 1)
     }
 
-    private val text = Paint().apply { isAntiAlias = true }
+    /** Per thread, like ModernRenderer's scratch paints (widget and app render concurrently). */
+    private val textTL = ThreadLocal.withInitial { Paint().apply { isAntiAlias = true } }
+    private val text: Paint get() = textTL.get()!!
 
     /** Pebble GOTHIC sizes map to Roboto at 0.82 (cap heights match). */
     private fun labelPaint(size: Float, bold: Boolean) = Paint(Paint.ANTI_ALIAS_FLAG).apply {

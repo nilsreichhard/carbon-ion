@@ -8,7 +8,10 @@ import org.json.JSONObject
  * src/c/modules/settings.c for anything missing.
  */
 data class WidgetSettings(
+    /** Resolved light/dark for drawing (WidgetStore.settings resolves [themeMode] SYSTEM against the phone). */
     val lightTheme: Boolean = true,
+    /** SETTING_LIGHT_THEME: 0 Dark, 1 Light, 2 Follow system (Android only; also when unset). */
+    val themeMode: Int = THEME_SYSTEM,
     val celsius: Boolean = true,
     val forecastHours: Int = 24,
     val cloudSensitivity: Int = 1,
@@ -31,13 +34,20 @@ data class WidgetSettings(
     val eventFlags: Int = 0,
     /** SETTING_FOG_INDICATOR */
     val fogIndicator: Boolean = true,
-    /** SETTING_TIMELINE_BATTERY: 0 20/10/4/0, 1 10/4/0, 2 4/0, 3 none, 4 10/4. */
+    /** SETTING_TIMELINE_BATTERY, Android levels (1.1.1): 0 20/10/5/0, 1 10/5/0, 2 5/0, 6 20/0, 7 10/0, 5 0 only.
+     *  The watch's 4 % (battery saver) is 5 % here; its "10 / 4" (4) reads as 10/5/0 and "None" (3) as 0 only. */
     val timelineBattery: Int = 0,
 ) {
     val pastHours get() = forecastHours / 4
+    /** Battery marker levels (%) for [timelineBattery], highest first. */
+    val batteryLevels: List<Int> get() = batteryLevels(timelineBattery)
     val totalHours get() = forecastHours + forecastHours / 4
 
     companion object {
+        const val THEME_DARK = 0
+        const val THEME_LIGHT = 1
+        const val THEME_SYSTEM = 2
+
         fun fromDict(json: String?): WidgetSettings {
             if (json.isNullOrEmpty() || json == "null") return WidgetSettings()
             val d = JSONObject(json)
@@ -45,7 +55,9 @@ data class WidgetSettings(
             fun i(k: String, dv: Int) = if (d.has(k)) d.optInt(k, dv) else dv
             val fh = i("SETTING_FORECAST_HOURS", def.forecastHours)
             return WidgetSettings(
-                lightTheme = i("SETTING_LIGHT_THEME", 1) == 1,
+                // Without a phone context SYSTEM draws light; WidgetStore.settings() resolves it.
+                themeMode = i("SETTING_LIGHT_THEME", THEME_SYSTEM).let { if (it in 0..2) it else THEME_SYSTEM },
+                lightTheme = i("SETTING_LIGHT_THEME", THEME_SYSTEM) != THEME_DARK,
                 celsius = i("SETTING_TEMP_UNIT", 0) == 0,
                 forecastHours = if (fh in intArrayOf(12, 18, 24, 36, 48)) fh else 24,
                 cloudSensitivity = i("SETTING_CLOUD_SENSITIVITY", 1).coerceIn(0, 4),
@@ -61,8 +73,28 @@ data class WidgetSettings(
                 dateFormat = d.optString("SETTING_DATE_FORMAT", def.dateFormat).ifEmpty { def.dateFormat },
                 eventFlags = i("SETTING_EVENT_FLAGS", 0) and 0x3F,
                 fogIndicator = i("SETTING_FOG_INDICATOR", 1) != 0,
-                timelineBattery = i("SETTING_TIMELINE_BATTERY", 0).let { if (it in 0..4) it else 0 },
+                timelineBattery = normalizeBattery(i("SETTING_TIMELINE_BATTERY", BATTERY_ALL)),
             )
+        }
+
+        const val BATTERY_ALL = 0
+        const val BATTERY_ZERO_ONLY = 5
+
+        /** Old or unknown values onto the Android options (watch "10 / 4" → 10/5/0, "None" → 0 only). */
+        fun normalizeBattery(v: Int): Int = when (v) {
+            0, 1, 2, BATTERY_ZERO_ONLY, 6, 7 -> v
+            4 -> 1
+            3 -> BATTERY_ZERO_ONLY
+            else -> BATTERY_ALL
+        }
+
+        fun batteryLevels(v: Int): List<Int> = when (normalizeBattery(v)) {
+            1 -> listOf(10, 5, 0)
+            2 -> listOf(5, 0)
+            6 -> listOf(20, 0)
+            7 -> listOf(10, 0)
+            BATTERY_ZERO_ONLY -> listOf(0)
+            else -> listOf(20, 10, 5, 0)
         }
 
         /** TextClock pattern for the watch's leading-zero rule (time_layer.c). */
