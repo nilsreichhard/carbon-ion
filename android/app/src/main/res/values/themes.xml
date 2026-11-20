@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Expanded app screen: Material 3, light/dark set from the widget theme (DetailActivity). -->
+    <style name="Theme.Carbon.Detail" parent="Theme.Material3.DayNight.NoActionBar" />
+    <!-- Settings: the same Material 3 DayNight look with an app bar (SettingsActivity). -->
+    <style name="Theme.Carbon.Settings" parent="Theme.Material3.DayNight" />
+</resources>

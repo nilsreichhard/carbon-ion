@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text font option "inter" (FontOption): city row at the top of the time
+     block, date row at the bottom with the next alarm (time_layer.c), added into time_block. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:id="@+id/city_row"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/city"
+            android:layout_width="wrap_content"
+            android:ellipsize="end"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/inter_regular"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:shadowColor="#40000000"
+            android:shadowDy="1"
+            android:shadowRadius="2"
+            android:textColor="#000000"
+            android:textSize="14sp" />
+
+        <ImageView
+            android:id="@+id/cond"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:adjustViewBounds="true"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter" />
+    </LinearLayout>
+
+    <!-- Date row, bottom-centred: the live date, then the next alarm ("· [icon] 07:00")
+         in the date's font; tops aligned, the icon bitmap is a text line tall. -->
+    <LinearLayout
+        android:id="@+id/date_row"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:baselineAligned="false"
+        android:gravity="top"
+        android:orientation="horizontal">
+
+        <TextClock
+            android:id="@+id/date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="EEEE, MMM d"
+            android:format24Hour="EEEE, MMM d"
+            android:fontFamily="@font/inter_regular"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:shadowColor="#40000000"
+            android:shadowDy="1"
+            android:shadowRadius="2"
+            android:textColor="#000000"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:id="@+id/date_alarm"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:baselineAligned="false"
+            android:contentDescription="@string/alarm_description"
+            android:gravity="top"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/alarm_sep"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:importantForAccessibility="no"
+                android:fontFamily="@font/inter_regular"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:shadowColor="#40000000"
+                android:shadowDy="1"
+                android:shadowRadius="2"
+                android:textColor="#000000"
+                android:textSize="14sp" />
+
+            <ImageView
+                android:id="@+id/alarm_icon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@null"
+                android:importantForAccessibility="no"
+                android:scaleType="center" />
+
+            <TextView
+                android:id="@+id/alarm_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:importantForAccessibility="no"
+                android:fontFamily="@font/inter_regular"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:shadowColor="#40000000"
+                android:shadowDy="1"
+                android:shadowRadius="2"
+                android:textColor="#000000"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

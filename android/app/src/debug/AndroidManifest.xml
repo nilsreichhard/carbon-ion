@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only sample tooling (README "Samples on the emulator"). Not in release builds.
+     Senders need DUMP (a signature|privileged permission adb's shell user holds), so other apps can't use it. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+
+    <application>
+        <receiver
+            android:name=".DebugSamplesReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            tools:ignore="ExportedReceiver"
+            xmlns:tools="http://schemas.android.com/tools">
+            <intent-filter>
+                <action android:name="com.nilsreichhard.carbonion.widget.DEBUG_LOAD" />
+                <action android:name="com.nilsreichhard.carbonion.widget.DEBUG_WALLPAPER" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

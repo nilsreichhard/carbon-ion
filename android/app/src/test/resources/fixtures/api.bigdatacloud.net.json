@@ -1,0 +1,104 @@
+{
+  "latitude": 46.3,
+  "lookupSource": "coordinates",
+  "longitude": 7.05,
+  "localityLanguageRequested": "de",
+  "continent": "Europa",
+  "continentCode": "EU",
+  "countryName": "Schweiz",
+  "countryCode": "CH",
+  "principalSubdivision": "Kanton Waadt",
+  "principalSubdivisionCode": "CH-VD",
+  "city": "Ollon",
+  "locality": "Ollon",
+  "postcode": "",
+  "plusCode": "8FR98322+22",
+  "localityInfo": {
+    "administrative": [
+      {
+        "name": "Schweiz",
+        "description": "Staat in Mitteleuropa",
+        "isoName": "Switzerland",
+        "order": 4,
+        "adminLevel": 2,
+        "isoCode": "CH",
+        "wikidataId": "Q39",
+        "geonameId": 2658434
+      },
+      {
+        "name": "Genferseeregion",
+        "description": "Grossregion der Schweiz",
+        "order": 6,
+        "adminLevel": 3,
+        "wikidataId": "Q27714"
+      },
+      {
+        "name": "Kanton Waadt",
+        "description": "Kanton der Schweiz",
+        "isoName": "Vaud",
+        "order": 7,
+        "adminLevel": 4,
+        "isoCode": "CH-VD",
+        "wikidataId": "Q12771",
+        "geonameId": 2658182
+      },
+      {
+        "name": "Bezirk Aigle",
+        "description": "Bezirk im Kanton Waadt, Schweiz",
+        "order": 10,
+        "adminLevel": 6,
+        "wikidataId": "Q647923",
+        "geonameId": 6458896
+      },
+      {
+        "name": "Ollon",
+        "description": "Gemeinde im Kanton Waadt in der Schweiz",
+        "order": 11,
+        "adminLevel": 8,
+        "wikidataId": "Q70115",
+        "geonameId": 2659298
+      }
+    ],
+    "informative": [
+      {
+        "name": "Europa",
+        "description": "terrestrischer Kontinent im Nordwesten Eurasiens",
+        "isoName": "Europe",
+        "order": 1,
+        "isoCode": "EU",
+        "wikidataId": "Q46",
+        "geonameId": 6255148
+      },
+      {
+        "name": "Alpen",
+        "description": "höchstes Gebirge in Mitteleuropa",
+        "order": 2,
+        "wikidataId": "Q1286",
+        "geonameId": 2661786
+      },
+      {
+        "name": "Europe/Zurich",
+        "description": "Zeitzone",
+        "order": 3
+      },
+      {
+        "name": "Schweizer Alpen",
+        "order": 5,
+        "wikidataId": "Q25220"
+      },
+      {
+        "name": "Berner Alpen",
+        "description": "Gebirgsgruppe der Alpen in der Schweiz",
+        "order": 8,
+        "wikidataId": "Q327221",
+        "geonameId": 2661549
+      },
+      {
+        "name": "Chablais",
+        "description": "region",
+        "order": 9,
+        "wikidataId": "Q2947278;Q2947279"
+      }
+    ]
+  }
+}

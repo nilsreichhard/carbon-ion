@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DEFAULT (3 cells high): emery 73 | 90 | 9 + 56 = 228 rows.
+     Rows follow the watch grid (src/c/main.c, time_layer.h); the chart bitmap
+     fills the widget and text sizes are set in code (WidgetUpdater). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/chart"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="@string/widget_description" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="73" />
+
+        <FrameLayout
+            android:id="@+id/time_block"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="90">
+
+            <!-- City row, clock and date come from the font layouts
+                 (text_*.xml, clock_*.xml), added by WidgetUpdater. -->
+        </FrameLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="65" />
+    </LinearLayout>
+</FrameLayout>
