@@ -119,7 +119,23 @@ check('Fog and wind still refetch (phone-side)', [settings.weatherSettingsChange
 var capsT = require('../src/pkjs/weather/caps.js');
 check('Tornado toggle shown only for providers reporting WMO 19/99', Object.keys(capsT).filter(function (k) { return capsT[k].tornado; }).sort(), ['geosphere', 'openmeteo', 'owm']);
 var setSrc = require('fs').readFileSync(__dirname + '/../src/c/modules/settings.h', 'utf8');
-check('Settings struct: event_hide, rain_height, cloud_thick, leading_zero appended last (upgrade keeps defaults 0)', /uint8_t event_hide;[^\n]*\n\tuint8_t rain_height;[^\n]*\n\tuint8_t cloud_thick;[^\n]*\n[^\n]*\n\tuint8_t leading_zero;[^\n]*\n[^\n]*\n\} Settings;/.test(setSrc), true);
+check('Settings struct: event_hide, rain_height, cloud_thick, leading_zero, phone_alarm_off appended last (upgrade keeps defaults 0)', /uint8_t event_hide;[^\n]*\n\tuint8_t rain_height;[^\n]*\n\tuint8_t cloud_thick;[^\n]*\n[^\n]*\n\tuint8_t leading_zero;[^\n]*\n[^\n]*\n\tuint8_t phone_alarm_off;[^\n]*\n[^\n]*\n\} Settings;/.test(setSrc), true);
+/* ---- 3.3.0: next phone alarm (Android companion app, PebbleKit Android 2) ---- */
+(function () {
+	var pkgJ = require('../package.json').pebble, app = require('../appinfo.json');
+	check('3.3.0: PHONE_ALARM_TIME 10095 / SETTING_PHONE_ALARM 10096 in package.json and appinfo.json',
+		[pkgJ.messageKeys.PHONE_ALARM_TIME, pkgJ.messageKeys.SETTING_PHONE_ALARM, app.messageKeys.PHONE_ALARM_TIME, app.appKeys.SETTING_PHONE_ALARM], [10095, 10096, 10095, 10096]);
+	check('3.3.0: companionApp (Android, optional) identical in package.json and appinfo.json',
+		[JSON.stringify(pkgJ.companionApp), pkgJ.companionApp.android.required, pkgJ.companionApp.android.apps[0].package],
+		[JSON.stringify(app.companionApp), false, 'com.nilsreichhard.carbonion.widget']);
+	check('3.3.0: phone alarm toggle default on; off sends 0',
+		[settings.buildSettingsDict({}).SETTING_PHONE_ALARM, settings.buildSettingsDict({ SETTING_PHONE_ALARM: true }).SETTING_PHONE_ALARM,
+		 settings.buildSettingsDict({ SETTING_PHONE_ALARM: false }).SETTING_PHONE_ALARM, settings.buildSettingsDict({ SETTING_PHONE_ALARM: 'false' }).SETTING_PHONE_ALARM,
+		 settings.weatherSettingsChanged({ SETTING_PHONE_ALARM: true }, { SETTING_PHONE_ALARM: false })], [1, 1, 0, 0, false]);
+	var cfgSrc = require('fs').readFileSync(__dirname + '/../src/pkjs/config.js', 'utf8');
+	check('3.3.0: Clay toggle and "Mon, Jan 15" date option',
+		[/"messageKey": "SETTING_PHONE_ALARM",\s*"label": "Show next phone alarm \(Android companion app\)"[\s\S]*?"defaultValue": true/.test(cfgSrc), /"value": "%a, %b %d"/.test(cfgSrc)], [true, true]);
+})();
 check('Watch event-flag key matches package.json', (/KEY_SETTING_EVENT_FLAGS MESSAGE_KEY_SETTING_EVENT_FLAGS\b/.test(setSrc) ? pkg.pebble.messageKeys.SETTING_EVENT_FLAGS : -1), pkg.pebble.messageKeys.SETTING_EVENT_FLAGS);
 
 /* ---- 2.9.4: event sensitivity levels ---- */
@@ -207,7 +223,7 @@ var bBt = bitsOf('s_bt_off_bits'), bQt = bitsOf('s_quiet_bits');
 check('Status icons: both 15x17 maps', [bBt.length, bQt.length, bBt.every(function (r) { return r.length === 15; }), bQt.every(function (r) { return r.length === 15; })], [17, 17, true, true]);
 check('Status icons: identical badge outline (same drawn pixels)', bBt.map(function (r) { return r.replace(/[#.]/g, 'x'); }), bQt.map(function (r) { return r.replace(/[#.]/g, 'x'); }));
 check('Status icons: same slash diagonal (1,2)-(13,14) in both', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].every(function (i) { return bBt[i + 1][i] === '.'; }) && [1, 2, 3, 13].every(function (i) { return bQt[i + 1][i] === '.'; }), true);
-check('Version 3.2.1 everywhere', [pkg.version, require('../appinfo.json').versionLabel, require('../src/pkjs/constants').APP_VERSION === '3.2.1' && /version: C\.APP_VERSION/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['3.2.1', '3.2.1', true]);
+check('Version 3.3.0 everywhere', [pkg.version, require('../appinfo.json').versionLabel, require('../src/pkjs/constants').APP_VERSION === '3.3.0' && /version: C\.APP_VERSION/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['3.3.0', '3.3.0', true]);
 
 /* ---- 2.9.6: rain bar height + hourly mm ---- */
 var mainSrc = require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8');
@@ -260,7 +276,7 @@ check('3.0.3: 12h blank lead cell, steps capped at 99K in one font size (no 14/0
 		Object.keys(got).length === new Set(Object.keys(got).map(function (k) { return got[k]; })).size],
 		[{ STORAGE_KEY_SETTINGS: 0, STORAGE_KEY_BATT_HIST: 1, STORAGE_KEY_WEATHER: 2, STORAGE_KEY_WEATHER_PART2: 3, STORAGE_KEY_EVENTS: 4,
 			STORAGE_KEY_WEATHER_PART3: 5, STORAGE_KEY_BATT_LEARNED: 6, STORAGE_KEY_TAP_RANGE: 7, STORAGE_KEY_WEATHER_HDR: 8,
-			STORAGE_KEY_CLOUD_OVERRIDE: 9, STORAGE_KEY_WEATHER_PART4: 10 }, false, true]);
+			STORAGE_KEY_CLOUD_OVERRIDE: 9, STORAGE_KEY_WEATHER_PART4: 10, STORAGE_KEY_PHONE_ALARM: 11 }, false, true]);
 	var setH = fs.readFileSync(__dirname + '/../src/c/modules/settings.h', 'utf8');
 	check('3.0.3: settings.h uses generated MESSAGE_KEY_SETTING_* (no hardcoded 100xx outside the touch guard)',
 		[/#define KEY_SETTING_\w+ 100\d\d/.test(setH.replace(/#if defined\(CARBON_TOUCH_ENABLED\)\n\/\*[\s\S]*?#endif/, '')),

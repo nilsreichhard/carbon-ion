@@ -53,6 +53,7 @@ static const Settings s_defaults = {
     .rain_height = RAIN_HEIGHT_PROBABILITY,
     .cloud_thick = CLOUD_THICKNESS_ON,
     .leading_zero = LEADING_ZERO_AUTO,
+    .phone_alarm_off = 0,
 };
 
 /* 2.9.3: event_hide is appended right where the 2.9.2 struct ended (no tail
@@ -447,6 +448,10 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 		int v = settings_tuple_int(t);
 		s_settings.leading_zero = (v == LEADING_ZERO_ON || v == LEADING_ZERO_OFF) ? (uint8_t)v : LEADING_ZERO_AUTO;
 	}
+
+	t = dict_find(iter, KEY_SETTING_PHONE_ALARM); /* 3.3.0 */
+	if (t)
+		s_settings.phone_alarm_off = settings_tuple_int(t) == 0 ? 1 : 0;
 
 	t = dict_find(iter, KEY_SETTING_CLOUD_THICK);
 	if (t)

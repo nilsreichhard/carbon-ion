@@ -1131,6 +1131,10 @@ module.exports = [
 						"value": "%A, %b %d"
 					},
 					{
+						"label": "Mon, Jan 15",
+						"value": "%a, %b %d"
+					},
+					{
 						"label": "1/15/2026",
 						"value": "%m/%d/%Y"
 					},
@@ -1172,6 +1176,13 @@ module.exports = [
 			{
 				"type": "heading",
 				"defaultValue": "Advanced"
+			},
+			{
+				"type": "toggle",
+				"messageKey": "SETTING_PHONE_ALARM",
+				"label": "Show next phone alarm (Android companion app)",
+				"description": "Shows your phone's next alarm after the date, e.g. \u23f0 Mon 05:55. Needs the Carbon Ion Android companion app; iPhones cannot share their alarms.",
+				"defaultValue": true
 			},
 			{
 				"type": "toggle",

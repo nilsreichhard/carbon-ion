@@ -5,7 +5,7 @@
  * NEVER reuse or renumber a key. Watches keep old blobs across updates, so a
  * reused number would be read with the wrong layout. Retire a key by leaving
  * its line here, commented "retired", and take the next free number.
- * Next free key: 11.
+ * Next free key: 12.
  *
  * @license   GPL-3.0-or-later
  */
@@ -22,3 +22,4 @@
 #define STORAGE_KEY_WEATHER_HDR 8    /* weather header {version, size, fetch_time} */
 #define STORAGE_KEY_CLOUD_OVERRIDE 9 /* uint8 1+CloudDisplayMode; absent = Clay value */
 #define STORAGE_KEY_WEATHER_PART4 10 /* 2.9.6: WeatherData block 4 */
+#define STORAGE_KEY_PHONE_ALARM 11   /* 3.3.0: int32 phone alarm, UTC epoch s (absent = none) */

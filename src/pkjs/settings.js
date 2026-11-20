@@ -461,6 +461,8 @@ function buildSettingsDict(rawSettings) {
 	/* 3.0.3: leading zero (0 auto, 1 on, 2 off); watch-side only, no refetch. */
 	var lz = extractInt(rawSettings['SETTING_LEADING_ZERO']);
 	dict['SETTING_LEADING_ZERO'] = lz === 1 || lz === 2 ? lz : 0;
+	/* 3.3.0: phone alarm on the date line (default on); watch-side only, no refetch. */
+	dict['SETTING_PHONE_ALARM'] = extractBool(rawSettings['SETTING_PHONE_ALARM']) === 0 ? 0 : 1;
 
 	var weatherEventDisp = extractInt(rawSettings['SETTING_WEATHER_EVENT_DISPLAY']);
 	if (isNaN(weatherEventDisp)) weatherEventDisp = 0;

@@ -24,6 +24,7 @@
 #include <stddef.h>
 
 #include "modules/storage_keys.h" /* 3.0.3: all persist keys in one place */
+#include "modules/phone_alarm.h"
 /* Weather header {version, size, fetch_time}: fetch_time lives there so the
  * data blocks are only rewritten when the forecast itself changes. */
 #define WEATHER_PERSIST_VERSION 7 /* 3: + fog_bits, wx_flags (2.8.0); 4: + wind_bits (2.9.3); 5: + storm_bits (2.9.4); 6: + precip_mm (2.9.6); 7: + thick_bits (3.0.0) */
@@ -845,6 +846,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 	}
 
 	prv_apply_timeline_events(iter);
+	phone_alarm_apply_from_message(iter); /* 3.3.0: from the Android companion app */
 
 	Tuple *ft = dict_find(iter, MESSAGE_KEY_WEATHER_FETCH_TIME);
 	if (ft)
@@ -1205,6 +1207,14 @@ static void prv_window_unload(Window *window) {
 static void init(void) {
 	setlocale(LC_ALL, ""); // Use watch system locale for date formatting
 	settings_init();
+	phone_alarm_init(); /* 3.3.0 */
+#if defined(DEMO_SCENARIO) && defined(DEMO_PHONE_ALARM_MIN)
+	{
+		struct tm demo_tm;
+		demo_get_tm(&demo_tm);
+		phone_alarm_set_demo(mktime(&demo_tm) + (time_t)(DEMO_PHONE_ALARM_MIN) * 60);
+	}
+#endif
 
 	// Restore persisted weather before anything renders
 	memset(&s_weather, 0, sizeof(s_weather));

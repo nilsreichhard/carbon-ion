@@ -9,6 +9,7 @@
 
 #include "time_layer.h"
 #include "../modules/settings.h"
+#include "../modules/phone_alarm.h"
 #include "../generated/icons.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -24,6 +25,7 @@ struct TimeLayer {
 	TextLayer *step_label;
 	TextLayer *step_k_label; // "K" under step thousands
 	TextLayer *date_label;
+	Layer *date_alarm_layer; /* 3.3.0: date + phone alarm, drawn when an alarm shows */
 	Layer *status_layer;   // BT disconnected & quiet mode indicators left of time
 	GFont icon_font;
 	bool bt_connected;
@@ -38,6 +40,10 @@ struct TimeLayer {
 	bool time_lead_blank;  /* 3.0.3: 12h, leading zero stripped: skip one cell */
 	char step_buf[12];
 	char date_buf[32];
+	char date_short_buf[32]; /* 3.3.0: date with the weekday abbreviated */
+	char alarm_buf[16];      /* 3.3.0: "05:55", "Mon 05:55", "5:55 AM" */
+	const char *alarm_date;  /* date_buf or date_short_buf, whichever fits */
+	GColor date_color;
 };
 
 /* 2.9.5: both status icons are solid rounded badges with an identical
@@ -161,18 +167,146 @@ static const char *const s_day_names[] = {
 	"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 };
 
+/* 3.3.0: %a is expanded like %A (English, as before), so the short form
+ * reads "Fri" on every watch language, matching the full "Friday". */
+static const char *const s_day_abbr[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+
 static void prv_format_date(char *out, size_t out_len, const char *fmt, const struct tm *t) {
 	char custom_fmt[64];
+	int day_idx = (t->tm_wday >= 0 && t->tm_wday < 7) ? t->tm_wday : 0;
 	const char *a_pos = strstr(fmt, "%A");
+	const char *day_name = s_day_names[day_idx];
+	if (!a_pos) {
+		a_pos = strstr(fmt, "%a");
+		day_name = s_day_abbr[day_idx];
+	}
 	if (a_pos) {
-		int day_idx = (t->tm_wday >= 0 && t->tm_wday < 7) ? t->tm_wday : 0;
-		const char *day_name = s_day_names[day_idx];
 		snprintf(custom_fmt, sizeof(custom_fmt), "%.*s%s%s",
 		         (int)(a_pos - fmt), fmt, day_name, a_pos + 2);
 		fmt = custom_fmt;
 	}
 	strftime(out, out_len, fmt, t);
 	prv_remove_leading_zero(out, out_len);
+}
+
+/* 3.3.0: phone alarm on the date line: "Fri, Nov 20 · [bell] Mon 05:55".
+ * An alarm clock pixel map sized for the date font ('#' = ink). */
+#define ALARM_ICON_W 13
+#define ALARM_ICON_H 13
+static const char *const s_alarm_bits[ALARM_ICON_H] = {
+	".##.......##.",
+	"##..#####..##",
+	"#.##.....##.#",
+	"..#.......#..",
+	".#....#....#.",
+	".#....#....#.",
+	".#....#....#.",
+	".#....###..#.",
+	".#.........#.",
+	"..#.......#..",
+	"..##.....##..",
+	"....#####....",
+	"...#.....#...",
+};
+#define ALARM_SEP_W 11  /* " · " between date and icon */
+#define ALARM_ICON_GAP 3 /* icon to alarm time */
+#if PBL_DISPLAY_HEIGHT <= 168
+#define ALARM_INK_TOP 5 /* digit ink top inside the date box (Gothic 14 would need its own map) */
+#else
+#define ALARM_INK_TOP 7 /* Gothic 18: digits span about y 7..18 of the 22 px box */
+#endif
+#define ALARM_INK_H 11
+
+static void prv_draw_bits(GContext *ctx, const char *const *bits, int w, int h, int ox, int oy) {
+	for (int y = 0; y < h; y++) {
+		int x = 0;
+		while (x < w) {
+			int x2 = x;
+			while (x2 < w && bits[y][x2] == bits[y][x])
+				x2++;
+			if (bits[y][x] == '#')
+				graphics_fill_rect(ctx, GRect(ox + x, oy + y, x2 - x, 1), 0, GCornerNone);
+			x = x2;
+		}
+	}
+}
+
+static int prv_small_text_w(const char *str) {
+	return graphics_text_layout_get_content_size(str, fonts_get_system_font(TL_SMALL_FONT_KEY),
+	                                             GRect(0, 0, 400, TL_SMALL_H),
+	                                             GTextOverflowModeWordWrap, GTextAlignmentLeft).w;
+}
+
+static int prv_alarm_row_w(const TimeLayer *tl, const char *date) {
+	return prv_small_text_w(date) + ALARM_SEP_W + ALARM_ICON_W + ALARM_ICON_GAP +
+	       prv_small_text_w(tl->alarm_buf);
+}
+
+/* Width the date line may use with an alarm: 8 px clear of each screen edge;
+ * on round screens also 50 px inside the bezel chord at the row's lower ink
+ * edge, so the line stays clear of the chart curve and the hour ticks. */
+#define DATE_ROW_EDGE 8
+#define DATE_ROW_ROUND_INSET 50
+static int prv_date_row_avail(const TimeLayer *tl) {
+	GRect f = layer_get_frame(tl->container);
+	int w = f.size.w - 2 * DATE_ROW_EDGE;
+#if defined(PBL_ROUND)
+	GRect df = layer_get_frame(tl->date_alarm_layer);
+	int r = PBL_DISPLAY_WIDTH / 2;
+	int dy = f.origin.y + df.origin.y + ALARM_INK_TOP + ALARM_INK_H + 3 - PBL_DISPLAY_HEIGHT / 2;
+	if (dy < 0)
+		dy = -dy;
+	int half = 0, rem = r * r - dy * dy; /* integer sqrt */
+	while (rem > 0 && (half + 1) * (half + 1) <= rem)
+		half++;
+	int chord = 2 * (half - DATE_ROW_ROUND_INSET);
+	if (chord < w)
+		w = chord;
+#endif
+	return w;
+}
+
+static void prv_date_alarm_update_proc(Layer *layer, GContext *ctx) {
+	TimeLayer *tl = *(TimeLayer **)layer_get_data(layer);
+	if (!tl || !tl->alarm_date)
+		return;
+	GRect b = layer_get_bounds(layer);
+	GFont f = fonts_get_system_font(TL_SMALL_FONT_KEY);
+	int dw = prv_small_text_w(tl->alarm_date);
+	int aw = prv_small_text_w(tl->alarm_buf);
+	int total = dw + ALARM_SEP_W + ALARM_ICON_W + ALARM_ICON_GAP + aw;
+	int x = (b.size.w - total) / 2;
+	graphics_context_set_text_color(ctx, tl->date_color);
+	graphics_context_set_fill_color(ctx, tl->date_color);
+	graphics_draw_text(ctx, tl->alarm_date, f, GRect(x, 0, dw + 2, TL_SMALL_H),
+	                   GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+	x += dw;
+	/* separator dot, 2x2 at the digits' mid height */
+	graphics_fill_rect(ctx, GRect(x + ALARM_SEP_W / 2 - 1, ALARM_INK_TOP + ALARM_INK_H / 2 - 1, 2, 2), 0,
+	                   GCornerNone);
+	x += ALARM_SEP_W;
+	prv_draw_bits(ctx, s_alarm_bits, ALARM_ICON_W, ALARM_ICON_H, x,
+	              ALARM_INK_TOP + (ALARM_INK_H - ALARM_ICON_H) / 2);
+	x += ALARM_ICON_W + ALARM_ICON_GAP;
+	graphics_draw_text(ctx, tl->alarm_buf, f, GRect(x, 0, aw + 2, TL_SMALL_H),
+	                   GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+}
+
+/* "05:55" within 24 h, else "Mon 05:55"; 12/24 h and the leading-zero
+ * setting as on the clock, 12 h with " AM"/" PM" (as the Android widget),
+ * or "a"/"p" when `compact` (last step before the alarm is left out). */
+static void prv_format_alarm(char *out, size_t n, time_t alarm, time_t now, const Settings *s, bool compact) {
+	struct tm a = *localtime(&alarm);
+	bool is_24h = clock_is_24h_style();
+	bool strip = s->leading_zero == LEADING_ZERO_OFF || (s->leading_zero == LEADING_ZERO_AUTO && !is_24h);
+	char hm[8];
+	strftime(hm, sizeof(hm), is_24h ? "%H:%M" : "%I:%M", &a);
+	const char *t = (strip && hm[0] == '0') ? hm + 1 : hm;
+	const char *wd = "";
+	if (alarm - now > 24 * 3600 && a.tm_wday >= 0 && a.tm_wday < 7)
+		wd = s_day_abbr[a.tm_wday];
+	const char *ampm = is_24h ? "" : compact ? (a.tm_hour < 12 ? "a" : "p") : (a.tm_hour < 12 ? " AM" : " PM");
+	snprintf(out, n, "%s%s%s%s", wd, wd[0] ? " " : "", t, ampm);
 }
 
 static void prv_update_location_row(TimeLayer *tl) {
@@ -561,6 +695,14 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text(tl->date_label, tl->date_buf);
 	layer_add_child(tl->container, text_layer_get_layer(tl->date_label));
 
+	/* 3.3.0: same box; replaces the date label while a phone alarm shows */
+	tl->date_color = GColorWhite;
+	tl->date_alarm_layer = layer_create_with_data(GRect(0, date_y, w, TL_SMALL_H), sizeof(TimeLayer *));
+	*(TimeLayer **)layer_get_data(tl->date_alarm_layer) = tl;
+	layer_set_update_proc(tl->date_alarm_layer, prv_date_alarm_update_proc);
+	layer_set_hidden(tl->date_alarm_layer, true);
+	layer_add_child(tl->container, tl->date_alarm_layer);
+
 	return tl;
 }
 
@@ -568,6 +710,7 @@ void time_layer_destroy(TimeLayer *layer) {
 	if (!layer)
 		return;
 	layer_destroy(layer->status_layer);
+	layer_destroy(layer->date_alarm_layer);
 	fonts_unload_custom_font(layer->icon_font);
 	text_layer_destroy(layer->date_label);
 	text_layer_destroy(layer->step_k_label);
@@ -663,6 +806,44 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 	prv_format_date(layer->date_buf, sizeof(layer->date_buf), settings->date_format,
 	                tick_time);
 	text_layer_set_text(layer->date_label, layer->date_buf);
+
+	/* 3.3.0: phone alarm after the date. The full date first, then the date
+	 * with the weekday abbreviated, on 12 h then "7:00a"; else the alarm is
+	 * left out (the date never shrinks or truncates). Demo builds take "now"
+	 * from their frozen clock. */
+	layer->date_color = text_color;
+	layer->alarm_date = NULL;
+#if defined(DEMO_SCENARIO)
+	struct tm now_tm = *tick_time;
+	time_t now = mktime(&now_tm);
+#else
+	time_t now = time(NULL);
+#endif
+	time_t alarm = settings->phone_alarm_off ? 0 : phone_alarm_next(now);
+	if (alarm) {
+		int avail = prv_date_row_avail(layer);
+		/* the date with the weekday abbreviated (same as date_buf without %A) */
+		char short_fmt[sizeof(settings->date_format)];
+		strncpy(short_fmt, settings->date_format, sizeof(short_fmt) - 1);
+		short_fmt[sizeof(short_fmt) - 1] = '\0';
+		char *a = strstr(short_fmt, "%A");
+		if (a)
+			a[1] = 'a';
+		prv_format_date(layer->date_short_buf, sizeof(layer->date_short_buf), short_fmt, tick_time);
+		prv_format_alarm(layer->alarm_buf, sizeof(layer->alarm_buf), alarm, now, settings, false);
+		if (prv_alarm_row_w(layer, layer->date_buf) <= avail)
+			layer->alarm_date = layer->date_buf;
+		else if (prv_alarm_row_w(layer, layer->date_short_buf) <= avail)
+			layer->alarm_date = layer->date_short_buf;
+		else if (!clock_is_24h_style()) {
+			prv_format_alarm(layer->alarm_buf, sizeof(layer->alarm_buf), alarm, now, settings, true);
+			if (prv_alarm_row_w(layer, layer->date_short_buf) <= avail)
+				layer->alarm_date = layer->date_short_buf;
+		}
+	}
+	layer_set_hidden(text_layer_get_layer(layer->date_label), layer->alarm_date != NULL);
+	layer_set_hidden(layer->date_alarm_layer, layer->alarm_date == NULL);
+	layer_mark_dirty(layer->date_alarm_layer);
 }
 
 void time_layer_set_steps(TimeLayer *layer, int steps) {

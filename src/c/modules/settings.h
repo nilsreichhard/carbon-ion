@@ -145,6 +145,7 @@ typedef enum {
 #define KEY_SETTING_RAIN_HEIGHT MESSAGE_KEY_SETTING_RAIN_HEIGHT /* 2.9.6: RainHeightMode */
 #define KEY_SETTING_CLOUD_THICK MESSAGE_KEY_SETTING_CLOUD_THICK /* 3.0.0: CloudThicknessMode */
 #define KEY_SETTING_LEADING_ZERO MESSAGE_KEY_SETTING_LEADING_ZERO /* 3.0.3: LeadingZeroMode */
+#define KEY_SETTING_PHONE_ALARM MESSAGE_KEY_SETTING_PHONE_ALARM /* 3.3.0: show the phone alarm on the date line */
 #define KEY_SETTING_EVENT_FLAGS MESSAGE_KEY_SETTING_EVENT_FLAGS /* 2.9.3: EVENT_HIDE_* mask */
 #define EVENT_HIDE_THUNDER 0x01
 #define EVENT_HIDE_TORNADO 0x02
@@ -213,6 +214,8 @@ typedef struct {
 	                                      * when an older blob's tail padding covers it */
 	uint8_t leading_zero;                /* 3.0.3: LeadingZeroMode (0 = auto); 0 also from
 	                                      * older blobs (shorter, or tail padding) */
+	uint8_t phone_alarm_off;             /* 3.3.0: 1 hides the phone alarm; 0 (default,
+	                                      * also from older blobs) shows it */
 } Settings;
 
 /* 2.8.0: false when the weather provider has no low/mid/high cloud layers;

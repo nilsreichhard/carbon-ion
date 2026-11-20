@@ -10,6 +10,17 @@
   "watchapp": {
     "watchface": true
   },
+  "companionApp": {
+    "android": {
+      "url": "https://github.com/nilsreichhard/carbon-ion",
+      "required": false,
+      "apps": [
+        {
+          "package": "com.nilsreichhard.carbonion.widget"
+        }
+      ]
+    }
+  },
   "capabilities": [
     "location",
     "configurable"
@@ -103,8 +114,11 @@
     "WEATHER_STORM": 10089,
     "SETTING_RAIN_HEIGHT": 10090,
     "WEATHER_PRECIP_MM": 10091,
-      "SETTING_CLOUD_THICK": 10092,
-      "WEATHER_CLOUD_THICK": 10093
+    "SETTING_CLOUD_THICK": 10092,
+    "WEATHER_CLOUD_THICK": 10093,
+    "SETTING_LEADING_ZERO": 10094,
+    "PHONE_ALARM_TIME": 10095,
+    "SETTING_PHONE_ALARM": 10096
   },
   "resources": {
     "media": [
@@ -137,7 +151,7 @@
   "name": "carbon-ion",
   "shortName": "Carbon Ion",
   "longName": "Carbon Ion",
-  "versionLabel": "3.2.1",
+  "versionLabel": "3.3.0",
   "companyName": "Nils Reich",
   "appKeys": {
     "WEATHER_REQUEST": 10000,
@@ -215,6 +229,7 @@
     "SETTING_WEATHER_API_KEY": 10076,
     "SETTING_METEOSWISS": 10077,
     "SETTING_OM_MODEL": 10078,
+    "SETTING_OWM_ONECALL": 10079,
     "SETTING_WIND_GUST": 10080,
     "WEATHER_WIND": 10081,
     "SETTING_EVENT_THUNDER": 10082,
@@ -227,7 +242,10 @@
     "WEATHER_STORM": 10089,
     "SETTING_RAIN_HEIGHT": 10090,
     "WEATHER_PRECIP_MM": 10091,
-      "SETTING_CLOUD_THICK": 10092,
-      "WEATHER_CLOUD_THICK": 10093
+    "SETTING_CLOUD_THICK": 10092,
+    "WEATHER_CLOUD_THICK": 10093,
+    "SETTING_LEADING_ZERO": 10094,
+    "PHONE_ALARM_TIME": 10095,
+    "SETTING_PHONE_ALARM": 10096
   }
 }

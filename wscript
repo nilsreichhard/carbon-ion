@@ -62,11 +62,14 @@ def build(ctx):
 
 	cached_env = ctx.env
 	demo_scenario = os.environ.get('DEMO', '')
+	demo_alarm = os.environ.get('DEMO_ALARM', '')  # 3.3.0: phone alarm, minutes after the demo time
 	for platform in ctx.env.TARGET_PLATFORMS:
 		ctx.env = ctx.all_envs[platform]
 		ctx.set_group(ctx.env.PLATFORM_NAME)
 		if demo_scenario:
 			ctx.env.append_value('CFLAGS', ['-DDEMO_SCENARIO=' + demo_scenario])
+			if demo_alarm:
+				ctx.env.append_value('CFLAGS', ['-DDEMO_PHONE_ALARM_MIN=' + demo_alarm])
 		app_elf = '{}/pebble-app.elf'.format(ctx.env.BUILD_DIR)
 		c_sources = [n for n in ctx.path.ant_glob('src/c/**/*.c')
 		             if 'icon_bar_layer.c' not in n.abspath()]

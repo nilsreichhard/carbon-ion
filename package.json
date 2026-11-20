@@ -5,7 +5,7 @@
     "name": "Nils Reich",
     "url": "https://github.com/nilsreichhard/carbon-ion"
   },
-  "version": "3.2.1",
+  "version": "3.3.0",
   "keywords": [
     "pebble-app"
   ],
@@ -21,6 +21,17 @@
     ],
     "watchapp": {
       "watchface": true
+    },
+    "companionApp": {
+      "android": {
+        "url": "https://github.com/nilsreichhard/carbon-ion",
+        "required": false,
+        "apps": [
+          {
+            "package": "com.nilsreichhard.carbonion.widget"
+          }
+        ]
+      }
     },
     "capabilities": [
       "location",
@@ -117,7 +128,9 @@
       "WEATHER_PRECIP_MM": 10091,
       "SETTING_CLOUD_THICK": 10092,
       "SETTING_LEADING_ZERO": 10094,
-      "WEATHER_CLOUD_THICK": 10093
+      "WEATHER_CLOUD_THICK": 10093,
+      "PHONE_ALARM_TIME": 10095,
+      "SETTING_PHONE_ALARM": 10096
     },
     "resources": {
       "media": [
