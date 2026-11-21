@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h> /* time_t, localtime (modules/batt_eta.c) */
 
 #define PERSIST_DATA_MAX_LENGTH 256
 typedef enum { TUPLE_BYTE_ARRAY = 0, TUPLE_CSTRING = 1, TUPLE_UINT = 2, TUPLE_INT = 3 } TupleType;

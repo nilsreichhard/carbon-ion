@@ -24,12 +24,20 @@ typedef enum {
 	NEEDLE_NONE,       // No needle
 } NeedleMode;
 
+/* 4.0.0: fixed markers at 20 / 10 / 5 / 0 % on every platform (same values as
+ * the Android companion app). Old values map to the closest option
+ * (settings_battery_mode): 3.3.0 "4 %" became 5 %, its "10 / 4 %" (4) is
+ * 10 / 5 / 0 %; Android's old 20 / 0 % (6) is 20 / 10 / 5 / 0 %, its Off (8) None. */
 typedef enum {
-	TIMELINE_BATT_20_10_4_0 = 0, // 20% yellow, 10% orange, 4% red (battery-save), 0% deep red (default)
-	TIMELINE_BATT_10_4_0 = 1,    // 10%, 4%, 0%
-	TIMELINE_BATT_4_0 = 2,       // 4%, 0%
-	TIMELINE_BATT_NONE = 3,      // None (legacy; kept for persisted values)
-	TIMELINE_BATT_10_4 = 4,      // 10%, 4%
+	TIMELINE_BATT_20_10_5_0 = 0, // 20% yellow, 10% orange, 5% red, 0% deep red (default)
+	TIMELINE_BATT_10_5_0 = 1,    // 10%, 5%, 0%
+	TIMELINE_BATT_5_0 = 2,       // 5%, 0%
+	TIMELINE_BATT_NONE = 3,      // None
+	TIMELINE_BATT_OLD_10_4 = 4,  // 3.3.0 "10 / 4 %": read as 10 / 5 / 0 %
+	TIMELINE_BATT_0 = 5,         // 0% only
+	TIMELINE_BATT_OLD_20_0 = 6,  // Android 1.1.x "20 / 0 %": read as 20 / 10 / 5 / 0 %
+	TIMELINE_BATT_10_0 = 7,      // 10%, 0%
+	TIMELINE_BATT_OLD_OFF = 8,   // Android 1.1.3 "Off": read as None
 } TimelineBatteryMode;
 
 typedef enum {
@@ -146,6 +154,7 @@ typedef enum {
 #define KEY_SETTING_CLOUD_THICK MESSAGE_KEY_SETTING_CLOUD_THICK /* 3.0.0: CloudThicknessMode */
 #define KEY_SETTING_LEADING_ZERO MESSAGE_KEY_SETTING_LEADING_ZERO /* 3.0.3: LeadingZeroMode */
 #define KEY_SETTING_PHONE_ALARM MESSAGE_KEY_SETTING_PHONE_ALARM /* 3.3.0: show the phone alarm on the date line */
+#define KEY_SETTING_FEELS_LIKE MESSAGE_KEY_SETTING_FEELS_LIKE /* 4.0.0: show the feels-like line (1 = on, default) */
 #define KEY_SETTING_EVENT_FLAGS MESSAGE_KEY_SETTING_EVENT_FLAGS /* 2.9.3: EVENT_HIDE_* mask */
 #define EVENT_HIDE_THUNDER 0x01
 #define EVENT_HIDE_TORNADO 0x02
@@ -216,6 +225,8 @@ typedef struct {
 	                                      * older blobs (shorter, or tail padding) */
 	uint8_t phone_alarm_off;             /* 3.3.0: 1 hides the phone alarm; 0 (default,
 	                                      * also from older blobs) shows it */
+	uint8_t feels_like_off;              /* 4.0.0: 1 hides the feels-like line; 0 (default,
+	                                      * also from older blobs / tail padding) shows it */
 } Settings;
 
 /* 2.8.0: false when the weather provider has no low/mid/high cloud layers;
@@ -241,6 +252,8 @@ void settings_flush(void);
 
 void settings_init(void);
 Settings *settings_get(void);
+/* 4.0.0: any stored / received battery value onto the six options (unknown → default). */
+TimelineBatteryMode settings_battery_mode(int v);
 void settings_save(void);
 void settings_apply_from_message(DictionaryIterator *iter);
 

@@ -252,14 +252,24 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		snprintf(s_range_buf, sizeof(s_range_buf), "%d-%d", (int)window_low, (int)window_high);
 	}
 
-	int16_t t_min = pts[0] < apt[0] ? pts[0] : apt[0];
-	int16_t t_max = pts[0] > apt[0] ? pts[0] : apt[0];
+	/* 4.0.0: with the feels-like line hidden the scale uses the real
+	 * temperature only, so the curve keeps the full chart height. */
+	bool show_apt = !settings_get()->feels_like_off;
+	int16_t t_min = pts[0], t_max = pts[0];
+	if (show_apt) {
+		if (apt[0] < t_min)
+			t_min = apt[0];
+		if (apt[0] > t_max)
+			t_max = apt[0];
+	}
 	for (int i = 1; i <= total_hours; i++) {
 		if (i >= tl->hours_remaining) break; /* no data: draw nothing */
 		if (pts[i] < t_min)
 			t_min = pts[i];
 		if (pts[i] > t_max)
 			t_max = pts[i];
+		if (!show_apt)
+			continue;
 		if (apt[i] < t_min)
 			t_min = apt[i];
 		if (apt[i] > t_max)
@@ -361,9 +371,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		                   GPoint(spx[i], spy[i]));
 	}
 
-	// Pass 3: apparent-temp ("feels like") dashed line
+	// Pass 3: apparent-temp ("feels like") dashed line (4.0.0: optional)
 	graphics_context_set_stroke_color(ctx, is_light ? GColorBlack : GColorWhite);
-	for (int i = 1; i <= total_hours; i++) {
+	for (int i = 1; show_apt && i <= total_hours; i++) {
 		if (i >= tl->hours_remaining) break; /* no data: draw nothing */
 		graph_draw_dashed_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
 		                       GPoint(apx[i], apy[i]), 3, 2);
@@ -384,7 +394,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		                   GPoint(spx[i], spy[i]));
 	}
 
-	for (int i = 1; i <= total_hours; i++) {
+	for (int i = 1; show_apt && i <= total_hours; i++) {
 		if (i >= tl->hours_remaining) break; /* no data: draw nothing */
 		graph_draw_dashed_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
 		                       GPoint(apx[i], apy[i]), 3, 2);

@@ -171,6 +171,12 @@ function sanitizeClaySettingsStorage() {
 		lvl('SETTING_SNOW_LEVEL', 'SETTING_EVENT_SNOW', SNOW_OFF);
 		lvl('SETTING_FOG_LEVEL', 'SETTING_FOG_INDICATOR', FOG_OFF);
 
+		/* 4.0.0: battery markers 20 / 10 / 5 / 0 %; old values onto the closest option (normalizeBattery). */
+		if (flatSettings.SETTING_TIMELINE_BATTERY !== undefined && flatSettings.SETTING_TIMELINE_BATTERY !== '') {
+			var ob = extractInt(flatSettings.SETTING_TIMELINE_BATTERY), nb = normalizeBattery(ob);
+			if (ob !== nb) flatSettings.SETTING_TIMELINE_BATTERY = String(nb);
+		}
+
 		if (JSON.stringify(flatSettings) !== raw) {
 			localStorage.setItem('clay-settings', JSON.stringify(flatSettings));
 		}
@@ -384,7 +390,7 @@ function buildSettingsDict(rawSettings) {
 
 	var timelineBattery = extractInt(rawSettings['SETTING_TIMELINE_BATTERY']);
 	if (!isNaN(timelineBattery)) {
-		dict['SETTING_TIMELINE_BATTERY'] = timelineBattery;
+		dict['SETTING_TIMELINE_BATTERY'] = normalizeBattery(timelineBattery);
 	}
 
 	var lightTheme = extractInt(rawSettings['SETTING_LIGHT_THEME']) === 1;
@@ -463,6 +469,8 @@ function buildSettingsDict(rawSettings) {
 	dict['SETTING_LEADING_ZERO'] = lz === 1 || lz === 2 ? lz : 0;
 	/* 3.3.0: phone alarm on the date line (default on); watch-side only, no refetch. */
 	dict['SETTING_PHONE_ALARM'] = extractBool(rawSettings['SETTING_PHONE_ALARM']) === 0 ? 0 : 1;
+	/* 4.0.0: feels-like line on the temperature chart (default on); watch-side only, no refetch. */
+	dict['SETTING_FEELS_LIKE'] = extractBool(rawSettings['SETTING_FEELS_LIKE']) === 0 ? 0 : 1;
 
 	var weatherEventDisp = extractInt(rawSettings['SETTING_WEATHER_EVENT_DISPLAY']);
 	if (isNaN(weatherEventDisp)) weatherEventDisp = 0;
@@ -505,6 +513,19 @@ var WEATHER_SETTING_KEYS = [
 ];
 
 /** True when a weather-relevant setting differs between two flat/raw settings objects. */
+/* 4.0.0: battery marker options, same values on the watch and the Android app:
+ * 0 = 20/10/5/0 (default), 1 = 10/5/0, 2 = 5/0, 7 = 10/0, 5 = 0, 3 = None.
+ * Old values: 3.3.0 "10 / 4 %" (4) → 10/5/0, Android "20 / 0 %" (6) → 20/10/5/0,
+ * Android "Off" (8) → None; 3.3.0's 4 % and 4.0.0-beta's battery saver read as 5 %. */
+var BATTERY_OPTIONS = [0, 1, 2, 7, 5, 3];
+function normalizeBattery(v) {
+	v = parseInt(v, 10);
+	if (BATTERY_OPTIONS.indexOf(v) >= 0) return v;
+	if (v === 4) return 1;
+	if (v === 8) return 3;
+	return 0;
+}
+
 function weatherSettingsChanged(oldS, newS) {
 	oldS = oldS || {}; newS = newS || {};
 	for (var i = 0; i < WEATHER_SETTING_KEYS.length; i++) {
@@ -529,6 +550,7 @@ function rememberProviderKey(map, provider, key, caps) {
 module.exports = {
 	rememberProviderKey: rememberProviderKey, WX_KEYS_STORE: WX_KEYS_STORE,
 	weatherSettingsChanged: weatherSettingsChanged, WEATHER_SETTING_KEYS: WEATHER_SETTING_KEYS,
+	normalizeBattery: normalizeBattery, BATTERY_OPTIONS: BATTERY_OPTIONS,
 	shouldUseFahrenheit: shouldUseFahrenheit, getTempUnit: getTempUnit,
 	getFetchIntervalMin: getFetchIntervalMin, DEFAULT_FETCH_INTERVAL: DEFAULT_FETCH_INTERVAL, getWeatherProvider: getWeatherProvider, getLocalityLanguage: getLocalityLanguage,
 	readClaySettings: readClaySettings, flattenClaySettings: flattenClaySettings,

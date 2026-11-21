@@ -10,8 +10,8 @@ Developed by **Nils Reich** ([@nilsreichhard](https://github.com/nilsreichhard))
 ## Features
 
 - **Flexible Rolling Timeline (12h–48h)**: Configurable forecast horizons (12h, 18h, 24h, 36h, 48h) with a fixed 1/5 past ratio anchoring the current time needle at 20% width.
-- **Timeline Battery Milestones**: Projects remaining battery life onto the top timeline track (20% yellow, 10% orange, 0% red death projection).
-- **Dual Temperature Curves & Synchronized Infill**: Actual temperature spline matching infill colors across thermal bands (Freezing, Cold, Cool, Mild, Warm, Hot, Burning), paired with parallel dashed feels-like temperature curve.
+- **Timeline Battery Milestones**: Projects remaining battery life onto the top timeline track (20% yellow, 10% orange, 5% red, 0% deep red), from measured drain and a learned hour-of-day profile (`src/c/modules/batt_eta.c`).
+- **Dual Temperature Curves & Synchronized Infill**: Actual temperature spline matching infill colors across thermal bands (Freezing, Cold, Cool, Mild, Warm, Hot, Burning), paired with parallel dashed feels-like temperature curve (optional since 4.0.0: "Show feels-like line").
 - **Dynamic High/Low Labels**: Left-side numeric readouts calculate peak and valley temperatures across the active timeline window.
 - **Continuous Astronomical Daylight Track**: Full-width 3px baseline track, multi-day daylight spans with sunrise/sunset delimiter brackets, and per-midnight astronomical lunar phases.
 - **Hourly Timeline Axis Scale**: Bottom ticks marking hourly intervals (3px) and solar noon/midnight milestones (5px).
@@ -27,7 +27,7 @@ Configurable on your phone via Pebble app settings (Clay):
 - **Forecast Horizon**: 12h forecast (+3h past), 18h forecast (+4.5h past), 24h forecast (+6h past), 36h forecast (+9h past), 48h forecast (+12h past).
 - **Thermal Infill**: Future forecast only, Past hours only, Full timeline, or None (lines only).
 - **Current Time Needle**: Top track & meteogram, Top track only, Bottom meteogram only, or Hidden.
-- **Timeline Battery Markers**: 20% yellow / 10% orange / 0% red, 10% orange / 0% red, 0% red, or None.
+- **Timeline Battery Markers**: 20 / 10 / 5 / 0 %, 10 / 5 / 0 %, 5 / 0 %, 10 / 0 %, 0 %, or None.
 - **Calendar Events**: Blue bar at start time, Duration span, or Off.
 - **Calendars (×3)**: Paste private ICS URLs and choose a color per calendar. Leave blank / set Calendar Events Off to clear.
 - **Color Theme**: Dark (Black) or Light (White).

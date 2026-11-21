@@ -77,6 +77,40 @@ int main(void) {
 	reset(); store_blob(&rl, (int)sizeof(Settings)); settings_init();
 	CHECK("out-of-range rain_height → Probability", settings_get()->rain_height == RAIN_HEIGHT_PROBABILITY);
 
+	/* 4.0.0 feels_like_off: a 3.3.x blob ends before it (or covers it with zero
+	 * tail padding) → line shown; a current blob keeps Off; junk → shown */
+	Settings fl = def;
+	CHECK("defaults: feels-like line shown", def.feels_like_off == 0);
+	fl.feels_like_off = 1; fl.phone_alarm_off = 1;
+	reset(); store_blob(&fl, (int)offsetof(Settings, feels_like_off)); settings_init();
+	CHECK("3.3.x blob (ends before feels_like_off): line shown, phone_alarm_off kept",
+	      settings_get()->feels_like_off == 0 && settings_get()->phone_alarm_off == 1);
+	reset(); store_blob(&fl, (int)sizeof(Settings)); settings_init();
+	CHECK("current blob: feels-like Off kept", settings_get()->feels_like_off == 1);
+	fl.feels_like_off = 0x5A;
+	reset(); store_blob(&fl, (int)sizeof(Settings)); settings_init();
+	CHECK("out-of-range feels_like_off → shown", settings_get()->feels_like_off == 0);
+
+	/* 4.0.0 battery markers: 20/10/5/0 options; old values → closest */
+	CHECK("defaults: battery markers 20 / 10 / 5 / 0 %", def.timeline_battery == TIMELINE_BATT_20_10_5_0);
+	{
+		static const int in[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 200};
+		static const int want[] = {0, 1, 2, 3, 1, 5, 0, 7, 3, 0, 0};
+		bool ok = true;
+		for (unsigned i = 0; i < sizeof(in) / sizeof(in[0]); i++)
+			ok = ok && (int)settings_battery_mode(in[i]) == want[i];
+		CHECK("settings_battery_mode: options kept, 4 → 10/5/0, 6 → 20/10/5/0, 8 → None, junk → default", ok);
+	}
+	Settings bt = def; bt.timeline_battery = TIMELINE_BATT_OLD_10_4;
+	reset(); store_blob(&bt, (int)sizeof(Settings)); settings_init();
+	CHECK("stored 3.3.0 \"10 / 4 %\" (4) → 10 / 5 / 0 %", settings_get()->timeline_battery == TIMELINE_BATT_10_5_0);
+	bt.timeline_battery = TIMELINE_BATT_10_0;
+	reset(); store_blob(&bt, (int)sizeof(Settings)); settings_init();
+	CHECK("stored 10 / 0 % (7) kept", settings_get()->timeline_battery == TIMELINE_BATT_10_0);
+	bt.timeline_battery = (TimelineBatteryMode)77;
+	reset(); store_blob(&bt, (int)sizeof(Settings)); settings_init();
+	CHECK("stored junk battery value → 20 / 10 / 5 / 0 %", settings_get()->timeline_battery == TIMELINE_BATT_20_10_5_0);
+
 	/* own keys: cloud override 1/2 accepted, others dropped */
 	reset(); persist_write_int(STORAGE_KEY_CLOUD_OVERRIDE, 2); settings_init();
 	CHECK("cloud override key 9 = 2 → Split/Total override honoured", settings_effective_cloud_mode() == (CloudDisplayMode)1);

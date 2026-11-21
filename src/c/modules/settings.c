@@ -33,7 +33,7 @@ static const Settings s_defaults = {
     .forecast_hours = DEFAULT_FORECAST_HOURS,
     .show_bt_alert = true,
     .show_silent_mode = true,
-    .timeline_battery = TIMELINE_BATT_20_10_4_0,
+    .timeline_battery = TIMELINE_BATT_20_10_5_0,
     .show_step_count = true,
     .timeline_event = TIMELINE_EVENT_SPAN,
     .cloud_sensitivity = CLOUD_SENS_SENSITIVE,
@@ -54,6 +54,7 @@ static const Settings s_defaults = {
     .cloud_thick = CLOUD_THICKNESS_ON,
     .leading_zero = LEADING_ZERO_AUTO,
     .phone_alarm_off = 0,
+    .feels_like_off = 0, /* 4.0.0: line shown */
 };
 
 /* 2.9.3: event_hide is appended right where the 2.9.2 struct ended (no tail
@@ -66,6 +67,24 @@ _Static_assert(offsetof(Settings, event_hide) % _Alignof(Settings) == 0,
  * padding (persisted as zeros), so their defaults must be 0. */
 _Static_assert(RAIN_HEIGHT_PROBABILITY == 0 && CLOUD_THICKNESS_ON == 0 && LEADING_ZERO_AUTO == 0,
                "fields in old tail padding must default to 0");
+
+TimelineBatteryMode settings_battery_mode(int v) {
+	switch (v) {
+	case TIMELINE_BATT_20_10_5_0:
+	case TIMELINE_BATT_10_5_0:
+	case TIMELINE_BATT_5_0:
+	case TIMELINE_BATT_NONE:
+	case TIMELINE_BATT_0:
+	case TIMELINE_BATT_10_0:
+		return (TimelineBatteryMode)v;
+	case TIMELINE_BATT_OLD_10_4:
+		return TIMELINE_BATT_10_5_0;
+	case TIMELINE_BATT_OLD_OFF:
+		return TIMELINE_BATT_NONE;
+	default: /* incl. TIMELINE_BATT_OLD_20_0 */
+		return TIMELINE_BATT_20_10_5_0;
+	}
+}
 
 void settings_init(void) {
 	s_settings = s_defaults;
@@ -98,6 +117,9 @@ void settings_init(void) {
 	s_settings.event_hide &= EVENT_FLAGS_MASK;
 	if (s_settings.leading_zero > LEADING_ZERO_OFF)
 		s_settings.leading_zero = LEADING_ZERO_AUTO;
+	if (s_settings.feels_like_off > 1) /* 4.0.0: junk → line shown */
+		s_settings.feels_like_off = 0;
+	s_settings.timeline_battery = settings_battery_mode((int)s_settings.timeline_battery);
 	if (s_settings.rain_height > RAIN_HEIGHT_AMOUNT_LINE)
 		s_settings.rain_height = RAIN_HEIGHT_PROBABILITY;
 }
@@ -317,12 +339,8 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	}
 
 	t = dict_find(iter, KEY_SETTING_TIMELINE_BATTERY);
-	if (t) {
-		int bm = settings_tuple_int(t);
-		if (bm >= 0 && bm <= 4) {
-			s_settings.timeline_battery = (TimelineBatteryMode)bm;
-		}
-	}
+	if (t)
+		s_settings.timeline_battery = settings_battery_mode(settings_tuple_int(t));
 
 	/* Unified Step Counter: Off / Normal / Bold (key 10060). */
 	t = dict_find(iter, KEY_SETTING_STEP_DISPLAY);
@@ -452,6 +470,10 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 	t = dict_find(iter, KEY_SETTING_PHONE_ALARM); /* 3.3.0 */
 	if (t)
 		s_settings.phone_alarm_off = settings_tuple_int(t) == 0 ? 1 : 0;
+
+	t = dict_find(iter, KEY_SETTING_FEELS_LIKE); /* 4.0.0 */
+	if (t)
+		s_settings.feels_like_off = settings_tuple_int(t) == 0 ? 1 : 0;
 
 	t = dict_find(iter, KEY_SETTING_CLOUD_THICK);
 	if (t)

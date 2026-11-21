@@ -118,7 +118,8 @@
     "WEATHER_CLOUD_THICK": 10093,
     "SETTING_LEADING_ZERO": 10094,
     "PHONE_ALARM_TIME": 10095,
-    "SETTING_PHONE_ALARM": 10096
+    "SETTING_PHONE_ALARM": 10096,
+    "SETTING_FEELS_LIKE": 10097
   },
   "resources": {
     "media": [
@@ -151,7 +152,7 @@
   "name": "carbon-ion",
   "shortName": "Carbon Ion",
   "longName": "Carbon Ion",
-  "versionLabel": "3.3.0",
+  "versionLabel": "4.0.0",
   "companyName": "Nils Reich",
   "appKeys": {
     "WEATHER_REQUEST": 10000,
@@ -246,6 +247,7 @@
     "WEATHER_CLOUD_THICK": 10093,
     "SETTING_LEADING_ZERO": 10094,
     "PHONE_ALARM_TIME": 10095,
-    "SETTING_PHONE_ALARM": 10096
+    "SETTING_PHONE_ALARM": 10096,
+    "SETTING_FEELS_LIKE": 10097
   }
 }

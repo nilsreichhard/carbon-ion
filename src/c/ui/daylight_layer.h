@@ -37,7 +37,7 @@ void daylight_layer_set_data(DaylightLayer *layer, uint8_t sunrise_hour,
 // Set current time for the small red current-time indicator line on the daylight track
 void daylight_layer_set_current_time(DaylightLayer *layer, uint8_t hour, uint8_t minute);
 
-// Set battery state for timeline depletion markers (Clay 20/10/4/0).
+// Set battery state for timeline depletion markers (Clay 20/10/5/0 %; modules/batt_eta.c).
 // Pass both is_charging and is_plugged from BatteryChargeState — plugged-but-not-
 // charging (typical at 100%) must not be treated as discharging.
 void daylight_layer_set_battery(DaylightLayer *layer, uint8_t percent, bool charging,

@@ -586,6 +586,13 @@ module.exports = [
 				]
 			},
 			{
+				"type": "toggle",
+				"messageKey": "SETTING_FEELS_LIKE",
+				"label": "Show feels-like line",
+				"description": "Dashed line on the temperature chart for the feels-like (apparent) temperature. Off: only the real temperature is drawn and the chart uses its full height.",
+				"defaultValue": true
+			},
+			{
 				"type": "select",
 				"messageKey": "SETTING_NEEDLE_MODE",
 				"label": "Now line",
@@ -1026,27 +1033,31 @@ module.exports = [
 				"defaultValue": 0,
 				"options": [
 					{
-						"label": "20 / 10 / 4 / 0 %",
+						"label": "20 / 10 / 5 / 0 %",
 						"value": 0
 					},
 					{
-						"label": "10 / 4 / 0 %",
+						"label": "10 / 5 / 0 %",
 						"value": 1
 					},
 					{
-						"label": "4 / 0 %",
+						"label": "5 / 0 %",
 						"value": 2
 					},
 					{
-						"label": "10 / 4 %",
-						"value": 4
+						"label": "10 / 0 %",
+						"value": 7
+					},
+					{
+						"label": "0 %",
+						"value": 5
 					},
 					{
 						"label": "None",
 						"value": 3
 					}
 				],
-				"description": "When the battery is expected to reach each level. 4 % = battery saver."
+				"description": "Marks on the timeline when the battery is expected to reach each level, from your own usage (it learns your daily pattern over about 3 days)."
 			}
 		]
 	},

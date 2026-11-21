@@ -23,3 +23,4 @@
 #define STORAGE_KEY_CLOUD_OVERRIDE 9 /* uint8 1+CloudDisplayMode; absent = Clay value */
 #define STORAGE_KEY_WEATHER_PART4 10 /* 2.9.6: WeatherData block 4 */
 #define STORAGE_KEY_PHONE_ALARM 11   /* 3.3.0: int32 phone alarm, UTC epoch s (absent = none) */
+#define STORAGE_KEY_BATT_PROFILE 12  /* 3.3.1: battery hour-of-day drain profile (modules/batt_eta.c) */

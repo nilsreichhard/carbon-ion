@@ -119,7 +119,30 @@ check('Fog and wind still refetch (phone-side)', [settings.weatherSettingsChange
 var capsT = require('../src/pkjs/weather/caps.js');
 check('Tornado toggle shown only for providers reporting WMO 19/99', Object.keys(capsT).filter(function (k) { return capsT[k].tornado; }).sort(), ['geosphere', 'openmeteo', 'owm']);
 var setSrc = require('fs').readFileSync(__dirname + '/../src/c/modules/settings.h', 'utf8');
-check('Settings struct: event_hide, rain_height, cloud_thick, leading_zero, phone_alarm_off appended last (upgrade keeps defaults 0)', /uint8_t event_hide;[^\n]*\n\tuint8_t rain_height;[^\n]*\n\tuint8_t cloud_thick;[^\n]*\n[^\n]*\n\tuint8_t leading_zero;[^\n]*\n[^\n]*\n\tuint8_t phone_alarm_off;[^\n]*\n[^\n]*\n\} Settings;/.test(setSrc), true);
+check('Settings struct: event_hide, rain_height, cloud_thick, leading_zero, phone_alarm_off, feels_like_off appended last (upgrade keeps defaults 0)', /uint8_t event_hide;[^\n]*\n\tuint8_t rain_height;[^\n]*\n\tuint8_t cloud_thick;[^\n]*\n[^\n]*\n\tuint8_t leading_zero;[^\n]*\n[^\n]*\n\tuint8_t phone_alarm_off;[^\n]*\n[^\n]*\n\tuint8_t feels_like_off;[^\n]*\n[^\n]*\n\} Settings;/.test(setSrc), true);
+/* ---- 4.0.0: optional feels-like line ---- */
+(function () {
+	var fs = require('fs');
+	var pkjJ = require('../package.json').pebble, app = require('../appinfo.json');
+	check('4.0.0: SETTING_FEELS_LIKE 10097 in package.json and both appinfo.json key maps',
+		[pkjJ.messageKeys.SETTING_FEELS_LIKE, app.messageKeys.SETTING_FEELS_LIKE, app.appKeys.SETTING_FEELS_LIKE], [10097, 10097, 10097]);
+	check('4.0.0: feels-like toggle default on (missing/old settings keep the line); off sends 0; no refetch',
+		[settings.buildSettingsDict({}).SETTING_FEELS_LIKE, settings.buildSettingsDict({ SETTING_FEELS_LIKE: true }).SETTING_FEELS_LIKE,
+		 settings.buildSettingsDict({ SETTING_FEELS_LIKE: false }).SETTING_FEELS_LIKE, settings.buildSettingsDict({ SETTING_FEELS_LIKE: 'false' }).SETTING_FEELS_LIKE,
+		 settings.buildSettingsDict({ SETTING_FEELS_LIKE: { value: 0 } }).SETTING_FEELS_LIKE,
+		 settings.weatherSettingsChanged({ SETTING_FEELS_LIKE: true }, { SETTING_FEELS_LIKE: false })], [1, 1, 0, 0, 0, false]);
+	var cfgSrc = fs.readFileSync(__dirname + '/../src/pkjs/config.js', 'utf8');
+	check('4.0.0: Clay toggle "Show feels-like line" (default on) sits between Temperature fill and Now line',
+		/"messageKey": "SETTING_INFILL_MODE"[\s\S]*?"type": "toggle",\s*"messageKey": "SETTING_FEELS_LIKE",\s*"label": "Show feels-like line",[\s\S]*?"defaultValue": true\s*\},\s*\{\s*"type": "select",\s*"messageKey": "SETTING_NEEDLE_MODE"/.test(cfgSrc), true);
+	var setC = fs.readFileSync(__dirname + '/../src/c/modules/settings.c', 'utf8');
+	var tempC = fs.readFileSync(__dirname + '/../src/c/ui/temp_layer.c', 'utf8');
+	check('4.0.0: watch reads the key (0 → feels_like_off = 1) and defaults to shown',
+		[/KEY_SETTING_FEELS_LIKE MESSAGE_KEY_SETTING_FEELS_LIKE/.test(setSrc), /dict_find\(iter, KEY_SETTING_FEELS_LIKE\);[^\n]*\n\tif \(t\)\n\t\ts_settings\.feels_like_off = settings_tuple_int\(t\) == 0 \? 1 : 0;/.test(setC), /\.feels_like_off = 0,/.test(setC)], [true, true, true]);
+	var dashed = tempC.match(/graph_draw_dashed_line\(/g) || [];
+	check('4.0.0: every feels-like dashed pass (colour and B&W; gabbro warps the same layer) is gated by show_apt, and the scale skips it when off',
+		[dashed.length, (tempC.match(/for \(int i = 1; show_apt && i <= total_hours; i\+\+\)/g) || []).length, /bool show_apt = !settings_get\(\)->feels_like_off;/.test(tempC), /if \(!show_apt\)\n\t\t\tcontinue;\n\t\tif \(apt\[i\] < t_min\)/.test(tempC)],
+		[2, 2, true, true]);
+})();
 /* ---- 3.3.0: next phone alarm (Android companion app, PebbleKit Android 2) ---- */
 (function () {
 	var pkgJ = require('../package.json').pebble, app = require('../appinfo.json');
@@ -223,7 +246,7 @@ var bBt = bitsOf('s_bt_off_bits'), bQt = bitsOf('s_quiet_bits');
 check('Status icons: both 15x17 maps', [bBt.length, bQt.length, bBt.every(function (r) { return r.length === 15; }), bQt.every(function (r) { return r.length === 15; })], [17, 17, true, true]);
 check('Status icons: identical badge outline (same drawn pixels)', bBt.map(function (r) { return r.replace(/[#.]/g, 'x'); }), bQt.map(function (r) { return r.replace(/[#.]/g, 'x'); }));
 check('Status icons: same slash diagonal (1,2)-(13,14) in both', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].every(function (i) { return bBt[i + 1][i] === '.'; }) && [1, 2, 3, 13].every(function (i) { return bQt[i + 1][i] === '.'; }), true);
-check('Version 3.3.0 everywhere', [pkg.version, require('../appinfo.json').versionLabel, require('../src/pkjs/constants').APP_VERSION === '3.3.0' && /version: C\.APP_VERSION/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['3.3.0', '3.3.0', true]);
+check('Version 4.0.0 everywhere', [pkg.version, require('../appinfo.json').versionLabel, require('../src/pkjs/constants').APP_VERSION === '4.0.0' && /version: C\.APP_VERSION/.test(require('fs').readFileSync(__dirname + '/../src/pkjs/index.js', 'utf8'))], ['4.0.0', '4.0.0', true]);
 
 /* ---- 2.9.6: rain bar height + hourly mm ---- */
 var mainSrc = require('fs').readFileSync(__dirname + '/../src/c/main.c', 'utf8');
@@ -276,7 +299,7 @@ check('3.0.3: 12h blank lead cell, steps capped at 99K in one font size (no 14/0
 		Object.keys(got).length === new Set(Object.keys(got).map(function (k) { return got[k]; })).size],
 		[{ STORAGE_KEY_SETTINGS: 0, STORAGE_KEY_BATT_HIST: 1, STORAGE_KEY_WEATHER: 2, STORAGE_KEY_WEATHER_PART2: 3, STORAGE_KEY_EVENTS: 4,
 			STORAGE_KEY_WEATHER_PART3: 5, STORAGE_KEY_BATT_LEARNED: 6, STORAGE_KEY_TAP_RANGE: 7, STORAGE_KEY_WEATHER_HDR: 8,
-			STORAGE_KEY_CLOUD_OVERRIDE: 9, STORAGE_KEY_WEATHER_PART4: 10, STORAGE_KEY_PHONE_ALARM: 11 }, false, true]);
+			STORAGE_KEY_CLOUD_OVERRIDE: 9, STORAGE_KEY_WEATHER_PART4: 10, STORAGE_KEY_PHONE_ALARM: 11, STORAGE_KEY_BATT_PROFILE: 12 }, false, true]);
 	var setH = fs.readFileSync(__dirname + '/../src/c/modules/settings.h', 'utf8');
 	check('3.0.3: settings.h uses generated MESSAGE_KEY_SETTING_* (no hardcoded 100xx outside the touch guard)',
 		[/#define KEY_SETTING_\w+ 100\d\d/.test(setH.replace(/#if defined\(CARBON_TOUCH_ENABLED\)\n\/\*[\s\S]*?#endif/, '')),
@@ -297,6 +320,42 @@ check('3.0.3: MET User-Agent carries the app version', require('../src/pkjs/weat
 		return r.status;
 	});
 	check('Settings migration C tests (tools/test_settings_migration.c, plain + short enums) pass', res, [0, 0]);
+})();
+(function () { /* 3.3.1: host C test of modules/batt_eta.c (battery markers), emery and gabbro */
+	var cp = require('child_process'), os = require('os'), path = require('path'), fs = require('fs');
+	var root = path.join(__dirname, '..'), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'carbon_batt_'));
+	var res = ['', '-DPBL_PLATFORM_GABBRO'].map(function (fl) {
+		var bin = path.join(dir, 't' + (fl ? 'g' : 'e'));
+		var r = cp.spawnSync('sh', ['-c', 'cc -std=c11 -Wall -Wextra -Werror ' + fl + ' -I"' + root + '/tools/host" -o "' + bin + '" "' + root + '/tools/test_batt_eta.c" "' + root + '/src/c/modules/batt_eta.c" && TZ=UTC "' + bin + '"'], { encoding: 'utf8' });
+		if (r.status !== 0) console.log(r.stdout + r.stderr);
+		return r.status;
+	});
+	check('battery ETA C tests (tools/test_batt_eta.c: missed change, bounce, restart, 20/10/5/0 %, hourly profile) pass', res, [0, 0]);
+	var cfg = fs.readFileSync(root + '/src/pkjs/config.js', 'utf8');
+	var cfgItems = [];
+	(function walk(a) { a.forEach(function (it) { if (it.type === 'section') walk(it.items); else cfgItems.push(it); }); })(require('../src/pkjs/config.js'));
+	var bItem = cfgItems.filter(function (it) { return it.messageKey === 'SETTING_TIMELINE_BATTERY'; })[0];
+	check('4.0.0: Clay battery markers exactly 20/10/5/0, 10/5/0, 5/0, 10/0, 0, None (values 0, 1, 2, 7, 5, 3), default 20/10/5/0',
+		[bItem.options.map(function (o) { return o.label + '=' + o.value; }).join(' | '), bItem.defaultValue],
+		['20 / 10 / 5 / 0 %=0 | 10 / 5 / 0 %=1 | 5 / 0 %=2 | 10 / 0 %=7 | 0 %=5 | None=3', 0]);
+	check('4.0.0: no battery saver wording left (Clay, watch code)',
+		[/battery saver|low-power/i.test(cfg), /BATT_LOW_POWER_PCT/.test(fs.readFileSync(root + '/src/c/ui/daylight_layer.c', 'utf8') + fs.readFileSync(root + '/src/c/modules/batt_eta.h', 'utf8'))], [false, false]);
+	check('4.0.0: old battery values → closest option (3.3.0 4 → 10/5/0, Android 20/0 (6) → 20/10/5/0, Off (8) → None, junk → default)',
+		[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, -1, 'x'].map(function (v) { return settings.buildSettingsDict({ SETTING_TIMELINE_BATTERY: String(v) }).SETTING_TIMELINE_BATTERY; }),
+		[0, 1, 2, 3, 1, 5, 0, 7, 3, 0, 0, undefined]);
+	check('4.0.0: missing battery setting sends nothing (watch keeps its default 20/10/5/0)', 'SETTING_TIMELINE_BATTERY' in settings.buildSettingsDict({}), false);
+	var setC = fs.readFileSync(root + '/src/c/modules/settings.c', 'utf8');
+	check('4.0.0: watch maps received and stored values through settings_battery_mode',
+		[/s_settings\.timeline_battery = settings_battery_mode\(settings_tuple_int\(t\)\);/.test(setC), /s_settings\.timeline_battery = settings_battery_mode\(\(int\)s_settings\.timeline_battery\);/.test(setC)], [true, true]);
+	/* sanitizeClaySettingsStorage rewrites stored old values once */
+	var savedClay = localStorage.getItem('clay-settings');
+	var migrated = ['4', '6', '8', '7', '2'].map(function (v) {
+		localStorage.setItem('clay-settings', JSON.stringify({ SETTING_TIMELINE_BATTERY: v }));
+		settings.sanitizeClaySettingsStorage();
+		return JSON.parse(localStorage.getItem('clay-settings')).SETTING_TIMELINE_BATTERY;
+	});
+	if (savedClay === null) localStorage.removeItem('clay-settings'); else localStorage.setItem('clay-settings', savedClay);
+	check('4.0.0: stored Clay values migrated (4 → 1, 6 → 0, 8 → 3; 7 and 2 kept)', migrated.map(String), ['1', '0', '3', '7', '2']);
 })();
 (function () { /* 3.0.3: leading zero setting */
 	var S = require('../src/pkjs/settings.js'), fs = require('fs');

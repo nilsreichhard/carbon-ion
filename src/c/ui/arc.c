@@ -14,13 +14,19 @@ static int prv_cy(void) { return PBL_DISPLAY_HEIGHT / 2; }
 #define prv_cx_pub prv_cx
 #define prv_cy_pub prv_cy
 
-/* Angular samples per radius row: >= outer arc length (124 * 2.09 ≈ 260)
- * so the outermost row has no tangential holes. */
-#define ARC_SAMPLES 336 /* 2.8.3: 128 * 2.44 rad ≈ 313 */
+/* Angular samples per radius row. 3.3.1: one sample per pixel of the outer
+ * arc (336, 2.8.3) still left ~5-6 % of the band pixels unwritten: on the
+ * diagonals one radius step moves less than a pixel in x and y, and with
+ * truncation neighbouring rows skip some screen pixels. Those holes kept the
+ * cleared background, so fills on gabbro looked speckled (granular). With
+ * ~2x the outer arc length and rounding to the nearest pixel every pixel of
+ * both bands is hit (checked offline: 0 holes for 60/48-row bands). */
+#define ARC_SAMPLES 672 /* 129 * 2.44 rad ≈ 315 → 2x with margin */
 
 static int16_t s_sin[ARC_SAMPLES]; /* r * s_sin >> 12 */
 static int16_t s_cos[ARC_SAMPLES];
 static uint8_t s_col[ARC_SAMPLES]; /* source column 0..ARC_SRC_W-1 */
+#define ARC_ROUND (1 << 11) /* + 0.5 px before >> 12: nearest pixel */
 static bool s_ready;
 static int s_top_h = 60, s_bot_h = 48;
 /* One scratch buffer, allocated once at window load and reused by both
@@ -192,8 +198,8 @@ static bool prv_band(GBitmap *fb, int src_y0, int rows, bool top, uint8_t bg) {
 		int rad = top ? ARC_R_TOP - r : ARC_R_OUTER - rows + 1 + r;
 		const uint8_t *src = &buf[r * ARC_SRC_W];
 		for (int k = 0; k < ARC_SAMPLES; k++) {
-			int x = cx + ((rad * s_sin[k]) >> 12);
-			int dy = (rad * s_cos[k]) >> 12;
+			int x = cx + ((rad * s_sin[k] + ARC_ROUND) >> 12);
+			int dy = (rad * s_cos[k] + ARC_ROUND) >> 12;
 			int y = top ? cy - dy : cy + dy;
 			if (y < 0 || y >= PBL_DISPLAY_HEIGHT)
 				continue;
