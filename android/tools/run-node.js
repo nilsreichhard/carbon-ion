@@ -56,13 +56,14 @@ console.log('city=' + res.city + ' provider=' + p.provider + ' now=' + p.current
 	' sun ' + p.sunrise_hour + ':' + ('0' + p.sunrise_minute).slice(-2) + '-' + p.sunset_hour + ':' + ('0' + p.sunset_minute).slice(-2) +
 	' valid_hours=' + p.valid_hours + ' fetch_time=' + new Date(p.fetch_time * 1000).toISOString());
 console.log('settings dict: ' + JSON.stringify(res.settings));
+console.log('used: ' + JSON.stringify(res.used));
 console.log('slot  hour  temp  feels  cloud  rain%  mm/h  sw(W/m2)  wmo');
 var t0 = p.fetch_time - 12 * 3600;
 for (var i = 6; i < 36; i++) {
 	var d = new Date((t0 + i * 3600) * 1000);
 	console.log([String(i).padStart(4), String(d.getHours()).padStart(5) + 'h', p.temp_hourly[i].toFixed(1).padStart(5),
 		p.apparent_temp_hourly[i].toFixed(1).padStart(6), String(p.cloud_cover[i]).padStart(6), String(p.precip_prob[i]).padStart(6),
-		(p.precip_mm[i] / 10).toFixed(1).padStart(5), String(Math.round(p.shortwave_radiation[i] * 4)).padStart(9), String(p.hourly_weather_code[i]).padStart(4)].join(' ') + (i === 12 ? '  <- now' : ''));
+		(p.precip_mm[i] / 10).toFixed(1).padStart(5), String(Math.round(p.shortwave_radiation[i])).padStart(9), String(p.hourly_weather_code[i]).padStart(4)].join(' ') + (i === 12 ? '  <- now' : ''));
 }
 var st = JSON.parse(global.carbonSettingsInit('{}'));
 console.log('settings page: ' + st.length + ' items, ' + st.filter(function (x) { return x.key; }).length + ' settings; hidden: ' +

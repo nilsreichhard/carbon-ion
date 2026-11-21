@@ -7,7 +7,6 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,7 +21,7 @@ import org.robolectric.annotation.GraphicsMode
 class JsRuntimeTest {
     private val ctx: Context = ApplicationProvider.getApplicationContext()
 
-    @Before fun setUp() { assumeTrue("desktop QuickJS library missing", JvmQuickJs.install()) }
+    @Before fun setUp() { JvmQuickJs.require() }
     @After fun tearDown() = JvmQuickJs.reset()
 
     @Test

@@ -5,7 +5,6 @@ import androidx.test.core.app.ApplicationProvider
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,7 +25,7 @@ import java.io.File
 class SampleFixturesTest {
     private val ctx: Context = ApplicationProvider.getApplicationContext()
 
-    @Before fun setUp() { assumeTrue("desktop QuickJS library missing", JvmQuickJs.install()) }
+    @Before fun setUp() { JvmQuickJs.require() }
     @After fun tearDown() = JvmQuickJs.reset()
 
     @Test

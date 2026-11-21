@@ -13,8 +13,8 @@ android {
         applicationId = "com.nilsreichhard.carbonion.widget"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.1.2"
+        versionCode = 11
+        versionName = "1.1.8"
     }
 
     /*
@@ -63,6 +63,11 @@ android {
                 it.systemProperty("carbon.payload", providers.gradleProperty("carbon.payload").getOrElse(""))
                 it.systemProperty("carbon.city", providers.gradleProperty("carbon.city").getOrElse(""))
                 it.systemProperty("carbon.previewName", providers.gradleProperty("carbon.previewName").getOrElse(""))
+                /* Rewrite the committed picker previews: -Pcarbon.updatePreview=true (WidgetPreviewTest) */
+                it.systemProperty("carbon.updatePreview", providers.gradleProperty("carbon.updatePreview").getOrElse(""))
+                /* QuickJS JNI library for the JS tests (-Pcarbon.quickjs=/path); -Pcarbon.skipQuickJs=true lets them skip */
+                it.systemProperty("carbon.quickjs", providers.gradleProperty("carbon.quickjs").getOrElse(""))
+                it.systemProperty("carbon.skipQuickJs", providers.gradleProperty("carbon.skipQuickJs").getOrElse(""))
                 it.outputs.upToDateWhen { false }
             }
         }

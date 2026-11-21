@@ -101,7 +101,7 @@ object CarbonStyle {
 
     // ---- Temperature meteogram (src/c/ui/temp_layer.c) ----
     const val TEMP_PAD = 4
-    const val TEMP_LABEL_W = 32        // prv_draw_labels label_x
+    const val TEMP_LABEL_W = 32        // prv_draw_labels label_x (the watch's box; 1.1.7 Android aligns to the now line instead)
     const val TEMP_FONT_SM = 16f       // FONT_KEY_GOTHIC_18 (sm_h 16)
     const val TEMP_FONT_MD = 22f       // FONT_KEY_GOTHIC_24_BOLD (md_h 22)
 
@@ -129,12 +129,16 @@ object CarbonStyle {
     /** Per-theme colours ("light" = SETTING_LIGHT_THEME 1). */
     class Palette(val light: Boolean) {
         val ink = if (light) BLACK else WHITE
-        // cloud_layer.c prv_cloud_color / prv_cloud_style
-        val cloudNormal = if (light) LIGHT_GRAY else WHITE
-        val cloudHeavy = if (light) DARK_GRAY else LIGHT_GRAY
+        // cloud_layer.c prv_cloud_color / prv_cloud_style. Light is the watch's: thin LightGray+White,
+        // normal LightGray, thick LightGray+DarkGray, heavy DarkGray (heavier = darker).
+        // 1.1.5: dark is its mirror image (heavier = brighter): thin LightGray+Black, normal LightGray,
+        // thick White+LightGray, heavy White. The watch's dark theme (normal White, thick
+        // LightGray+DarkGray, heavy LightGray) shows heavy and thick clouds dimmer than normal ones.
+        val cloudNormal = LIGHT_GRAY
+        val cloudHeavy = if (light) DARK_GRAY else WHITE
         val cloudLightDither = BG                    // White on light, Black on dark = background
-        val cloudThickBase = LIGHT_GRAY
-        val cloudThickDither = DARK_GRAY
+        val cloudThickBase = if (light) LIGHT_GRAY else WHITE
+        val cloudThickDither = if (light) DARK_GRAY else LIGHT_GRAY
         val sunRay = if (light) CHROME_YELLOW else YELLOW  // prv_draw_sun_rays
         // precip_layer.c prv_bar_color
         val rainHeavy = if (light) COBALT_BLUE else PICTON_BLUE

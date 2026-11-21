@@ -9,7 +9,6 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -49,6 +48,27 @@ class BatteryOptionsTest {
         assertEquals(7, WidgetSettings.fromDict("{\"SETTING_TIMELINE_BATTERY\":7}").timelineBattery)
         assertEquals(0, WidgetSettings.fromDict("{\"SETTING_TIMELINE_BATTERY\":9}").timelineBattery)
         assertEquals(0, WidgetSettings.fromDict("{}").timelineBattery)
+        assertEquals(emptyList<Int>(), WidgetSettings.batteryLevels(WidgetSettings.BATTERY_OFF))
+        assertEquals(8, WidgetSettings.fromDict("{\"SETTING_TIMELINE_BATTERY\":8}").timelineBattery)
+        assertEquals(8, WidgetSettings.fromDict("{\"SETTING_TIMELINE_BATTERY\":\"8\"}").timelineBattery)
+    }
+
+    /** 1.1.3: "Off" draws no battery marker in either style, exactly like having no battery data. */
+    @Test
+    fun offHidesAllMarkers() {
+        val off = WidgetSettings.BATTERY_OFF
+        for (light in listOf(false, true)) {
+            val c0 = WidgetRenderer.render(p, WidgetSettings(lightTheme = light, timelineBattery = 0), WidgetRenderer.Spec(battery = batt), now, tz)
+            val cOff = WidgetRenderer.render(p, WidgetSettings(lightTheme = light, timelineBattery = off), WidgetRenderer.Spec(battery = batt), now, tz)
+            val cNone = WidgetRenderer.render(p, WidgetSettings(lightTheme = light, timelineBattery = 0), WidgetRenderer.Spec(battery = null), now, tz)
+            assertTrue(differ(c0, cOff) > 20)
+            assertEquals("classic off = no battery", 0, differ(cOff, cNone))
+            val m0 = ModernRenderer.render(p, WidgetSettings(lightTheme = light, timelineBattery = 0), ModernRenderer.Spec(1080, 1032, 3f, battery = batt), now, tz)
+            val mOff = ModernRenderer.render(p, WidgetSettings(lightTheme = light, timelineBattery = off), ModernRenderer.Spec(1080, 1032, 3f, battery = batt), now, tz)
+            val mNone = ModernRenderer.render(p, WidgetSettings(lightTheme = light, timelineBattery = 0), ModernRenderer.Spec(1080, 1032, 3f, battery = null), now, tz)
+            assertTrue(differ(m0, mOff) > 20)
+            assertEquals("modern off = no battery", 0, differ(mOff, mNone))
+        }
     }
 
     private fun differ(a: Bitmap, b: Bitmap): Int {
@@ -78,18 +98,20 @@ class BatteryOptionsTest {
 
     @Test
     fun androidPageHasPhoneOptionsAndWatchConfigIsUnchanged() {
-        assumeTrue("desktop QuickJS library missing", JvmQuickJs.install())
+        JvmQuickJs.require()
         JsRuntime.store(ctx).edit().clear().putString("clay-settings", "{\"SETTING_TIMELINE_BATTERY\":\"4\"}").commit()
         JsRuntime(ctx).use { js ->
             val items = JSONArray(js.call("carbonSettingsInit", "{}"))
             val b = (0 until items.length()).map { items.getJSONObject(it) }.first { it.optString("key") == "SETTING_TIMELINE_BATTERY" }
             val opts = b.getJSONArray("options").let { a -> (0 until a.length()).map { a.getJSONObject(it).let { o -> o.getString("value") to o.getString("label") } } }
-            assertEquals(listOf("0" to "20 / 10 / 5 / 0 %", "1" to "10 / 5 / 0 %", "2" to "5 / 0 %", "6" to "20 / 0 %", "7" to "10 / 0 %", "5" to "0 % only"), opts)
+            assertEquals(listOf("0" to "20 / 10 / 5 / 0 %", "1" to "10 / 5 / 0 %", "2" to "5 / 0 %", "6" to "20 / 0 %", "7" to "10 / 0 %", "5" to "0 % only", "8" to "Off"), opts)
             assertEquals("old 10 / 4 % → 10 / 5 / 0 %", "1", b.getString("value"))
             assertFalse(b.getString("description").contains("4 %"))
             assertEquals(1, JSONObject(js.call("carbonSettingsDict")).getInt("SETTING_TIMELINE_BATTERY"))
             js.call("carbonSettingsChange", "SETTING_TIMELINE_BATTERY", "\"7\"")
             assertEquals(7, JSONObject(js.call("carbonSettingsSave", "{}")).getInt("SETTING_TIMELINE_BATTERY"))
+            js.call("carbonSettingsChange", "SETTING_TIMELINE_BATTERY", "\"8\"")
+            assertEquals("Off survives the shared settings.js dict", 8, JSONObject(js.call("carbonSettingsSave", "{}")).getInt("SETTING_TIMELINE_BATTERY"))
         }
         JsRuntime.store(ctx).edit().clear().putString("clay-settings", "{\"SETTING_TIMELINE_BATTERY\":\"3\"}").commit()
         JsRuntime(ctx).use { js -> assertEquals("old None → 0 % only", 5, JSONObject(js.call("carbonSettingsDict")).getInt("SETTING_TIMELINE_BATTERY")) }

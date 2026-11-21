@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Carbon Ion</string>
     <string name="widget_name">Carbon Ion weather</string>
-    <string name="widget_description">Carbon Ion watchface weather chart</string>
+    <string name="widget_description">Clock, date and next alarm over the Carbon Ion weather timeline: clouds, rain, events and temperature</string>
     <string name="settings_title">Carbon Ion settings</string>
     <string name="widget_section">Widget</string>
     <string name="bg_label">Background</string>
@@ -12,7 +12,7 @@
     <string name="bg_color_label">Colour</string>
     <string name="bg_opacity">Opacity: %1$d %%</string>
     <string name="style_label">Style</string>
-    <string name="style_desc">Modern draws the chart at your screen\'s full resolution and colour. Classic (watch) is pixel-faithful to the Pebble.</string>
+    <string name="style_desc">Modern draws the chart at your screen\'s full resolution and colour. Classic (watch) keeps the Pebble\'s pixel look; in dark mode heavier clouds are drawn brighter than on the watch.</string>
     <string name="style_modern">Modern (default)</string>
     <string name="style_classic">Classic (watch)</string>
     <string name="clock_font_label">Clock font</string>
@@ -45,11 +45,7 @@
     <string name="settings_save">Save</string>
     <string name="detail_no_data">No forecast yet</string>
     <string name="detail_high_low">H %1$s · L %2$s</string>
-    <string name="detail_next_alarm">Next alarm %1$s</string>
-    <string name="detail_forecast">Forecast</string>
-    <string name="detail_range">%1$d h</string>
-    <string name="detail_chart_description">Hourly forecast chart</string>
-    <string name="detail_scrub_hint">Touch the chart to inspect an hour.</string>
+    <string name="detail_scrub_hint">Touch or drag on the widget\'s chart above to inspect an hour.</string>
     <string name="detail_temp">Temperature</string>
     <string name="detail_feels">feels %1$s</string>
     <string name="detail_rain">Rain</string>
@@ -75,6 +71,25 @@
     <string name="bg_swatch">Background colour %1$s</string>
     <string name="bg_preview">Selected background colour</string>
     <string name="loc_unavailable_short">no location</string>
+    <string name="loc_used">Location %1$s · %2$s</string>
+    <string name="loc_src_fixed">fixed coordinates</string>
+    <string name="loc_src_precise">phone, precise (±%1$s)</string>
+    <string name="loc_src_precise_noacc">phone, precise</string>
+    <string name="loc_src_approx">phone, approximate (±%1$s)</string>
+    <string name="loc_src_approx_noacc">phone, approximate (±2 km)</string>
+    <string name="loc_src_saved">last phone fix</string>
+    <string name="loc_src_fallback">default place (Villars-sur-Ollon)</string>
+    <string name="loc_approx_note">Approximate location can be about 2 km off. On a mountainside that is hundreds of metres of altitude, so temperatures and gusts differ from the watch, which uses the Pebble app\'s precise location.</string>
+    <string name="location_precise">Use precise location</string>
+    <string name="detail_fallback">%1$s was not used (%2$s). The watch falls back the same way.</string>
+    <string name="loc_saved_marker">saved %1$s</string>
+    <string name="loc_saved_marker_noage">saved</string>
+    <string name="chart_description_expired">Weather chart: forecast expired, no current data</string>
+    <string name="detail_expired">Forecast expired</string>
+    <string name="mirror_description">Widget preview</string>
+    <string name="mirror_scrub_hint">Swipe up or down to step through the hours</string>
+    <string name="loc_src_saved_age">saved phone fix from %1$s ago (no current fix)</string>
+    <string name="loc_denied_saved">Location not allowed: showing the last saved phone place. Allow location, or set fixed coordinates in Settings.</string>
     <string name="loc_unavailable">Location unavailable: showing the default place. Allow location, or set fixed coordinates in Settings.</string>
     <string name="loc_no_fix">No location fix yet: showing the default place. Check that location is turned on, or set fixed coordinates in Settings.</string>
     <string name="place_error">Place search failed. Check the connection and try again.</string>

@@ -79,7 +79,8 @@ object PhoneAlarmSync {
 
     /** Sends and returns a short result for the log ("ok", "no watch", "face not open", …). */
     suspend fun sendNow(ctx: Context): String {
-        val seconds = alarmSeconds(ctx)
+        // "Send next alarm to watch" off: send "no alarm" so the face drops one it already has.
+        val seconds = if (WidgetStore.settings(ctx).alarmToWatch) alarmSeconds(ctx) else 0
         runCatching { ctx.sendBroadcast(classicIntent(seconds)) }
         val summary = try {
             val sender = DefaultPebbleSender(ctx)

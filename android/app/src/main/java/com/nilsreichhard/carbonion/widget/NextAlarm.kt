@@ -15,6 +15,7 @@ import java.util.Locale
  */
 object NextAlarm {
     const val DAY_MS = 24 * 3_600_000L
+    const val WEEK_MS = 6 * DAY_MS
     /** Debug builds only: overrides the alarm for screenshots (DebugSamplesReceiver). */
     const val DEBUG_PREF = "debug_alarm_at"
     const val DEBUG_NONE = -1L
@@ -34,10 +35,15 @@ object NextAlarm {
     fun text(ctx: Context, leadingZero: Int, nowMillis: Long = System.currentTimeMillis()): String? =
         info(ctx)?.let { format(it.triggerMillis, nowMillis, DateFormat.is24HourFormat(ctx), leadingZero) }
 
-    /** Time only within 24 h, else weekday + time; 12/24 h and the leading-zero setting as on the clock. */
+    /** Time only within 24 h, weekday + time within [WEEK_MS], else weekday, day of month + time; 12/24 h and the leading-zero setting as on the clock. */
     fun format(triggerMillis: Long, nowMillis: Long, is24h: Boolean, leadingZero: Int, locale: Locale = Locale.getDefault()): String {
         val time = WidgetSettings.clockPattern(is24h, leadingZero) + if (is24h) "" else " a"
-        val pattern = if (triggerMillis - nowMillis > DAY_MS) "EEE $time" else time
+        val ahead = triggerMillis - nowMillis
+        val pattern = when {
+            ahead > WEEK_MS -> "EEE d $time"   // 1.1.6: a weekday alone would read as this week
+            ahead > DAY_MS -> "EEE $time"
+            else -> time
+        }
         return SimpleDateFormat(pattern, locale).format(Date(triggerMillis))
     }
 }

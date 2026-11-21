@@ -14,7 +14,6 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -56,7 +55,7 @@ class FieldStyleTest {
 
     @Test
     fun everyDropdownAndInputOnTheSettingsPageIsAField() {
-        assumeTrue("desktop QuickJS library missing", JvmQuickJs.install())
+        JvmQuickJs.require()
         for (night in listOf(false, true)) {
             RuntimeEnvironment.setQualifiers(if (night) "+night" else "+notnight")
             app.getSharedPreferences(WidgetStore.PREFS, Context.MODE_PRIVATE).edit().clear()

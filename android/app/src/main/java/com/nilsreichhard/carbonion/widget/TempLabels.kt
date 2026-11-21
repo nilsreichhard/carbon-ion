@@ -18,7 +18,28 @@ import kotlin.math.roundToInt
  * digits at [right]. Shared by the Classic and Modern renderers.
  */
 object TempLabels {
-    class Placed(val text: String, val x: Float, val baseline: Float, val inkTop: Float, val inkBottom: Float, val inkRight: Float)
+    class Placed(val text: String, val x: Float, val baseline: Float, val inkTop: Float, val inkBottom: Float, val inkRight: Float,
+                 val inkLeft: Float = inkRight) {
+        val inkCenterX get() = (inkLeft + inkRight) / 2f
+    }
+
+    /**
+     * Share of the chart width the label column's right edge may reach at most (1.1.7). The now line sits
+     * at past / total = 20 % of the chart, so the column normally hugs it; the cap only keeps the labels
+     * from drifting into the chart if that ever changes.
+     */
+    const val MAX_RIGHT_FRAC = 0.30f
+
+    /**
+     * Centre x of the label column for labels [texts] / [paints] (1.1.7, Nils 14:51): the widest label's
+     * ink ends at [maxRight] (a small gap left of the now line), but never right of [capRight]; when the
+     * now line is too close to the left the column falls back to starting at [left] (callers shrink the
+     * labels to fit first).
+     */
+    fun columnCenter(texts: List<String>, paints: List<Paint>, left: Float, maxRight: Float, capRight: Float): Float {
+        val w = columnWidth(texts, paints)
+        return kotlin.math.max(left + w / 2f, kotlin.math.min(maxRight, capRight) - w / 2f)
+    }
 
     /** Coverage counted as visible ink (matches what reads as the glyph edge). */
     const val INK_ALPHA = 96
@@ -79,7 +100,7 @@ object TempLabels {
      * @param snap whole-pixel positions (Classic, pixel-faithful); an odd spare pixel goes to the top padding
      */
     fun place(texts: List<String>, paints: List<Paint>, right: Float, top: Float, bottom: Float,
-              pad: Float, minGap: Float, snap: Boolean = false): List<Placed> {
+              pad: Float, minGap: Float, snap: Boolean = false, centerX: Float? = null): List<Placed> {
         val b = texts.indices.map { ink(texts[it], paints[it]) }
         val inkH = b.sumOf { it.height().toDouble() }.toFloat()
         val avail = bottom - top - 2 * pad
@@ -92,8 +113,10 @@ object TempLabels {
         }
         return texts.indices.map { i ->
             val r = b[i]
-            val x = if (snap) (right - r.right).roundToInt().toFloat() else right - r.right
-            val p = Placed(texts[i], x, y - r.top, y, y + r.height(), x + r.right)
+            // 1.1.6: centred on one vertical axis ([centerX]) instead of right-aligned at [right].
+            val x0 = if (centerX != null) centerX - (r.left + r.right) / 2f else right - r.right
+            val x = if (snap) x0.roundToInt().toFloat() else x0
+            val p = Placed(texts[i], x, y - r.top, y, y + r.height(), x + r.right, x + r.left)
             y += r.height() + gap
             p
         }

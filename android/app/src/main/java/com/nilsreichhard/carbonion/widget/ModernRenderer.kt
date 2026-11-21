@@ -85,12 +85,17 @@ object ModernRenderer {
         val moonDark = if (light) 0xFF56637A.toInt() else 0xFF2B3344.toInt()
         val moonLit = if (light) 0xFFFFFFFF.toInt() else 0xFFF2F2EA.toInt()
         val moonRim = if (light) 0xFF56637A.toInt() else 0xFFB8C0CC.toInt()
-        /** Split layer tones: high, mid, low (lighter to darker); Total uses one. */
-        val cloudHigh = if (light) 0xFFAEB9CA.toInt() else 0xFFE6EBF1.toInt()
-        val cloudMid = if (light) 0xFF8593A9.toInt() else 0xFFB9C3D0.toInt()
-        val cloudLow = if (light) 0xFF5D6B82.toInt() else 0xFF8D9AAC.toInt()
-        val cloudTotal = if (light) 0xFF7D8BA2.toInt() else 0xFFC9D1DB.toInt()
-        val cloudHeavy = if (light) 0xFF465266.toInt() else 0xFF667389.toInt()
+        /**
+         * Cloud tones, weakest to strongest: high, mid, low (Split), Total, heavy (rain/snow/thunder hours).
+         * Heavier always means more contrast with the background: darker on light, brighter on dark.
+         * 1.1.4: dark had it backwards (high brightest, heavy a dim slate), so thin cirrus stood out
+         * and rain clouds sank into the background (the watch's dark heavy LightGray < White does the same).
+         */
+        val cloudHigh = if (light) 0xFFAEB9CA.toInt() else 0xFF7F8B9D.toInt()
+        val cloudMid = if (light) 0xFF8593A9.toInt() else 0xFFA9B4C2.toInt()
+        val cloudLow = if (light) 0xFF5D6B82.toInt() else 0xFFCDD5DF.toInt()
+        val cloudTotal = if (light) 0xFF7D8BA2.toInt() else 0xFFC2CBD6.toInt()
+        val cloudHeavy = if (light) 0xFF465266.toInt() else 0xFFF2F5FA.toInt()
         val faint = if (light) 0xFFFFFFFF.toInt() else 0xFF2A2F38.toInt()
         val chance = 0xFFFF8F1F.toInt()
         val hailRing = 0xFF8E24AA.toInt()
@@ -174,14 +179,26 @@ object ModernRenderer {
         val g = Ctx(c, w, s, Palette(s.lightTheme, spec.accent), spec.density / k, spec, inset, w - inset).also { it.h0 = 1f / k }
         if (spec.scrim) drawScrim(g)
         block(c, 0f, CarbonStyle.DAYLIGHT_H.toFloat(), w) { drawDaylight(g, p, nowMillis, tz, CarbonStyle.DAYLIGHT_H.toFloat()) }
-        if (p != null) {
-            val win = WidgetRenderer.Window.of(p, s, nowMillis, tz)
+        val win = p?.let { WidgetRenderer.Window.of(it, s, nowMillis, tz) }
+        // 1.1.6: expired data (over 24 h, or past its last hour) draws no clouds, rain or curve, only "--".
+        if (p != null && win != null && win.expired) {
+            if (L.hasTemp) block(c, L.tempY.toFloat(), L.tempH.toFloat(), w) {
+                val lh = L.tempH.toFloat()
+                val pos = tempLabelLayout(g.spec.textTypeface, lh, g.left, g.nowX, g.dp, listOf("--", "--", "--"), emptyList(), emptyList(), g.cw)
+                val k = labelFit(lh, g.spec.textTypeface, pos.map { it.text }, g.left, g.nowX, g.dp, g.cw).second
+                for ((i, pl) in pos.withIndex()) label(g, pl.text, pl.x, pl.baseline, (if (i == 1) labelSizes(lh).second else labelSizes(lh).first) * k, i == 1,
+                    if (i == 1) g.pal.ink else g.pal.ink2)
+            }
+        } else if (p != null && win != null) {
             val h = WidgetRenderer.stripHeights(s)
             val precipH = h.precip + L.precipExtra
             val cloudY = (CarbonStyle.DAYLIGHT_H - CarbonStyle.CLOUD_LIFT - CarbonStyle.CLOUD_RAISE).toFloat()
             block(c, cloudY, h.cloud.toFloat(), w) { drawSun(g, p, win, h.cloud.toFloat()); drawClouds(g, p, win, h.cloud) }
-            val precipY = CarbonStyle.DAYLIGHT_H + h.cloud - CarbonStyle.CLOUD_LIFT - CarbonStyle.CLOUD_RAISE
-            val precipLayerH = precipH + CarbonStyle.CLOUD_LIFT + CarbonStyle.CLOUD_RAISE
+            // 1.1.4: the rain hangs just under the lowest cloud the strip can draw (thin gap), not at the
+            // watch's strip edge; the extra rows go to longer bars.
+            val tuck = rainTuck(s, h.cloud)
+            val precipY = CarbonStyle.DAYLIGHT_H + h.cloud - CarbonStyle.CLOUD_LIFT - CarbonStyle.CLOUD_RAISE - tuck
+            val precipLayerH = precipH + CarbonStyle.CLOUD_LIFT + CarbonStyle.CLOUD_RAISE + tuck
             block(c, precipY.toFloat(), precipLayerH.toFloat(), w) { drawRain(g, p, win, precipLayerH.toFloat()) }
             if (h.event > 0) {
                 val evY = CarbonStyle.DAYLIGHT_H + h.cloud + precipH - CarbonStyle.EVENT_ICON_LIFT
@@ -420,6 +437,23 @@ object ModernRenderer {
         cover < th[2] -> 2
         else -> 3
     }
+
+    /** Rows between the rain bars and the bottom of a full-cover cloud (1.1.2 had 3.8 Total, 4.4 Split). */
+    const val RAIN_GAP = 1.0f
+
+    /** Lowest row a cloud can reach in the strip ([drawClouds] / [band] geometry, full cover). */
+    fun cloudBottom(s: WidgetSettings, hCloud: Int): Float = if (s.cloudSplit) {
+        val (cyHigh, cyMid, cyLow) = WidgetRenderer.splitRows(hCloud)
+        val rMax = min(4.2f, (cyMid - cyHigh) * 0.62f)
+        cyLow + rMax * 1.05f * 0.58f
+    } else {
+        val cy = (hCloud / 2).coerceAtMost(hCloud - 5).coerceAtLeast(4).toFloat()
+        cy + min(5.8f, hCloud * 0.4f) * 0.58f
+    }
+
+    /** How far the rain strip moves up into the cloud strip (rows). */
+    fun rainTuck(s: WidgetSettings, hCloud: Int): Float =
+        if (s.cloudSensitivity >= 4) 0f else max(0f, hCloud - cloudBottom(s, hCloud) - RAIN_GAP)
 
     private fun drawClouds(g: Ctx, p: WeatherPayload, win: WidgetRenderer.Window, h: Int) {
         val s = g.s
@@ -750,7 +784,7 @@ object ModernRenderer {
         val nowCol = s.pastHours
         val rem = win.hoursRemaining
         val pts = FloatArray(total + 1); val apt = FloatArray(total + 1)
-        val cur = p.currentTemp
+        val cur = if (win.offset == 0) p.currentTemp else null // main.c: current value only in the fetch hour
         for (i in 0..total) {
             val sl = win.startSlot + i
             pts[i] = when {
@@ -825,21 +859,83 @@ object ModernRenderer {
         // Now line (no dot on the curve).
         val nowT = cur?.toFloat() ?: pts[nowCol]
         if (s.needle == 0 || s.needle == 2) c.drawLine(xNow, 0f, xNow, lh, strokeP(g.pal.needle, 1.6f * g.dp))
-        // Labels: high (top), current (middle, bold), low (bottom), in the chosen text font,
-        // stacked by their ink bounds with equal gaps and right-aligned on the digits.
-        val sm = if (lh > 70f) 15f else 13.5f
-        val md = if (lh > 70f) 23f else 20f
         val tf = g.spec.textTypeface
-        // Watch label column, but always clear of the now line (the ° hangs right of the digits).
-        val degW = labelPaint(tf, md, true).measureText("°")
-        val right = min(g.left + 3f + CarbonStyle.TEMP_LABEL_W, xNow - 2.6f - 1f * g.dp - 2f - degW)
-        val texts = listOf("${hi.roundToInt()}", "${nowT.roundToInt()}", "${lo.roundToInt()}")
-        val paints = listOf(labelPaint(tf, sm, false), labelPaint(tf, md, true), labelPaint(tf, sm, false))
+        val pos = tempLabelLayout(tf, lh, g.left, xNow, g.dp, listOf("${hi.roundToInt()}°", "${nowT.roundToInt()}°", "${lo.roundToInt()}°"), tickXs, tickLens, g.cw)
+        val k = labelFit(lh, tf, pos.map { it.text }, g.left, xNow, g.dp, g.cw).second
+        val sm = labelSizes(lh).first * k; val md = labelSizes(lh).second * k
+        for ((i, pl) in pos.withIndex()) label(g, pl.text, pl.x, pl.baseline, if (i == 1) md else sm, i == 1, if (i == 1) g.pal.ink else g.pal.ink2)
+    }
+
+    /**
+     * Gap between the widest label's ink and the now line's edge (1.1.8, Nils 15:09 "leave a small gap"):
+     * 8 dp on a 4x3 widget (chart ~[GAP_REF_CHART_DP] wide), scaled with the chart width, at least 6 dp and
+     * at most 10 dp.
+     */
+    const val NOW_LABEL_GAP_DP = 8f
+    const val NOW_LABEL_GAP_MIN_DP = 6f
+    const val NOW_LABEL_GAP_MAX_DP = 10f
+    const val GAP_REF_CHART_DP = 340f
+
+    /** The gap in chart units for a chart [graphW] units wide ([dp] units per dp); unknown width: 8 dp. */
+    fun labelGap(dp: Float, graphW: Float): Float {
+        val gapDp = if (graphW == Float.MAX_VALUE || dp <= 0f) NOW_LABEL_GAP_DP
+            else (NOW_LABEL_GAP_DP * (graphW / dp) / GAP_REF_CHART_DP).coerceIn(NOW_LABEL_GAP_MIN_DP, NOW_LABEL_GAP_MAX_DP)
+        return gapDp * dp
+    }
+
+    /** Rightmost label ink: the now line's half width (0.8 dp) plus the gap left of it. */
+    fun labelMaxRight(xNow: Float, dp: Float, graphW: Float = Float.MAX_VALUE) = xNow - 0.8f * dp - labelGap(dp, graphW)
+
+    /** The 1.1.7 gap, used only when the labels wouldn't fit before the now line even at the smallest scale. */
+    const val NOW_LABEL_GAP_TIGHT_DP = 3f
+
+    /**
+     * Rightmost label ink and label scale: the full gap if the labels fit there (shrunk down to 0.45);
+     * on the narrowest widgets, where they wouldn't, the gap narrows to [NOW_LABEL_GAP_TIGHT_DP] instead
+     * of letting the labels overlap the now line.
+     */
+    fun labelFit(lh: Float, tf: Typeface, texts: List<String>, left: Float, xNow: Float, dp: Float, graphW: Float): Pair<Float, Float> {
+        val full = labelMaxRight(xNow, dp, graphW)
+        val k = labelScale(lh, tf, texts, full - (left + 2f))
+        if (TempLabels.columnWidth(texts, labelPaints(tf, lh, k)) <= full - (left + 2f)) return full to k
+        val tight = xNow - (0.8f + NOW_LABEL_GAP_TIGHT_DP) * dp
+        return tight to labelScale(lh, tf, texts, tight - (left + 2f))
+    }
+
+    /** Label sizes (small, current) for a chart [lh] rows tall. */
+    fun labelSizes(lh: Float): Pair<Float, Float> = if (lh > 70f) 15f to 23f else 13.5f to 20f
+
+    private fun labelPaints(tf: Typeface, lh: Float, k: Float) = labelSizes(lh).let { (sm, md) ->
+        listOf(labelPaint(tf, sm * k, false), labelPaint(tf, md * k, true), labelPaint(tf, sm * k, false)) }
+
+    /** 1 when [texts] fit in [avail] rows, else the factor (≥ 0.6) that makes them fit. */
+    fun labelScale(lh: Float, tf: Typeface, texts: List<String>, avail: Float): Float {
+        val w = TempLabels.columnWidth(texts, labelPaints(tf, lh, 1f))
+        // 1.1.7: floor 0.45 so even "-12°" fits a 2-cell widget's short past span instead of touching the now line.
+        if (w <= avail || w <= 0f) return 1f
+        // Glyph widths don't scale exactly linearly: step down until the scaled column really fits.
+        var k = (avail / w * 0.98f).coerceAtLeast(0.45f)
+        repeat(6) { if (k > 0.45f && TempLabels.columnWidth(texts, labelPaints(tf, lh, k)) > avail) k = (k * 0.97f).coerceAtLeast(0.45f) }
+        return k
+    }
+
+    /**
+     * Labels: high (top), current (middle, bold), low (bottom), in the chosen text font, stacked by their
+     * ink with equal gaps over the full chart height, and (1.1.6) centred on one vertical axis: the middle
+     * of a label column at least the watch's width, widened for long labels, kept clear of the now line.
+     */
+    fun tempLabelLayout(tf: Typeface, lh: Float, left: Float, xNow: Float, dp: Float, texts: List<String>,
+                        tickXs: List<Float>, tickLens: List<Float>, graphW: Float = Float.MAX_VALUE): List<TempLabels.Placed> {
+        // Long labels (three digits °F, "-12°") in a short past span: shrink all three alike to fit before the now line.
+        val (maxRight, k) = labelFit(lh, tf, texts, left, xNow, dp, graphW)
+        val paints = labelPaints(tf, lh, k)
+        val colW = TempLabels.columnWidth(texts, paints)
+        // 1.1.7: right-aligned to the now line (gap NOW_LABEL_GAP_DP), capped at MAX_RIGHT_FRAC of the chart.
+        val cx = TempLabels.columnCenter(texts, paints, left + 2f, maxRight, left + TempLabels.MAX_RIGHT_FRAC * graphW)
         // Full chart height: the same small ink padding (4 %, ≥ 1.5 dp) under the top edge and above
         // the tallest hour tick under the label column (the ticks elsewhere don't constrain it).
-        val bottom = TempLabels.bandBottom(lh, tickXs, tickLens, right - TempLabels.columnWidth(texts, paints) - 1f, right + degW + 1f)
-        val pos = TempLabels.place(texts, paints, right, 0f, bottom, pad = TempLabels.pad(lh, 1.5f * g.dp), minGap = 1.6f)
-        for ((i, pl) in pos.withIndex()) label(g, pl.text + "°", pl.x, pl.baseline, if (i == 1) md else sm, i == 1, if (i == 1) g.pal.ink else g.pal.ink2)
+        val bottom = TempLabels.bandBottom(lh, tickXs, tickLens, cx - colW / 2f - 1f, cx + colW / 2f + 1f)
+        return TempLabels.place(texts, paints, cx + colW / 2f, 0f, bottom, pad = TempLabels.pad(lh, 1.5f * dp), minGap = 1.6f, centerX = cx)
     }
 
     private val textTL = ThreadLocal.withInitial { Paint(Paint.ANTI_ALIAS_FLAG) }

@@ -36,8 +36,22 @@ object DetailData {
             p.cloudLow[j], p.cloudMid[j], p.cloudHigh[j], p.wind[j], p.storm[j], p.fog[j], p.shortwaveWm2[j], p.weatherCode[j])
     }
 
-    /** Calendar days from today with at least [minHours] forecast hours in the payload. */
-    fun days(p: WeatherPayload, nowMillis: Long, tz: TimeZone, minHours: Int = 6): List<Day> {
+    /**
+     * The payload slots the watch face shows for these settings (main.c prv_push_weather_to_layers:
+     * GRAPH_HOURS from 12 − past + hours since the fetch, cut at valid_hours). Gust / storm / fog / snow
+     * flags outside this window never reach the watch's event row, so the app mustn't report them.
+     */
+    fun watchSlots(p: WeatherPayload, s: WidgetSettings, nowMillis: Long, tz: TimeZone): IntRange {
+        val w = WidgetRenderer.Window.of(p, s, nowMillis, tz)
+        return w.startSlot until min(w.startSlot + s.totalHours, min(p.validHours, WeatherPayload.HOURS))
+    }
+
+    /**
+     * Calendar days from today with at least [minHours] forecast hours in the payload. Event words
+     * (gusts, thunder, fog, snow) only come from [eventSlots], the hours the watch face shows.
+     */
+    fun days(p: WeatherPayload, nowMillis: Long, tz: TimeZone, minHours: Int = 6,
+             eventSlots: IntRange = 0 until WeatherPayload.HOURS): List<Day> {
         val cal = Calendar.getInstance(tz)
         fun dayStart(t: Long): Long = cal.run {
             timeInMillis = t; set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0); timeInMillis
@@ -50,7 +64,7 @@ object DetailData {
         }
         return groups.filter { it.value.size >= minHours }.map { (d, js) ->
             val ev = LinkedHashSet<String>()
-            js.forEach { j ->
+            js.filter { it in eventSlots }.forEach { j ->
                 if (p.storm[j] || p.weatherCode[j] in 95..99) ev += "thunder"
                 if (p.wind[j]) ev += "gusts"
                 if (p.fog[j]) ev += "fog"

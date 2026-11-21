@@ -17,6 +17,7 @@ import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import java.util.TimeZone
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -124,6 +125,19 @@ object WidgetUpdater {
     }
 
     /**
+     * 1.1.4: size for the widget mirror in the app, [wDp] wide: the first placed widget's shape
+     * (height / width, kept between 0.55 and 1.1), else a 4×4-like 0.9.
+     */
+    fun mirrorSize(ctx: Context, wDp: Int): Size {
+        val mgr = AppWidgetManager.getInstance(ctx)
+        val ids = runCatching { mgr.getAppWidgetIds(android.content.ComponentName(ctx, CarbonWidgetProvider::class.java)) }.getOrNull()
+        val ratio = ids?.firstOrNull()?.let { sizeOf(mgr, it).let { s -> s.hDp.toFloat() / s.wDp } } ?: 0.9f
+        return mirrorSize(wDp, ratio)
+    }
+
+    fun mirrorSize(wDp: Int, ratio: Float): Size = Size(wDp, (wDp * ratio.coerceIn(0.55f, 1.1f)).roundToInt())
+
+    /**
      * Clock size in rows: the watch's 62, or less when the widget is narrow.
      */
     fun clockRows(sample: String, widthRows: Int,
@@ -152,7 +166,10 @@ object WidgetUpdater {
     fun build(ctx: Context, size: Size, widgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID,
               alarmOverride: String? = null, useAlarmOverride: Boolean = false,
               nowMillis: Long = System.currentTimeMillis(), batteryOverride: WidgetRenderer.Battery? = null,
-              useBatteryOverride: Boolean = false): RemoteViews {
+              useBatteryOverride: Boolean = false,
+              /** Gets the hour columns of the render (null without data), for the app's touch-to-inspect mirror. */
+              columnsOut: ((MirrorColumns?) -> Unit)? = null): RemoteViews {
+        var columnsSent = false
         ensureIconFont(ctx)
         val ui = WidgetStore.ui(ctx)
         val modern = ui.style == UiOptions.Style.MODERN
@@ -169,15 +186,17 @@ object WidgetUpdater {
         val sample = clockPattern.replace(Regex("[Hh]+"), "00").replace("mm", "00")
         val rowDp = size.hDp / layout.totalRows.toFloat()
         val widthRows = (size.wDp / rowDp).roundToInt()
-        val alarmInfo = if (useAlarmOverride) null else NextAlarm.info(ctx)
-        val alarm = if (useAlarmOverride) alarmOverride
+        val alarmInfo = if (useAlarmOverride || !s.showAlarm) null else NextAlarm.info(ctx)
+        val alarm = if (!s.showAlarm) null else if (useAlarmOverride) alarmOverride
             else alarmInfo?.let { NextAlarm.format(it.triggerMillis, nowMillis, is24h, s.leadingZero) }
         val clockRows = clockRows(sample, widthRows, clockTf, ui.clockSize.factor)
-        val battery = if (useBatteryOverride) batteryOverride else BatteryTracker.read(ctx)
+        // Read even when the markers are off so the drain history is ready if they're switched back on.
+        val battery = (if (useBatteryOverride) batteryOverride else BatteryTracker.read(ctx))
+            .takeIf { s.timelineBattery != WidgetSettings.BATTERY_OFF }
         val payload = WidgetStore.payload(ctx, s.celsius)
 
         val v = RemoteViews(ctx.packageName, layout.layoutRes)
-        v.setContentDescription(R.id.chart, chartDescription(ctx, payload))
+        v.setContentDescription(R.id.chart, chartDescription(ctx, payload, s, nowMillis))
         v.setInt(android.R.id.background, "setBackgroundColor", bg.argb)
 
         // City row + date (text font) and the live clock (clock font): one small layout per font,
@@ -232,9 +251,21 @@ object WidgetUpdater {
                 val spec = ModernRenderer.Spec.forWidget(size.wDp, size.hDp, density, layout, sample, clockRows, battery,
                     clockTf, textTf, ui.scrim && bg.mode == WidgetStore.BG_TRANSPARENT, accent, cornerRadiusPx(ctx),
                     textShadow = bg.mode == WidgetStore.BG_TRANSPARENT)
+                if (columnsOut != null && !columnsSent) {
+                    columnsSent = true
+                    val c = ModernRenderer.columns(spec, sv)
+                    columnsOut(payload?.let { MirrorColumns.even(c.leftPx, c.colPx, c.total, spec.widthPx.toFloat(),
+                        WidgetRenderer.Window.of(it, sv.copy(forecastHours = c.forecastHours), nowMillis, TimeZone.getDefault()).startSlot) })
+                }
                 ModernRenderer.render(payload, sv, spec, nowMillis)
             } else {
                 val spec = WidgetRenderer.Spec.forWidget(size.wDp, size.hDp, density, layout, sample, clockRows, battery, clockTf)
+                if (columnsOut != null && !columnsSent) {
+                    columnsSent = true
+                    val fs = sv.copy(forecastHours = WidgetLayout.fitHours(sv.forecastHours, spec.widthRows))
+                    columnsOut(payload?.let { MirrorColumns.rows(spec.widthRows, fs.totalHours,
+                        WidgetRenderer.Window.of(it, fs, nowMillis, TimeZone.getDefault()).startSlot) })
+                }
                 WidgetRenderer.render(payload, sv, spec, nowMillis)
             }
             val icon = WidgetRenderer.conditionIcon(payload, nowMillis, TimeZone.getDefault(), ink, iconPx)
@@ -302,9 +333,14 @@ object WidgetUpdater {
      * when the phone's location wasn't available and the default place was used.
      */
     fun staleCity(ctx: Context, city: String, p: WeatherPayload?, nowMillis: Long,
-                  noLocation: Boolean = WidgetStore.placeSource(ctx) == LocationHelper.VILLARS.source): String {
+                  noLocation: Boolean = WidgetStore.placeSource(ctx) == LocationHelper.VILLARS.source,
+                  savedFixTime: Long? = WidgetStore.placeUsed(ctx)?.takeIf { it.source == LocationHelper.SOURCE_SAVED }?.let { it.fixTime ?: 0L }): String {
         val marks = ArrayList<String>()
         if (noLocation) marks.add(ctx.getString(R.string.loc_unavailable_short))
+        // 1.1.4: the fetch had to use an old phone fix (no fresh one in the background): say so, with its age.
+        if (savedFixTime != null) marks.add(
+            if (savedFixTime > 0L) ctx.getString(R.string.loc_saved_marker, LocationHelper.describeAge(max(0L, nowMillis - savedFixTime)))
+            else ctx.getString(R.string.loc_saved_marker_noage))
         if (p != null && p.fetchTime > 0L) {
             val h = ((nowMillis / 1000 - p.fetchTime) / 3600).toInt()
             if (h >= STALE_HOURS) marks.add(if (h >= 48) ctx.getString(R.string.stale_days, h / 24) else ctx.getString(R.string.stale_hours, h))
@@ -313,10 +349,13 @@ object WidgetUpdater {
     }
 
     /** TalkBack summary of the chart image: now, high and low. */
-    fun chartDescription(ctx: Context, p: WeatherPayload?): String {
+    fun chartDescription(ctx: Context, p: WeatherPayload?, s: WidgetSettings, nowMillis: Long, tz: TimeZone = TimeZone.getDefault()): String {
         if (p == null) return ctx.getString(R.string.chart_description_empty)
-        fun t(v: Double?) = v?.let { "${it.roundToInt()}°" } ?: "—"
-        return ctx.getString(R.string.chart_description, t(p.currentTemp), t(p.highTemp), t(p.lowTemp))
+        if (p.isExpired(nowMillis, tz)) return ctx.getString(R.string.chart_description_expired)
+        fun t(v: Number?) = v?.let { "${it.toDouble().roundToInt()}°" } ?: "—"
+        // 1.1.6: high / low of the window the chart shows (its labels), not the payload's 24 h values.
+        val hl = WidgetRenderer.windowHiLo(p, s, nowMillis, tz)
+        return ctx.getString(R.string.chart_description, t(p.displayTemp(nowMillis, tz)), t(hl?.first), t(hl?.second))
     }
 
     /** Material You accent (Android 12+) when chosen: darker tone on light, lighter on dark. */

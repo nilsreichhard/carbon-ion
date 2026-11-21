@@ -118,6 +118,14 @@ G.carbonFetchWeather = function (hostJson) {
 		localStorage.setItem(LAST_FETCH_KEY, J({ t: Date.now(), provider: payload.provider, requested: wxOpts.provider,
 			attribution: payload.attribution || '', hours: payload.valid_hours }));
 		out = { payload: payload };
+		/* 1.1.4: what the data really came from (weather/index.js fetchWeather: a keyed provider without a key
+		 * keeps the Open-Meteo model; a rejected key or failure retries Open-Meteo with best_match). */
+		var usedProv = payload.provider || wxOpts.provider;
+		out.used = {
+			provider: usedProv, requested: wxOpts.provider,
+			model: usedProv !== 'openmeteo' ? '' : (fellBack && !/no API key/.test(fellBack) ? 'best_match' : wxOpts.model),
+			fallback: fellBack ? net.maskUrlsIn(fellBack).slice(0, 120) : '',
+		};
 	});
 	if (!out) out = { error: 'weather callback did not complete (host HTTP bridge must be synchronous)' };
 	if (out.error) return J(out);
@@ -167,7 +175,18 @@ var SKIP_KEYS = {
 	SETTING_CALENDAR_SOURCE_3: 1, SETTING_CALENDAR_ICS_URL_3: 1, SETTING_CALENDAR_COLOR_3: 1, SETTING_CALENDAR_PLACE_3: 1,
 	SETTING_BACKLIGHT_COLORS: 1, SETTING_SHOW_BT_ALERT: 1, SETTING_SHOW_SILENT_MODE: 1,
 	SETTING_STEP_DISPLAY: 1,
-	SETTING_PHONE_ALARM: 1, /* 3.3.0 watch face: the widget always shows the alarm */
+	SETTING_PHONE_ALARM: 1, /* the watch's Advanced toggle; 1.1.3 shows it next to the date instead (ANDROID_ITEMS_AFTER) */
+};
+
+/* 1.1.3: phone-only items placed right after a watch item. "Show next alarm" reuses the watch's
+ * SETTING_PHONE_ALARM key (widget date row + app header); "Send next alarm to watch" gates PhoneAlarmSync. */
+var ANDROID_ITEMS_AFTER = {
+	SETTING_DATE_FORMAT: [
+		{ type: 'toggle', messageKey: 'SETTING_PHONE_ALARM', label: 'Show next alarm',
+			description: 'Shows the phone\u2019s next alarm after the date, on the widget and in the app.', defaultValue: true },
+		{ type: 'toggle', messageKey: 'SETTING_ANDROID_ALARM_WATCH', label: 'Send next alarm to watch',
+			description: 'Shares the next alarm with the Carbon Ion watch face, which shows it when its own \u201cShow next phone alarm\u201d setting is on.', defaultValue: true },
+	],
 };
 var SKIP_TYPES = { 'debug-info': 1 };
 
@@ -188,6 +207,9 @@ function defaultValueOf(it) {
 function configDefaults() {
 	var d = {};
 	walkConfig(CLAY_CONFIG, function (it) { if (it.messageKey) d[it.messageKey] = defaultValueOf(it); });
+	Object.keys(ANDROID_ITEMS_AFTER).forEach(function (k) {
+		ANDROID_ITEMS_AFTER[k].forEach(function (it) { if (d[it.messageKey] === undefined) d[it.messageKey] = defaultValueOf(it); });
+	});
 	return d;
 }
 
@@ -216,6 +238,7 @@ function ensureSettingsSeeded() {
 /* settings.js buildSettingsDict keeps only 0/1 for the theme (the watch has no "system"); pass 2 through. */
 function androidDict(flat) {
 	var dict = settings.buildSettingsDict(flat);
+	dict.SETTING_ANDROID_ALARM_WATCH = settings.extractBool(flat.SETTING_ANDROID_ALARM_WATCH) === 0 ? 0 : 1;
 	if (BATTERY_MIGRATE[dict.SETTING_TIMELINE_BATTERY] !== undefined) dict.SETTING_TIMELINE_BATTERY = BATTERY_MIGRATE[dict.SETTING_TIMELINE_BATTERY];
 	var t = settings.extractInt(flat.SETTING_LIGHT_THEME);
 	dict.SETTING_LIGHT_THEME = (t === 0 || t === 1) ? t : THEME_SYSTEM;
@@ -235,6 +258,8 @@ var ANDROID_OPTIONS = {
 			{ value: '6', label: '20 / 0 %' },
 			{ value: '7', label: '10 / 0 %' },
 			{ value: '5', label: '0 % only' },
+			/* 1.1.3: no markers (WidgetSettings.BATTERY_OFF). */
+			{ value: '8', label: 'Off' },
 		],
 		description: 'When the phone battery is expected to reach each level (while not charging).',
 	},
@@ -264,10 +289,7 @@ function buildPage(userData) {
 	walkConfig(CLAY_CONFIG, function (it, sec) {
 		if (sec && it.messageKey && !SKIP_KEYS[it.messageKey]) sectionKeep[CLAY_CONFIG.indexOf(sec)] = true;
 	});
-	walkConfig(CLAY_CONFIG, function (it, sec) {
-		if (SKIP_TYPES[it.type]) return;
-		if (it.messageKey && SKIP_KEYS[it.messageKey]) return;
-		if (sec && !sectionKeep[CLAY_CONFIG.indexOf(sec)]) return;
+	function add(it) {
 		var m = {
 			type: it.type, key: it.messageKey || null, id: it.id || null, label: it.label || '',
 			description: (it.messageKey && ANDROID_OPTIONS[it.messageKey] && ANDROID_OPTIONS[it.messageKey].description) || it.description || '',
@@ -283,6 +305,13 @@ function buildPage(userData) {
 		items.push(m);
 		if (m.key) byKey[m.key] = m;
 		if (m.id) byId[m.id] = m;
+		(it.messageKey && ANDROID_ITEMS_AFTER[it.messageKey] || []).forEach(add);
+	}
+	walkConfig(CLAY_CONFIG, function (it, sec) {
+		if (SKIP_TYPES[it.type]) return;
+		if (it.messageKey && SKIP_KEYS[it.messageKey]) return;
+		if (sec && !sectionKeep[CLAY_CONFIG.indexOf(sec)]) return;
+		add(it);
 	});
 
 	function api(m) {

@@ -79,8 +79,14 @@ object WidgetRenderer {
         val g = Ctx(c, w, s, CarbonStyle.Palette(s.lightTheme))
         // The watch adds the daylight layer first; clouds overlap its last rows.
         block(c, 0, CarbonStyle.DAYLIGHT_H, w) { drawDaylight(g, p, nowMillis, tz, CarbonStyle.DAYLIGHT_H, spec.battery) }
-        if (p != null) {
-            val win = Window.of(p, s, nowMillis, tz)
+        val win = p?.let { Window.of(it, s, nowMillis, tz) }
+        // 1.1.6: expired data (over 24 h, or past its last hour) draws no clouds, rain or curve, only "--".
+        if (p != null && win != null && win.expired) {
+            if (L.hasTemp) block(c, L.tempY, L.tempH, w) {
+                val pos = tempLabelLayout(L.tempH, nowX(g).toFloat(), listOf("--", "--", "--"), emptyList(), emptyList(), g.w.toFloat())
+                for ((i, pl) in pos.withIndex()) label(g, pl.text, pl.x, pl.baseline, if (i == 1) CarbonStyle.TEMP_FONT_MD else CarbonStyle.TEMP_FONT_SM, i == 1)
+            }
+        } else if (p != null && win != null) {
             val h = stripHeights(s)
             val precipH = h.precip + L.precipExtra
             val cloudY = CarbonStyle.DAYLIGHT_H - CarbonStyle.CLOUD_LIFT - CarbonStyle.CLOUD_RAISE
@@ -175,16 +181,38 @@ object WidgetRenderer {
     private fun nowX(g: Ctx) = g.w * g.s.pastHours / g.s.totalHours
 
     /** Which payload slots are on screen (graph_common.h hour window). */
-    class Window(val startSlot: Int, val currentHour: Int, val hoursRemaining: Int) {
+    /** [offset]: whole hours since the top of the fetch hour (main.c prv_weather_data_offset); 0 = the fetch hour. */
+    class Window(val startSlot: Int, val currentHour: Int, val hoursRemaining: Int, val offset: Int = 0,
+                 /** main.c: data older than 6 h (condition icon dropped) / older than 24 h or run out ("--", no data drawn). */
+                 val stale: Boolean = false, val expired: Boolean = false) {
         companion object {
             fun of(p: WeatherPayload, s: WidgetSettings, nowMillis: Long, tz: TimeZone): Window {
-                // The watch moves its "now" column on as time passes after a fetch.
-                val shift = max(0L, floor((nowMillis / 1000 - p.fetchTime) / 3600.0).toLong()).toInt()
+                // The watch moves its "now" column on at each top of the hour after the fetch hour.
+                val shift = p.hoursSinceFetchHour(nowMillis, tz)
                 val start = min(CarbonStyle.PAYLOAD_NOW_SLOT - s.pastHours + shift, WeatherPayload.HOURS - s.totalHours - 1).coerceAtLeast(0)
                 val cal = Calendar.getInstance(tz).apply { timeInMillis = nowMillis }
-                return Window(start, cal.get(Calendar.HOUR_OF_DAY), p.validHours - start)
+                return Window(start, cal.get(Calendar.HOUR_OF_DAY), p.validHours - start, shift, p.isStale(nowMillis), p.isExpired(nowMillis, tz))
             }
         }
+    }
+
+    /**
+     * High / low of the visible window, as the chart labels show them (temp_layer.c window_high/low,
+     * the current reading at the now column in the fetch hour); null when expired.
+     */
+    fun windowHiLo(p: WeatherPayload, s: WidgetSettings, nowMillis: Long, tz: TimeZone): Pair<Int, Int>? {
+        val win = Window.of(p, s, nowMillis, tz)
+        if (win.expired) return null
+        val cur = if (win.offset == 0) p.currentTemp else null
+        var hi = Int.MIN_VALUE; var lo = Int.MAX_VALUE
+        for (i in 0..s.totalHours) {
+            if (i > 0 && i >= win.hoursRemaining) break
+            val sl = win.startSlot + i
+            if (sl >= WeatherPayload.HOURS) break
+            val t = (if (i == s.pastHours && cur != null) cur else p.tempHourly[sl]).roundToInt()
+            hi = max(hi, t); lo = min(lo, t)
+        }
+        return if (hi == Int.MIN_VALUE) null else hi to lo
     }
 
     // ------------------------------------------------------------- daylight
@@ -597,7 +625,8 @@ object WidgetRenderer {
         val nowCol = s.pastHours
         val rem = win.hoursRemaining
         val pts = IntArray(total + 1); val apt = IntArray(total + 1)
-        val cur = p.currentTemp?.roundToInt()
+        // main.c: the fetch's current temperature only in the fetch hour, then the hourly slot.
+        val cur = (if (win.offset == 0) p.currentTemp else null)?.roundToInt()
         for (i in 0..total) {
             val sl = win.startSlot + i
             pts[i] = when {
@@ -668,15 +697,28 @@ object WidgetRenderer {
         }
         // prv_draw_needle
         if (s.needle == 0 || s.needle == 2) rect(c, xNow - 1, 0, 2, lh, g.pal.needle)
-        // prv_draw_labels, but stacked by glyph ink (TempLabels): equal gaps, current midway, right-aligned digits.
-        val right = 2f + CarbonStyle.TEMP_LABEL_W
-        val texts = listOf(hi.toString(), (cur ?: pts[nowCol]).toString(), lo.toString())
-        val paints = listOf(labelPaint(CarbonStyle.TEMP_FONT_SM, false), labelPaint(CarbonStyle.TEMP_FONT_MD, true), labelPaint(CarbonStyle.TEMP_FONT_SM, false))
-        // Full chart height: ink padded 4 % (≥ 1 px) under the top and above the tallest hour tick under the labels.
-        val bottom = TempLabels.bandBottom(lh.toFloat(), tickXs, tickLens, right - TempLabels.columnWidth(texts, paints) - 1f, right + 1f)
-        val pos = TempLabels.place(texts, paints, right, 0f, bottom,
-            pad = TempLabels.pad(lh.toFloat(), 1f).roundToInt().toFloat(), minGap = 1f, snap = true)
+        val pos = tempLabelLayout(lh, xNow.toFloat(), listOf(hi.toString(), (cur ?: pts[nowCol]).toString(), lo.toString()), tickXs, tickLens, g.w.toFloat())
         for ((i, pl) in pos.withIndex()) label(g, pl.text, pl.x, pl.baseline, if (i == 1) CarbonStyle.TEMP_FONT_MD else CarbonStyle.TEMP_FONT_SM, i == 1)
+    }
+
+    /**
+     * prv_draw_labels, but stacked by glyph ink (TempLabels): equal gaps over the full height, current
+     * midway, and (1.1.6) centred on one vertical axis in a column at least the watch's 32 px wide,
+     * widened for long labels and kept clear of the now needle. Whole pixels (snap).
+     */
+    /** Gap in rows between the labels' ink and the 2-row needle's left edge (1.1.8: 7 rows, ~9-10 dp; a row is ~1.3-1.5 dp). */
+    const val NOW_LABEL_GAP = 7f
+
+    fun tempLabelLayout(lh: Int, xNow: Float, texts: List<String>, tickXs: List<Float>, tickLens: List<Float>,
+                        graphW: Float = Float.MAX_VALUE): List<TempLabels.Placed> {
+        val paints = listOf(labelPaint(CarbonStyle.TEMP_FONT_SM, false), labelPaint(CarbonStyle.TEMP_FONT_MD, true), labelPaint(CarbonStyle.TEMP_FONT_SM, false))
+        val colW = TempLabels.columnWidth(texts, paints)
+        // 1.1.7: right-aligned to the needle (left edge xNow - 1, then the gap), capped at MAX_RIGHT_FRAC of the width.
+        val cx = TempLabels.columnCenter(texts, paints, 2f, xNow - 1f - NOW_LABEL_GAP, 2f + TempLabels.MAX_RIGHT_FRAC * graphW)
+        // Full chart height: ink padded 4 % (≥ 1 px) under the top and above the tallest hour tick under the labels.
+        val bottom = TempLabels.bandBottom(lh.toFloat(), tickXs, tickLens, cx - colW / 2f - 1f, cx + colW / 2f + 1f)
+        return TempLabels.place(texts, paints, cx + colW / 2f, 0f, bottom,
+            pad = TempLabels.pad(lh.toFloat(), 1f).roundToInt().toFloat(), minGap = 1f, snap = true, centerX = cx)
     }
 
     /** Per thread, like ModernRenderer's scratch paints (widget and app render concurrently). */
@@ -757,11 +799,12 @@ object WidgetRenderer {
 
     /** The condition icon shown right of the city (time_layer.c cond_label, IcoMoon 18). */
     fun conditionIcon(p: WeatherPayload?, nowMillis: Long, tz: TimeZone, color: Int, sizePx: Int): Bitmap? {
-        if (p == null || iconTypeface == null) return null
+        // main.c: weather older than 6 h drops the condition glyph (and "--" once expired).
+        if (p == null || iconTypeface == null || p.isStale(nowMillis) || p.isExpired(nowMillis, tz)) return null
         val cal = Calendar.getInstance(tz).apply { timeInMillis = nowMillis }
         val m = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
         val isDay = m >= p.sunriseHour * 60 + p.sunriseMinute && m < p.sunsetHour * 60 + p.sunsetMinute
-        val glyph = conditionGlyph(p.currentCode, isDay) ?: return null
+        val glyph = conditionGlyph(p.displayCode(nowMillis, tz), isDay) ?: return null
         val b = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         iconGlyph(Canvas(b), glyph, sizePx / 2f, sizePx / 2f, sizePx.toFloat(), color)
         return b

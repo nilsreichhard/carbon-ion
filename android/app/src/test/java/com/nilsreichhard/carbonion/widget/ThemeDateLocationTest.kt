@@ -13,7 +13,6 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -97,7 +96,7 @@ class ThemeDateLocationTest {
 
     @Test
     fun settingsPageHasSystemThemeShortDateAndNoBottomSave() {
-        assumeTrue("desktop QuickJS library missing", JvmQuickJs.install())
+        JvmQuickJs.require()
         prefs().edit().clear().commit()
         val ctl = Robolectric.buildActivity(SettingsActivity::class.java).setup()
         val act = ctl.get()

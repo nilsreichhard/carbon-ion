@@ -462,8 +462,7 @@ class SettingsActivity : AppCompatActivity() {
         WidgetUpdater.updateAll(this)
         val app = applicationContext
         Thread {
-            // Fresh phone fix while the app is in the foreground (widget refreshes reuse it).
-            if (LocationHelper.hasPermission(app)) LocationHelper.current(app)?.let { WidgetStore.savePhoneLocation(app, it.latitude, it.longitude) }
+            // 1.1.6: the fetch takes its own fix (LocationHelper.resolve: recent only, real fix time).
             WeatherWorker.schedule(app, replace = true)
             WeatherWorker.runNow(app)
         }.start()

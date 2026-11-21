@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 1.1.4: precise location (the watch gets the Pebble app's precise fix; approximate is ±2 km). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Redraw from the last good data after a reboot (WorkManager declares it too). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 

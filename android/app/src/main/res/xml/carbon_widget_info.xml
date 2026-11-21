@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:configure="com.nilsreichhard.carbonion.widget.SettingsActivity"
     android:description="@string/widget_description"
     android:initialLayout="@layout/widget_carbon"
@@ -8,9 +9,11 @@
     android:minResizeHeight="80dp"
     android:minHeight="180dp"
     android:previewImage="@drawable/widget_preview"
+    android:previewLayout="@layout/widget_preview_layout"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="4"
     android:targetCellHeight="3"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen"
-    android:widgetFeatures="reconfigurable|configuration_optional" />
+    android:widgetFeatures="reconfigurable|configuration_optional"
+    tools:targetApi="s" />

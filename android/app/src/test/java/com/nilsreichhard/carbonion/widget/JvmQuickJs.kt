@@ -35,6 +35,18 @@ object JvmQuickJs {
         return true
     }
 
+    /**
+     * For a test's @Before: installs the library, or fails with how to build it. The JS tests used to skip
+     * silently without it; now only -Pcarbon.skipQuickJs=true (e.g. a CI box without the build) skips them.
+     */
+    fun require() {
+        if (install()) return
+        val msg = "QuickJS JNI library not found at ${lib.path}. Build it (README, \"JS tests\": macOS .dylib; on Linux the same " +
+            "cmake build gives libquickjs-java-wrapper.so, pass -Pcarbon.quickjs=/path/to/it), or run with -Pcarbon.skipQuickJs=true to skip."
+        if (System.getProperty("carbon.skipQuickJs") == "true") org.junit.Assume.assumeTrue(msg, false)
+        throw AssertionError(msg)
+    }
+
     fun reset() {
         JsRuntime.http = JsRuntime.Http { u, h -> JsRuntime.urlConnectionGet(u, h) }
     }

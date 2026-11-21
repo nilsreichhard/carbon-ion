@@ -23,8 +23,6 @@ import androidx.core.widget.TextViewCompat
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
-import com.google.android.material.chip.Chip
-import com.google.android.material.chip.ChipGroup
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.snackbar.Snackbar
@@ -37,20 +35,22 @@ import kotlin.math.roundToInt
 import com.google.android.material.R as M
 
 /**
- * The expanded screen (tap the widget, or the app icon): header with city,
- * temperature, condition and next alarm; the large Modern chart with
- * touch-to-inspect; the next days from the hourly forecast; when and where
+ * The expanded screen (tap the widget, or the app icon): the widget itself (mirror), touch or drag
+ * its chart for an hour's details right under it (1.1.6: replaces the separate Forecast chart);
+ * temperature, condition and where the data is for; the next days from the hourly forecast; when and where
  * the data came from; Refresh and Settings in the toolbar. Light/dark follows
  * the theme setting (Follow system by default); Material You colours on Android 12+.
  */
 class DetailActivity : AppCompatActivity() {
     private val dp get() = resources.displayMetrics.density
     private lateinit var content: LinearLayout
-    private lateinit var chart: ChartView
     private lateinit var details: LinearLayout
-    private var hours = 0
+    /** Payload slot inspected on the mirror (kept across rebuilds while it's on screen). */
+    private var selectedSlot: Int? = null
     private var light = true
     private var hadPermission = false
+    /** The settings dict the screen was last built from. */
+    private var boundDict: String? = null
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == null || key == "payload" || key == "dict" || key == "city" || key == "ui" || key == "place_source") runOnUiThread {
             if (WidgetStore.settings(this).lightTheme != light) recreate() else bind()
@@ -65,7 +65,7 @@ class DetailActivity : AppCompatActivity() {
         DynamicColors.applyToActivityIfAvailable(this)
         super.onCreate(savedInstanceState)
         WidgetUpdater.ensureIconFont(this)
-        hours = savedInstanceState?.getInt("hours") ?: 0
+        selectedSlot = savedInstanceState?.getInt("slot", -1)?.takeIf { it >= 0 }
         hadPermission = LocationHelper.hasPermission(this)
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; fitsSystemWindows = true }
@@ -91,12 +91,17 @@ class DetailActivity : AppCompatActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState); outState.putInt("hours", hours)
+        super.onSaveInstanceState(outState); outState.putInt("slot", selectedSlot ?: -1)
     }
 
     override fun onStart() {
         super.onStart()
-        getSharedPreferences(WidgetStore.PREFS, MODE_PRIVATE).registerOnSharedPreferenceChangeListener(prefsListener)
+        val prefs = getSharedPreferences(WidgetStore.PREFS, MODE_PRIVATE)
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        // Settings saved while this screen was stopped (the listener is off then): redraw now, e.g. the alarm row.
+        if (::content.isInitialized && prefs.getString("dict", null) != boundDict) {
+            if (WidgetStore.settings(this).lightTheme != light) recreate() else bind()
+        }
         LocationHelper.refreshInForeground(applicationContext)
     }
 
@@ -123,6 +128,7 @@ class DetailActivity : AppCompatActivity() {
 
     /** (Re)builds everything from the stored payload and settings. */
     private fun bind() {
+        boundDict = getSharedPreferences(WidgetStore.PREFS, MODE_PRIVATE).getString("dict", null)
         content.removeAllViews()
         val s = WidgetStore.settings(this)
         val p = WidgetStore.payload(this, s.celsius)
@@ -130,85 +136,73 @@ class DetailActivity : AppCompatActivity() {
         val tz = TimeZone.getDefault()
         val ink = color(M.attr.colorOnSurface)
 
-        // ---- header
+        // ---- 1.1.4: the widget itself, exactly as on the home screen (same style, city, clock, date + alarm,
+        // timeline, clouds, rain, events and temperatures), then the details below.
+        // 1.1.6: touch / drag on its chart shows that hour below (the separate Forecast chart is gone; its
+        // range chips too: the mirror shows the widget's own range, Settings > forecast hours).
+        widgetMirror(p)?.let { content.addView(it) }
+        val dcard = card()
+        details = column(16)
+        dcard.addView(details); content.addView(dcard)
+        if (p == null) dcard.visibility = View.GONE   // nothing to inspect yet
+        showHour(p, selectedSlot)
+
+        // ---- now + where the data is for
         val head = card(filled = true)
-        val hc = column(20)
+        val hc = column(16)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val left = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        left.addView(text(WidgetStore.city(this).ifEmpty { getString(R.string.app_name) }, M.attr.textAppearanceTitleLarge))
-        val cond = p?.let { DetailData.conditionName(it.currentCode) } ?: getString(R.string.detail_no_data)
-        left.addView(text(cond, M.attr.textAppearanceBodyLarge, M.attr.colorOnSurfaceVariant))
-        if (p != null) left.addView(text(getString(R.string.detail_high_low, DetailData.fmtTemp(p.highTemp, true), DetailData.fmtTemp(p.lowTemp, true)),
+        // 1.1.6: as on the watch, expired data (over 24 h or run out) shows "--" and no now values.
+        val expired = p?.isExpired(now, tz) == true
+        val cond = when {
+            p == null -> getString(R.string.detail_no_data)
+            expired -> getString(R.string.detail_expired)
+            else -> DetailData.conditionName(p.displayCode(now, tz))
+        }
+        left.addView(text(cond, M.attr.textAppearanceTitleMedium))
+        // High / low of the window the widget shows (its labels), not the payload's 24 h values.
+        val hl = p?.let { WidgetRenderer.windowHiLo(it, s, now, tz) }
+        if (p != null) left.addView(text(getString(R.string.detail_high_low, hl?.let { DetailData.fmtTemp(it.first.toDouble(), true) } ?: "--",
+            hl?.let { DetailData.fmtTemp(it.second.toDouble(), true) } ?: "--"),
             M.attr.textAppearanceBodyMedium, M.attr.colorOnSurfaceVariant))
         top.addView(left, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        WidgetRenderer.conditionIcon(p, now, tz, ink, px(44))?.let { b ->
+        WidgetRenderer.conditionIcon(p, now, tz, ink, px(36))?.let { b ->
             top.addView(ImageView(this).apply { setImageBitmap(b); contentDescription = cond },
-                LinearLayout.LayoutParams(px(44), px(44)).apply { marginEnd = px(10) })
+                LinearLayout.LayoutParams(px(36), px(36)).apply { marginEnd = px(10) })
         }
-        top.addView(text(p?.currentTemp?.let { DetailData.fmtTemp(it, true) } ?: "—", M.attr.textAppearanceDisplayMedium))
+        top.addView(text(p?.displayTemp(now, tz)?.let { DetailData.fmtTemp(it, true) } ?: if (expired) "--" else "—", M.attr.textAppearanceHeadlineLarge))
         hc.addView(top)
+        // Which coordinates the forecast is for, and how they were found (compare with the watch's).
+        WidgetStore.placeUsed(this)?.let { pl ->
+            hc.addView(text(getString(R.string.loc_used, "%.4f, %.4f".format(Locale.US, pl.lat, pl.lon), placeSourceLabel(pl)),
+                M.attr.textAppearanceBodySmall, M.attr.colorOnSurfaceVariant).apply { setPadding(0, px(8), 0, 0) })
+        }
         // No phone location: say so instead of silently showing the default place, with the fix right there.
         when (LocationPermission.state(this)) {
             LocationPermission.State.DENIED -> {
-                hc.addView(text(getString(R.string.loc_unavailable), M.attr.textAppearanceBodyMedium, androidx.appcompat.R.attr.colorError).apply { setPadding(0, px(8), 0, 0) })
+                val savedInUse = WidgetStore.placeSource(this) == LocationHelper.SOURCE_SAVED
+                hc.addView(text(getString(if (savedInUse) R.string.loc_denied_saved else R.string.loc_unavailable), M.attr.textAppearanceBodyMedium, androidx.appcompat.R.attr.colorError).apply { setPadding(0, px(8), 0, 0) })
                 hc.addView(MaterialButton(this, null, M.attr.materialButtonTonalStyle).apply {
                     setText(R.string.location_allow)
                     setOnClickListener { LocationPermission.ask(this@DetailActivity) }
+                }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = px(6) })
+            }
+            LocationPermission.State.APPROXIMATE -> {
+                hc.addView(text(getString(R.string.loc_approx_note), M.attr.textAppearanceBodySmall, M.attr.colorOnSurfaceVariant).apply { setPadding(0, px(6), 0, 0) })
+                hc.addView(MaterialButton(this, null, M.attr.materialButtonTonalStyle).apply {
+                    setText(R.string.location_precise)
+                    setOnClickListener { LocationPermission.askPrecise(this@DetailActivity) }
                 }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = px(6) })
             }
             LocationPermission.State.NO_FIX ->
                 hc.addView(text(getString(R.string.loc_no_fix), M.attr.textAppearanceBodyMedium, androidx.appcompat.R.attr.colorError).apply { setPadding(0, px(8), 0, 0) })
             LocationPermission.State.OK -> {}
         }
-        NextAlarm.info(this)?.let { a ->
-            val label = NextAlarm.format(a.triggerMillis, now, DateFormat.is24HourFormat(this), s.leadingZero)
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, px(12), 0, 0)
-                isClickable = true; isFocusable = true
-                val tv = TypedValue(); theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true); setBackgroundResource(tv.resourceId)
-                setOnClickListener { openAlarms(a) }
-                contentDescription = getString(R.string.alarm_description_at, label)
-            }
-            val ic = Bitmap.createBitmap(px(22), px(22), Bitmap.Config.ARGB_8888)
-            AlarmBadge.drawIcon(Canvas(ic), px(11).toFloat(), px(11).toFloat(), px(20).toFloat(), color(androidx.appcompat.R.attr.colorPrimary))
-            row.addView(ImageView(this).apply { setImageBitmap(ic) }, LinearLayout.LayoutParams(px(22), px(22)).apply { marginEnd = px(8) })
-            row.addView(text(getString(R.string.detail_next_alarm, label), M.attr.textAppearanceTitleSmall, androidx.appcompat.R.attr.colorPrimary))
-            hc.addView(row)
-        }
         head.addView(hc); content.addView(head)
-
-        // ---- chart + range chips + scrub details
-        val cc = card()
-        val col = column(0).apply { setPadding(0, px(12), 0, px(12)) }
-        val chips = ChipGroup(this).apply { isSingleSelection = true; isSelectionRequired = true; setPadding(px(12), 0, px(12), px(6)) }
-        val choices = listOf(12, 24, 36, 48)
-        if (hours !in choices) hours = s.forecastHours.takeIf { it in choices } ?: 24
-        for (hh in choices) chips.addView(Chip(this, null, M.attr.chipStyle).apply {
-            id = View.generateViewId(); text = getString(R.string.detail_range, hh); isCheckable = true; isChecked = hh == hours
-            setOnClickListener { hours = hh; chart.settings = s.copy(forecastHours = hh); chart.select(chart.selected) }
-        })
-        col.addView(text(getString(R.string.detail_forecast), M.attr.textAppearanceTitleMedium).apply { setPadding(px(16), 0, px(16), px(6)) })
-        col.addView(chips)
-        chart = ChartView(this).apply {
-            textTypeface = WidgetStore.ui(this@DetailActivity).text().typeface(this@DetailActivity, clock = false)
-            light = s.lightTheme
-            accent = color(androidx.appcompat.R.attr.colorPrimary)
-            nowMillis = now
-            settings = s.copy(forecastHours = hours)
-            payload = p
-            onHour = { slot -> showHour(p, slot) }
-            contentDescription = getString(R.string.detail_chart_description) + ". " + WidgetUpdater.chartDescription(this@DetailActivity, p)
-        }
-        col.addView(chart, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        details = column(16).apply { setPadding(px(16), px(10), px(16), 0) }
-        col.addView(details)
-        cc.addView(col); content.addView(cc)
-        showHour(p, null)
 
         // ---- next days
         if (p != null) {
-            val days = DetailData.days(p, now, tz)
+            val days = DetailData.days(p, now, tz, eventSlots = DetailData.watchSlots(p, s, now, tz))
             if (days.isNotEmpty()) {
                 val dc = card(); val dl = column(16)
                 dl.addView(text(getString(R.string.detail_days), M.attr.textAppearanceTitleMedium))
@@ -235,12 +229,19 @@ class DetailActivity : AppCompatActivity() {
         // ---- source + actions
         val dict = runCatching { JSONObject(getSharedPreferences(WidgetStore.PREFS, MODE_PRIVATE).getString("dict", null) ?: "{}") }.getOrNull()
         val provider = p?.provider?.ifEmpty { null } ?: dict?.optString("SETTING_WEATHER_PROVIDER")?.ifEmpty { null } ?: "openmeteo"
-        val model = dict?.optString("SETTING_OM_MODEL")?.ifEmpty { null } ?: "best_match"
+        // 1.1.4: the model the data really came from (a failed keyed provider retries Open-Meteo best_match).
+        val used = WidgetStore.used(this)
+        val model = used?.optString("model")?.ifEmpty { null } ?: dict?.optString("SETTING_OM_MODEL")?.ifEmpty { null } ?: "best_match"
         val updated = p?.let { updatedLabel(it.fetchTime * 1000, now) } ?: "—"
         val src = if (provider.startsWith("openmeteo") || provider == "om") getString(R.string.detail_source_model, updated, providerName(provider), model)
             else getString(R.string.detail_source, updated, providerName(provider))
         // Refresh / Settings live in the toolbar only.
         content.addView(text(src, M.attr.textAppearanceBodySmall, M.attr.colorOnSurfaceVariant).apply { setPadding(px(4), px(16), px(4), px(8)) })
+        used?.optString("fallback")?.ifEmpty { null }?.let { fb ->
+            val asked = providerName(used.optString("requested"))
+            content.addView(text(getString(R.string.detail_fallback, asked, fb), M.attr.textAppearanceBodySmall, androidx.appcompat.R.attr.colorError)
+                .apply { setPadding(px(4), 0, px(4), px(8)) })
+        }
     }
 
     override fun onResume() {
@@ -260,6 +261,70 @@ class DetailActivity : AppCompatActivity() {
         bind()
     }
 
+    /** The home-screen widget rendered into the app (WidgetUpdater.build applied here), at the placed widget's shape. */
+    private fun widgetMirror(p: WeatherPayload?): View? = runCatching {
+        val wDp = (resources.displayMetrics.widthPixels / dp).roundToInt() - 32
+        val size = WidgetUpdater.mirrorSize(this, wDp)
+        // TalkBack reads the preview once (the widget's own descriptions are in the details below).
+        val frame = MirrorFrame(this).apply {
+            id = R.id.widget_mirror
+            contentDescription = getString(R.string.mirror_description) + ". " +
+                WidgetUpdater.chartDescription(this@DetailActivity, p, WidgetStore.settings(this@DetailActivity), System.currentTimeMillis()) +
+                (if (p != null) ". " + getString(R.string.mirror_scrub_hint) else "")
+            lineColor = color(androidx.appcompat.R.attr.colorPrimary)
+            onSelect = { slot -> selectedSlot = slot; showHour(p, slot) }
+            describeSlot = { slot -> p?.let { hourSummary(it, slot) } ?: "" }
+        }
+        frame.layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, px(size.hDp)).apply { topMargin = px(4) }
+        // 1.1.6: rendered off the UI thread (the frame keeps its size meanwhile); a newer bind() wins.
+        val gen = ++mirrorGen
+        val app = applicationContext
+        mirrorExecutor.execute {
+            var cols: MirrorColumns? = null
+            val rv = runCatching { WidgetUpdater.build(app, size, columnsOut = { cols = it }) }.onFailure(::logMirror).getOrNull() ?: return@execute
+            runOnUiThread {
+                if (gen != mirrorGen || isDestroyed) return@runOnUiThread
+                // Inflate with the application context, as a launcher does. The activity's AppCompat inflater swaps
+                // ImageView for AppCompatImageView, whose setImageBitmap isn't remotable: on a device the apply then
+                // threw ActionException whenever the widget sends a plain bitmap (theme Light / Dark, a colour
+                // background, Android 11 and older) and the app opened without its widget.
+                runCatching {
+                    val v = rv.apply(app, frame)
+                    v.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                    frame.removeAllViews(); frame.addView(v)
+                    frame.columns = cols
+                    val c = cols
+                    if (c != null && p != null) {
+                        frame.nowColumn = WidgetStore.settings(this).pastHours.coerceIn(0, c.total - 1)
+                        // Keep an inspected hour that is still on screen (silently: the details already show it).
+                        val sel = selectedSlot?.let { it - c.startSlot }?.takeIf { it in 0 until c.total }
+                        frame.select(sel, notify = false)
+                        if (sel == null && selectedSlot != null) { selectedSlot = null; showHour(p, null) }
+                    }
+                }.onFailure(::logMirror)
+            }
+        }
+        frame
+    }.onFailure(::logMirror).getOrNull()
+
+    private var mirrorGen = 0
+
+    private fun logMirror(t: Throwable) {
+        android.util.Log.w("CarbonWidget", "widget mirror failed: ${t.javaClass.simpleName}: ${t.message?.take(200)}", if (BuildConfig.DEBUG) t else null)
+    }
+
+    private fun placeSourceLabel(pl: LocationHelper.Place): String = when (pl.source) {
+        LocationHelper.SOURCE_FIXED -> getString(R.string.loc_src_fixed)
+        LocationHelper.VILLARS.source -> getString(R.string.loc_src_fallback)
+        LocationHelper.SOURCE_SAVED -> pl.fixTime?.let { getString(R.string.loc_src_saved_age, LocationHelper.describeAge(maxOf(0L, System.currentTimeMillis() - it))) }
+            ?: getString(R.string.loc_src_saved)
+        else -> {
+            val acc = pl.accuracyM?.let { LocationHelper.describeAccuracy(it) }
+            if (pl.precise) acc?.let { getString(R.string.loc_src_precise, it) } ?: getString(R.string.loc_src_precise_noacc)
+            else acc?.let { getString(R.string.loc_src_approx, it) } ?: getString(R.string.loc_src_approx_noacc)
+        }
+    }
+
     /** "14:05" today, "yesterday 14:05" / "Tue 14:05" otherwise, so an old forecast reads as old. */
     private fun updatedLabel(t: Long, now: Long): String {
         val time = SimpleDateFormat(if (DateFormat.is24HourFormat(this)) "HH:mm" else "h:mm a", Locale.getDefault()).format(Date(t))
@@ -273,9 +338,20 @@ class DetailActivity : AppCompatActivity() {
     private fun providerName(p: String) = PROVIDER_LABELS[p.lowercase()] ?: p
 
     companion object {
+        /** Where the widget mirror is rendered; tests run it inline. */
+        @androidx.annotation.VisibleForTesting
+        internal var mirrorExecutor: java.util.concurrent.Executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
         val PROVIDER_LABELS = mapOf("openmeteo" to "Open-Meteo", "om" to "Open-Meteo", "metno" to "MET Norway (yr.no)", "yr" to "MET Norway (yr.no)",
             "geosphere" to "GeoSphere Austria", "meteoblue" to "Meteoblue", "tomorrow" to "Tomorrow.io",
             "owm" to "OpenWeatherMap", "openweathermap" to "OpenWeatherMap", "weatherapi" to "WeatherAPI.com")
+    }
+
+    /** One line for TalkBack while stepping through the mirror's hours. */
+    private fun hourSummary(p: WeatherPayload, slot: Int): String {
+        val h = DetailData.hour(p, slot)
+        val time = SimpleDateFormat(if (DateFormat.is24HourFormat(this)) "EEEE HH:mm" else "EEEE h a", Locale.getDefault()).format(Date(h.timeMillis))
+        return "$time, ${DetailData.fmtTemp(h.temp, true)}, ${DetailData.conditionName(h.code)}"
     }
 
     /** The scrub details for payload [slot] (null: the hint). */

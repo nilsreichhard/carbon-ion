@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 1.1.4: the widget mirror at the top of the app screen. -->
+    <item name="widget_mirror" type="id" />
+</resources>

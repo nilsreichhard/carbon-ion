@@ -91,8 +91,32 @@ object WidgetStore {
 
     fun saveUi(ctx: Context, o: UiOptions) = prefs(ctx).edit().putString("ui", o.encode()).apply()
 
-    fun savePhoneLocation(ctx: Context, lat: Double, lon: Double) =
-        prefs(ctx).edit().putString("phone_loc", JSONObject().put("lat", lat).put("lon", lon).put("t", System.currentTimeMillis()).toString()).apply()
+    fun savePhoneLocation(ctx: Context, lat: Double, lon: Double, accuracyM: Float? = null, precise: Boolean = false,
+                          fixTime: Long = System.currentTimeMillis()) =
+        prefs(ctx).edit().putString("phone_loc", JSONObject().put("lat", lat).put("lon", lon).put("t", fixTime)
+            .put("precise", precise).apply { accuracyM?.let { put("acc", it.toDouble()) } }.toString()).apply()
+
+    /** The saved phone fix as a place (accuracy / precise unknown for fixes saved before 1.1.4). */
+    fun phoneFix(ctx: Context): LocationHelper.Place? = prefs(ctx).getString("phone_loc", null)?.let {
+        runCatching { JSONObject(it).let { o -> LocationHelper.Place(o.getDouble("lat"), o.getDouble("lon"), false, LocationHelper.SOURCE_PHONE,
+            if (o.has("acc")) o.getDouble("acc").toFloat() else null, o.optBoolean("precise", false),
+            if (o.has("t")) o.getLong("t") else null) } }.getOrNull()
+    }
+
+    /** 1.1.4: provider / model the last fetch really used ({provider, requested, model, fallback}). */
+    fun saveUsed(ctx: Context, json: String?) = prefs(ctx).edit().putString("wx_used", json).apply()
+    fun used(ctx: Context): JSONObject? = prefs(ctx).getString("wx_used", null)?.let { runCatching { JSONObject(it) }.getOrNull() }
+
+    /** 1.1.4: the place the last fetch used, shown in the app (coordinates, source, accuracy). */
+    fun savePlaceUsed(ctx: Context, p: LocationHelper.Place) = prefs(ctx).edit().putString("place_used", JSONObject()
+        .put("lat", p.lat).put("lon", p.lon).put("source", p.source).put("precise", p.precise)
+        .apply { p.accuracyM?.let { put("acc", it.toDouble()) }; p.fixTime?.let { put("ft", it) } }.toString()).putString("place_source", p.source).apply()
+
+    fun placeUsed(ctx: Context): LocationHelper.Place? = prefs(ctx).getString("place_used", null)?.let {
+        runCatching { JSONObject(it).let { o -> LocationHelper.Place(o.getDouble("lat"), o.getDouble("lon"), o.getString("source") == LocationHelper.SOURCE_FIXED,
+            o.getString("source"), if (o.has("acc")) o.getDouble("acc").toFloat() else null, o.optBoolean("precise", false),
+            if (o.has("ft")) o.getLong("ft") else null) } }.getOrNull()
+    }
 
     fun phoneLocation(ctx: Context): Pair<Double, Double>? = prefs(ctx).getString("phone_loc", null)?.let {
         runCatching { JSONObject(it).let { o -> o.getDouble("lat") to o.getDouble("lon") } }.getOrNull()

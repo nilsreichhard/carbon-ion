@@ -47,7 +47,8 @@ class WeatherWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params
                 if (out.has("error")) throw IllegalStateException("weather: " + out.getString("error"))
                 WidgetStore.saveWeather(ctx, out.getJSONObject("payload").toString(), out.optString("city", ""),
                     out.getJSONObject("settings").toString())
-                WidgetStore.savePlaceSource(ctx, place.source)
+                WidgetStore.savePlaceUsed(ctx, place)
+                WidgetStore.saveUsed(ctx, out.optJSONObject("used")?.toString())
             }
         }
 
@@ -67,7 +68,9 @@ class WeatherWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params
         fun runNow(ctx: Context) {
             val req = OneTimeWorkRequestBuilder<WeatherWorker>().setConstraints(net)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MINUTES, TimeUnit.MINUTES).build()
-            WorkManager.getInstance(ctx).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, req)
+            // 1.1.6: queue behind a fetch that is still running instead of starting a second one beside it
+            // (REPLACE cancels the work, but a Worker's doWork thread keeps going).
+            WorkManager.getInstance(ctx).enqueueUniqueWork(NOW, ExistingWorkPolicy.APPEND_OR_REPLACE, req)
         }
 
         fun cancel(ctx: Context) {

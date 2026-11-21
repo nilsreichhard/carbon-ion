@@ -53,8 +53,46 @@ class WeatherPayload(
             fetchTime, provider, rawJson)
     }
 
+    /** main.c prv_weather_data_offset: whole hours since the top of the fetch's local hour (≥ 0). */
+    fun hoursSinceFetchHour(nowMillis: Long, tz: java.util.TimeZone): Int {
+        if (fetchTime <= 0) return 0
+        val t = fetchTime * 1000
+        val off = tz.getOffset(t)
+        val hourTop = Math.floorDiv(t + off, 3_600_000L) * 3_600_000L - off
+        val elapsed = nowMillis - hourTop
+        return if (elapsed > 0) (elapsed / 3_600_000L).toInt() else 0
+    }
+
+    private fun nowSlot(nowMillis: Long, tz: java.util.TimeZone) = (12 + hoursSinceFetchHour(nowMillis, tz)).coerceAtMost(HOURS - 1)
+
+    /** main.c WEATHER_STALE_SEC: older than 6 h, the condition icon is dropped. */
+    fun isStale(nowMillis: Long): Boolean = fetchTime > 0 && nowMillis / 1000 - fetchTime > STALE_SEC
+
+    /**
+     * main.c "expired" (2.8.7): older than 24 h, or the clock has run past the last valid hourly slot.
+     * The numbers then show "--" and no hour is passed off as now.
+     */
+    fun isExpired(nowMillis: Long, tz: java.util.TimeZone): Boolean =
+        (fetchTime > 0 && nowMillis / 1000 - fetchTime > EXPIRED_SEC) || 12 + hoursSinceFetchHour(nowMillis, tz) >= validHours.coerceAtMost(HOURS)
+
+    /** main.c display_temp: the fetch's current value in the fetch hour, else the hourly slot for now; null once expired. */
+    fun displayTemp(nowMillis: Long, tz: java.util.TimeZone): Double? = when {
+        isExpired(nowMillis, tz) -> null
+        hoursSinceFetchHour(nowMillis, tz) == 0 && currentTemp != null -> currentTemp
+        else -> tempHourly[nowSlot(nowMillis, tz)]
+    }
+
+    /** main.c display_code: same rule for the condition; -1 once expired. */
+    fun displayCode(nowMillis: Long, tz: java.util.TimeZone): Int = when {
+        isExpired(nowMillis, tz) -> -1
+        hoursSinceFetchHour(nowMillis, tz) == 0 && currentCode >= 0 -> currentCode
+        else -> weatherCode[nowSlot(nowMillis, tz)]
+    }
+
     companion object {
         const val HOURS = 72
+        const val STALE_SEC = 6 * 3600L
+        const val EXPIRED_SEC = 24 * 3600L
 
         fun fromJson(json: String): WeatherPayload = fromJson(JSONObject(json))
 
@@ -78,7 +116,8 @@ class WeatherPayload(
                 cloudMid = ints("cloud_cover_mid"),
                 cloudHigh = ints("cloud_cover_high"),
                 weatherCode = ints("hourly_weather_code"),
-                shortwaveWm2 = IntArray(HOURS) { i -> Math.round(sw.optDouble(i, 0.0) * 4).toInt() },
+                // provider.js gives W/m²; only the watch's AppMessage packs /4 (wxsend.js) and unpacks ×4.
+                shortwaveWm2 = IntArray(HOURS) { i -> Math.round(sw.optDouble(i, 0.0)).toInt() },
                 precipMmTenths = ints("precip_mm"),
                 cloudThick = IntArray(HOURS) { k -> (thickBytes[k shr 2] shr ((k and 3) * 2)) and 3 },
                 fog = bits("fog_bits"),

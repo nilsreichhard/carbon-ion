@@ -11,7 +11,6 @@ import android.widget.TextView
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,7 +24,7 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], qualifiers = "w400dp-h800dp-hdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class SettingsScreenTest {
-    @Before fun setUp() { assumeTrue("desktop QuickJS library missing", JvmQuickJs.install()) }
+    @Before fun setUp() { JvmQuickJs.require() }
     @After fun tearDown() = JvmQuickJs.reset()
 
     private fun all(v: View): List<View> = if (v is ViewGroup) listOf(v) + (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else listOf(v)

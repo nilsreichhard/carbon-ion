@@ -34,9 +34,13 @@ data class WidgetSettings(
     val eventFlags: Int = 0,
     /** SETTING_FOG_INDICATOR */
     val fogIndicator: Boolean = true,
-    /** SETTING_TIMELINE_BATTERY, Android levels (1.1.1): 0 20/10/5/0, 1 10/5/0, 2 5/0, 6 20/0, 7 10/0, 5 0 only.
+    /** SETTING_TIMELINE_BATTERY, Android levels (1.1.1): 0 20/10/5/0, 1 10/5/0, 2 5/0, 6 20/0, 7 10/0, 5 0 only, 8 off (1.1.3).
      *  The watch's 4 % (battery saver) is 5 % here; its "10 / 4" (4) reads as 10/5/0 and "None" (3) as 0 only. */
     val timelineBattery: Int = 0,
+    /** SETTING_PHONE_ALARM (1.1.3 on the phone): next alarm after the date on the widget and in the app. */
+    val showAlarm: Boolean = true,
+    /** SETTING_ANDROID_ALARM_WATCH (1.1.3, phone only): send the next alarm to the watch face. */
+    val alarmToWatch: Boolean = true,
 ) {
     val pastHours get() = forecastHours / 4
     /** Battery marker levels (%) for [timelineBattery], highest first. */
@@ -74,15 +78,19 @@ data class WidgetSettings(
                 eventFlags = i("SETTING_EVENT_FLAGS", 0) and 0x3F,
                 fogIndicator = i("SETTING_FOG_INDICATOR", 1) != 0,
                 timelineBattery = normalizeBattery(i("SETTING_TIMELINE_BATTERY", BATTERY_ALL)),
+                showAlarm = i("SETTING_PHONE_ALARM", 1) != 0,
+                alarmToWatch = i("SETTING_ANDROID_ALARM_WATCH", 1) != 0,
             )
         }
 
         const val BATTERY_ALL = 0
         const val BATTERY_ZERO_ONLY = 5
+        /** 1.1.3: no battery markers at all (Android only; not a watch value). */
+        const val BATTERY_OFF = 8
 
         /** Old or unknown values onto the Android options (watch "10 / 4" → 10/5/0, "None" → 0 only). */
         fun normalizeBattery(v: Int): Int = when (v) {
-            0, 1, 2, BATTERY_ZERO_ONLY, 6, 7 -> v
+            0, 1, 2, BATTERY_ZERO_ONLY, 6, 7, BATTERY_OFF -> v
             4 -> 1
             3 -> BATTERY_ZERO_ONLY
             else -> BATTERY_ALL
@@ -94,6 +102,7 @@ data class WidgetSettings(
             6 -> listOf(20, 0)
             7 -> listOf(10, 0)
             BATTERY_ZERO_ONLY -> listOf(0)
+            BATTERY_OFF -> emptyList()
             else -> listOf(20, 10, 5, 0)
         }
 
