@@ -216,8 +216,10 @@ function configDefaults() {
 /* Android-only theme value: Follow system (also the default). 0 Dark / 1 Light as on the watch. */
 var THEME_SYSTEM = 2;
 var THEME_MIGRATED_KEY = 'carbon.android.theme.v2';
-/* Watch SETTING_TIMELINE_BATTERY values with no phone option (WidgetSettings.normalizeBattery). */
-var BATTERY_MIGRATE = { 3: 5, 4: 1 };
+/* 4.0.0: battery markers use the watch's own list and values (settings.js normalizeBattery:
+ * 20/10/5/0, 10/5/0, 5/0, 10/0, 0, None); sanitizeClaySettingsStorage maps the old phone values
+ * (20 / 0 % → 20/10/5/0, Off 8 → None 3). The 1.1.1 seeding already rewrote the watch's None (3)
+ * to 0 % only (5), so a stored 3 is always the new None. */
 
 function ensureSettingsSeeded() {
 	settings.sanitizeClaySettingsStorage();
@@ -229,9 +231,6 @@ function ensureSettingsSeeded() {
 		if (settings.extractInt(cur.SETTING_LIGHT_THEME) !== 0) { cur.SETTING_LIGHT_THEME = THEME_SYSTEM; changed = true; }
 		localStorage.setItem(THEME_MIGRATED_KEY, '1');
 	}
-	/* 1.1.1: watch-only battery values onto the phone list: "10 / 4 %" (4) → 10 / 5 / 0 %, "None" (3) → 0 % only. */
-	var oldBatt = settings.extractInt(cur.SETTING_TIMELINE_BATTERY);
-	if (BATTERY_MIGRATE[oldBatt] !== undefined) { cur.SETTING_TIMELINE_BATTERY = String(BATTERY_MIGRATE[oldBatt]); changed = true; }
 	if (changed) localStorage.setItem('clay-settings', J(cur));
 }
 
@@ -239,7 +238,6 @@ function ensureSettingsSeeded() {
 function androidDict(flat) {
 	var dict = settings.buildSettingsDict(flat);
 	dict.SETTING_ANDROID_ALARM_WATCH = settings.extractBool(flat.SETTING_ANDROID_ALARM_WATCH) === 0 ? 0 : 1;
-	if (BATTERY_MIGRATE[dict.SETTING_TIMELINE_BATTERY] !== undefined) dict.SETTING_TIMELINE_BATTERY = BATTERY_MIGRATE[dict.SETTING_TIMELINE_BATTERY];
 	var t = settings.extractInt(flat.SETTING_LIGHT_THEME);
 	dict.SETTING_LIGHT_THEME = (t === 0 || t === 1) ? t : THEME_SYSTEM;
 	return dict;
@@ -249,18 +247,8 @@ function androidDict(flat) {
  * `first`/`add` extend the watch's list, `replace` swaps it, `description` overrides its text. */
 var ANDROID_OPTIONS = {
 	SETTING_LIGHT_THEME: { first: [{ value: String(THEME_SYSTEM), label: 'Follow system (auto)' }] },
-	/* 1.1.1: phone levels 20 / 10 / 5 / 0 % (WidgetSettings.batteryLevels); same values as the watch where they match. */
+	/* 4.0.0: the watch's option list as is (WidgetSettings.batteryLevels); only the text says "phone". */
 	SETTING_TIMELINE_BATTERY: {
-		replace: [
-			{ value: '0', label: '20 / 10 / 5 / 0 %' },
-			{ value: '1', label: '10 / 5 / 0 %' },
-			{ value: '2', label: '5 / 0 %' },
-			{ value: '6', label: '20 / 0 %' },
-			{ value: '7', label: '10 / 0 %' },
-			{ value: '5', label: '0 % only' },
-			/* 1.1.3: no markers (WidgetSettings.BATTERY_OFF). */
-			{ value: '8', label: 'Off' },
-		],
 		description: 'When the phone battery is expected to reach each level (while not charging).',
 	},
 };

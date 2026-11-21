@@ -27,7 +27,12 @@ object BitmapText {
         val alarm: String? = null,
         /** Date row text scale (AlarmBadge.Plan.scale). */
         val dateScale: Float = 1f,
+        /** Where the marks after the city name (" · 5 h") start in [city]; drawn at [MARK_SCALE]. */
+        val markStart: Int = city.length,
     )
+
+    /** 1.1.9: the city row's marks (saved-place age, data age) are drawn smaller than the city, so they stay compact. */
+    const val MARK_SCALE = 0.8f
 
     /** Draws onto [bmp], whose height is the layout's total rows. */
     fun draw(bmp: Bitmap, layout: WidgetLayout, it: Item) {
@@ -44,11 +49,17 @@ object BitmapText {
         val top = layout.timeY.toFloat()
         if (it.city.isNotEmpty()) {
             val gap = 5f
-            val cityW = AlarmBadge.measureSeparated(it.city, p)
+            val head = it.city.substring(0, it.markStart.coerceIn(0, it.city.length))
+            val tail = it.city.substring(head.length)
+            val pm = Paint(p).apply { textSize = p.textSize * MARK_SCALE }
+            val headW = AlarmBadge.measureSeparated(head, p)
+            val cityW = headW + (if (tail.isEmpty()) 0f else AlarmBadge.measureSeparated(tail, pm))
             val iconW = if (it.icon != null) gap + it.iconRows else 0f
             val rowH = maxOf(boxH, if (it.icon != null) it.iconRows else 0f)
             val x0 = (w - cityW - iconW) / 2f
-            AlarmBadge.drawSeparated(c, it.city, x0, top + (rowH - boxH) / 2f - fm.ascent, p)
+            val baseline = top + (rowH - boxH) / 2f - fm.ascent
+            AlarmBadge.drawSeparated(c, head, x0, baseline, p)
+            if (tail.isNotEmpty()) AlarmBadge.drawSeparated(c, tail, x0 + headW, baseline, pm)
             it.icon?.let { ic ->
                 val y = top + (rowH - it.iconRows) / 2f
                 c.drawBitmap(ic, null, android.graphics.RectF(x0 + cityW + gap, y, x0 + cityW + gap + it.iconRows, y + it.iconRows),

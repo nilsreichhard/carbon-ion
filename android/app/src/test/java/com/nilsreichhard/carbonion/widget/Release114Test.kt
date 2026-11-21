@@ -176,7 +176,7 @@ class Release114Test {
         assertEquals(LocationHelper.SOURCE_SAVED, pl.source)
         WidgetStore.savePlaceUsed(ctx, pl)
         assertEquals(now - 3 * 3_600_000L, WidgetStore.placeUsed(ctx)!!.fixTime)
-        assertEquals("Ollon · saved 3 h", WidgetUpdater.staleCity(ctx, "Ollon", null, now))
+        assertEquals("Ollon · 3 h", WidgetUpdater.staleCity(ctx, "Ollon", null, now))
         WidgetStore.savePlaceUsed(ctx, LocationHelper.Place(46.3, 7.06, false, LocationHelper.SOURCE_PHONE, 10f, true, now))
         assertEquals("Ollon", WidgetUpdater.staleCity(ctx, "Ollon", null, now))
     }

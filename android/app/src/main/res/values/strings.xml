@@ -82,8 +82,8 @@
     <string name="loc_approx_note">Approximate location can be about 2 km off. On a mountainside that is hundreds of metres of altitude, so temperatures and gusts differ from the watch, which uses the Pebble app\'s precise location.</string>
     <string name="location_precise">Use precise location</string>
     <string name="detail_fallback">%1$s was not used (%2$s). The watch falls back the same way.</string>
-    <string name="loc_saved_marker">saved %1$s</string>
-    <string name="loc_saved_marker_noage">saved</string>
+    <string name="loc_saved_marker">%1$s</string>
+    <string name="loc_saved_marker_description">location saved %1$s ago</string>
     <string name="chart_description_expired">Weather chart: forecast expired, no current data</string>
     <string name="detail_expired">Forecast expired</string>
     <string name="mirror_description">Widget preview</string>

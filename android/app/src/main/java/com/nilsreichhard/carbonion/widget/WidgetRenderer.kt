@@ -637,11 +637,14 @@ object WidgetRenderer {
             apt[i] = if (i > 0 && i >= rem) apt[i - 1] else p.apparentHourly[sl].roundToInt()
         }
         var hi = pts[0]; var lo = pts[0]
-        var tMin = min(pts[0], apt[0]); var tMax = max(pts[0], apt[0])
+        // 4.0.0: with the feels-like line off the scale follows the real temperature only (temp_layer.c).
+        val feels = s.showFeelsLike
+        var tMin = if (feels) min(pts[0], apt[0]) else pts[0]; var tMax = if (feels) max(pts[0], apt[0]) else pts[0]
         for (i in 1..total) {
             if (i >= rem) break
             hi = max(hi, pts[i]); lo = min(lo, pts[i])
-            tMin = minOf(tMin, pts[i], apt[i]); tMax = maxOf(tMax, pts[i], apt[i])
+            tMin = min(tMin, pts[i]); tMax = max(tMax, pts[i])
+            if (feels) { tMin = min(tMin, apt[i]); tMax = max(tMax, apt[i]) }
         }
         val tRange = max(1, tMax - tMin)
         val pad = CarbonStyle.TEMP_PAD
@@ -676,8 +679,9 @@ object WidgetRenderer {
             if (i >= rem) break
             line(c, spx[i - 1], spy[i - 1], spx[i], spy[i], colour(i), 2)
         }
-        // Pass 3: feels-like, graph_draw_dashed_line(3, 2)
+        // Pass 3: feels-like, graph_draw_dashed_line(3, 2) (4.0.0: optional, SETTING_FEELS_LIKE)
         for (i in 1..total) {
+            if (!feels) break
             if (i >= rem) break
             val x0 = spx[i - 1]; val y0 = apy[i - 1]; val dx = spx[i] - x0; val dy = apy[i] - y0
             val steps = max(abs(dx), abs(dy))

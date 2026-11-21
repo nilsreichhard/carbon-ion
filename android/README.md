@@ -87,7 +87,7 @@ cloud sensitivity, cloud thickness, sunlight bars level, rain sensitivity,
 rain chart (Probability / Amount + checked dots / Amount + line with the
 orange chance line), weather events (Range + icon / Icon only / None; thunder
 level, tornado, snow level, fog level, wind gusts), battery markers (20/10/4/0
-and the other levels), temperature unit, temperature fill, now line, leading
+and the other levels), temperature unit, temperature fill, feels-like line (4.0.0), now line, leading
 zero (clock and alarm) and date format.
 
 **Not shown on the phone (watch-only):** wrist flick and flick action, the

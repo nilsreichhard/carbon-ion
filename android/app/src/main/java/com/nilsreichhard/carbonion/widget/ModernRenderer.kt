@@ -796,10 +796,13 @@ object ModernRenderer {
         }
         val last = if (rem in 1..total) rem - 1 else total
         var hi = pts[0]; var lo = pts[0]
-        var tMin = min(pts[0], apt[0]); var tMax = max(pts[0], apt[0])
+        // 4.0.0: with the feels-like line off the scale follows the real temperature only (temp_layer.c).
+        val feels = s.showFeelsLike
+        var tMin = if (feels) min(pts[0], apt[0]) else pts[0]; var tMax = if (feels) max(pts[0], apt[0]) else pts[0]
         for (i in 1..last) {
             hi = max(hi, pts[i]); lo = min(lo, pts[i])
-            tMin = minOf(tMin, pts[i], apt[i]); tMax = maxOf(tMax, pts[i], apt[i])
+            tMin = min(tMin, pts[i]); tMax = max(tMax, pts[i])
+            if (feels) { tMin = min(tMin, apt[i]); tMax = max(tMax, apt[i]) }
         }
         val tRange = max(2f, tMax - tMin)
         val mid = (tMax + tMin) / 2f
@@ -834,11 +837,13 @@ object ModernRenderer {
             c.restore()
             fp.shader = null
         }
-        // Feels-like: thin dashed line.
-        val ap = strokeP(alpha(g.pal.ink2, 0.75f), 1f * g.dp)
-        ap.pathEffect = DashPathEffect(floatArrayOf(2.4f, 2f), 0f)
-        c.drawPath(smooth(xs, FloatArray(last + 1) { y(apt[it]) }), ap)
-        ap.pathEffect = null
+        // Feels-like: thin dashed line (4.0.0: optional, SETTING_FEELS_LIKE).
+        if (feels) {
+            val ap = strokeP(alpha(g.pal.ink2, 0.75f), 1f * g.dp)
+            ap.pathEffect = DashPathEffect(floatArrayOf(2.4f, 2f), 0f)
+            c.drawPath(smooth(xs, FloatArray(last + 1) { y(apt[it]) }), ap)
+            ap.pathEffect = null
+        }
         // Actual temperature: crisp gradient stroke.
         val lp = strokeP(Color.WHITE, 2.1f * g.dp + 0.3f)
         lp.shader = LinearGradient(0f, y0, 0f, y1, gc, gp, Shader.TileMode.CLAMP)

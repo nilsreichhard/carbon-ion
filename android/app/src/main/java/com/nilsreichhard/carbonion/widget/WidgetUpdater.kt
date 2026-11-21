@@ -192,7 +192,7 @@ object WidgetUpdater {
         val clockRows = clockRows(sample, widthRows, clockTf, ui.clockSize.factor)
         // Read even when the markers are off so the drain history is ready if they're switched back on.
         val battery = (if (useBatteryOverride) batteryOverride else BatteryTracker.read(ctx))
-            .takeIf { s.timelineBattery != WidgetSettings.BATTERY_OFF }
+            .takeIf { s.timelineBattery != WidgetSettings.BATTERY_NONE }
         val payload = WidgetStore.payload(ctx, s.celsius)
 
         val v = RemoteViews(ctx.packageName, layout.layoutRes)
@@ -205,8 +205,16 @@ object WidgetUpdater {
         val bitmapText = textFont.bundled
         val textRv = RemoteViews(ctx.packageName, if (bitmapText) R.layout.text_system else textFont.textLayout)
         val clockRv = RemoteViews(ctx.packageName, clockFont.clockLayout)
-        val city = staleCity(ctx, WidgetStore.city(ctx), payload, nowMillis)
-        textRv.setTextViewText(R.id.city, city)
+        val cityName = WidgetStore.city(ctx)
+        val city = staleCity(ctx, cityName, payload, nowMillis)
+        val cityDesc = staleCity(ctx, cityName, payload, nowMillis, spoken = true)
+        // 1.1.9: the marks after the name (" · 5 h", " · 2 h ago") are smaller, so the row stays compact.
+        val markStart = if (cityName.isNotEmpty() && city.startsWith(cityName)) cityName.length else 0
+        textRv.setTextViewText(R.id.city, if (markStart in 1 until city.length) android.text.SpannableString(city).apply {
+            setSpan(android.text.style.RelativeSizeSpan(BitmapText.MARK_SCALE), markStart, city.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        } else city)
+        // TalkBack: the age is spelled out only when the widget shows the saved-place marker.
+        textRv.setContentDescription(R.id.city, cityDesc)
         val textRows = min(CarbonStyle.CITY_TEXT_ROWS * (if (modern) 0.92f else 1f), clockRows * 0.4f)
         textRv.setTextViewTextSize(R.id.city, TypedValue.COMPLEX_UNIT_DIP, textRows * rowDp)
         clockRv.setTextViewTextSize(R.id.clock, TypedValue.COMPLEX_UNIT_DIP, clockRows * rowDp)
@@ -273,7 +281,7 @@ object WidgetUpdater {
             if (bitmapText) {
                 BitmapText.draw(chart, layout, BitmapText.Item(city, DateFormat.format(rowPattern, nowMillis).toString(),
                     textRows, textTf, ink, icon, 18 * 0.92f, bg.mode == WidgetStore.BG_TRANSPARENT,
-                    alarm = alarm.takeIf { plan.showAlarm }, dateScale = plan.scale))
+                    alarm = alarm.takeIf { plan.showAlarm }, dateScale = plan.scale, markStart = markStart.takeIf { it > 0 } ?: city.length))
             } else if (icon != null) {
                 cond = Bitmap.createBitmap(iconPx + gapPx, iconPx, Bitmap.Config.ARGB_8888)
                 android.graphics.Canvas(cond).drawBitmap(icon, gapPx.toFloat(), 0f, null)
@@ -325,22 +333,41 @@ object WidgetUpdater {
         return v
     }
 
+    /**
+     * 1.1.9 (Nils 16:06): the widget shows only the city while the saved phone fix used for the forecast is
+     * younger than this; from here on a short "Ollon · 3 h". (Whether a fix counts as fresh or saved is still
+     * [LocationHelper.isRecent]'s 30 minutes: that drives refetching and the app's location line.)
+     */
+    const val SAVED_MARKER_MS = 3 * 3_600_000L
+
+    private fun savedFixTimeUsed(ctx: Context): Long? =
+        WidgetStore.placeUsed(ctx)?.takeIf { it.source == LocationHelper.SOURCE_SAVED }?.let { it.fixTime ?: 0L }
+
+    /** The saved fix's age when the widget should show it ("3 h"), else null (fresh fix, younger than [SAVED_MARKER_MS], or age unknown). */
+    fun savedMarkerAge(savedFixTime: Long?, nowMillis: Long): String? {
+        if (savedFixTime == null || savedFixTime <= 0L) return null
+        val age = max(0L, nowMillis - savedFixTime)
+        return if (age >= SAVED_MARKER_MS) LocationHelper.describeAge(age) else null
+    }
+
     /** Data older than this is marked on the city row ("· 5 h ago"): fetches failed or were offline. */
     const val STALE_HOURS = 2
 
     /**
      * The city, plus how old the forecast is once it's [STALE_HOURS] or more, or "no location"
-     * when the phone's location wasn't available and the default place was used.
+     * when the phone's location wasn't available and the default place was used. [spoken]: the TalkBack
+     * wording ("location saved 3 h ago" instead of the bare "3 h").
      */
     fun staleCity(ctx: Context, city: String, p: WeatherPayload?, nowMillis: Long,
                   noLocation: Boolean = WidgetStore.placeSource(ctx) == LocationHelper.VILLARS.source,
-                  savedFixTime: Long? = WidgetStore.placeUsed(ctx)?.takeIf { it.source == LocationHelper.SOURCE_SAVED }?.let { it.fixTime ?: 0L }): String {
+                  savedFixTime: Long? = savedFixTimeUsed(ctx), spoken: Boolean = false): String {
         val marks = ArrayList<String>()
         if (noLocation) marks.add(ctx.getString(R.string.loc_unavailable_short))
         // 1.1.4: the fetch had to use an old phone fix (no fresh one in the background): say so, with its age.
-        if (savedFixTime != null) marks.add(
-            if (savedFixTime > 0L) ctx.getString(R.string.loc_saved_marker, LocationHelper.describeAge(max(0L, nowMillis - savedFixTime)))
-            else ctx.getString(R.string.loc_saved_marker_noage))
+        // 1.1.9: only once it's [SAVED_MARKER_MS] old, and compact ("Ollon · 3 h").
+        savedMarkerAge(savedFixTime, nowMillis)?.let {
+            marks.add(ctx.getString(if (spoken) R.string.loc_saved_marker_description else R.string.loc_saved_marker, it))
+        }
         if (p != null && p.fetchTime > 0L) {
             val h = ((nowMillis / 1000 - p.fetchTime) / 3600).toInt()
             if (h >= STALE_HOURS) marks.add(if (h >= 48) ctx.getString(R.string.stale_days, h / 24) else ctx.getString(R.string.stale_hours, h))

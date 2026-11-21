@@ -13,8 +13,8 @@ android {
         applicationId = "com.nilsreichhard.carbonion.widget"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.1.8"
+        versionCode = 13
+        versionName = "4.0.0"
     }
 
     /*

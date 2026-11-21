@@ -34,13 +34,15 @@ data class WidgetSettings(
     val eventFlags: Int = 0,
     /** SETTING_FOG_INDICATOR */
     val fogIndicator: Boolean = true,
-    /** SETTING_TIMELINE_BATTERY, Android levels (1.1.1): 0 20/10/5/0, 1 10/5/0, 2 5/0, 6 20/0, 7 10/0, 5 0 only, 8 off (1.1.3).
-     *  The watch's 4 % (battery saver) is 5 % here; its "10 / 4" (4) reads as 10/5/0 and "None" (3) as 0 only. */
+    /** SETTING_TIMELINE_BATTERY (4.0.0, same values as the watch): 0 20/10/5/0, 1 10/5/0, 2 5/0, 7 10/0, 5 0, 3 None.
+     *  Old values: 4 (watch 3.3.0 "10 / 4") → 10/5/0, 6 (phone "20 / 0") → 20/10/5/0, 8 (phone "Off") → None. */
     val timelineBattery: Int = 0,
     /** SETTING_PHONE_ALARM (1.1.3 on the phone): next alarm after the date on the widget and in the app. */
     val showAlarm: Boolean = true,
     /** SETTING_ANDROID_ALARM_WATCH (1.1.3, phone only): send the next alarm to the watch face. */
     val alarmToWatch: Boolean = true,
+    /** SETTING_FEELS_LIKE (4.0.0, same key as the watch): dashed feels-like line on the temperature chart. */
+    val showFeelsLike: Boolean = true,
 ) {
     val pastHours get() = forecastHours / 4
     /** Battery marker levels (%) for [timelineBattery], highest first. */
@@ -80,29 +82,31 @@ data class WidgetSettings(
                 timelineBattery = normalizeBattery(i("SETTING_TIMELINE_BATTERY", BATTERY_ALL)),
                 showAlarm = i("SETTING_PHONE_ALARM", 1) != 0,
                 alarmToWatch = i("SETTING_ANDROID_ALARM_WATCH", 1) != 0,
+                showFeelsLike = i("SETTING_FEELS_LIKE", 1) != 0,
             )
         }
 
         const val BATTERY_ALL = 0
         const val BATTERY_ZERO_ONLY = 5
-        /** 1.1.3: no battery markers at all (Android only; not a watch value). */
-        const val BATTERY_OFF = 8
+        /** 4.0.0: "None", the watch's value 3 (was the phone-only 8 in 1.1.3). */
+        const val BATTERY_NONE = 3
+        /** The six options in Clay order (src/pkjs/settings.js BATTERY_OPTIONS). */
+        val BATTERY_OPTIONS = listOf(0, 1, 2, 7, BATTERY_ZERO_ONLY, BATTERY_NONE)
 
-        /** Old or unknown values onto the Android options (watch "10 / 4" → 10/5/0, "None" → 0 only). */
+        /** Old or unknown values onto the options (settings.js normalizeBattery). */
         fun normalizeBattery(v: Int): Int = when (v) {
-            0, 1, 2, BATTERY_ZERO_ONLY, 6, 7, BATTERY_OFF -> v
+            in BATTERY_OPTIONS -> v
             4 -> 1
-            3 -> BATTERY_ZERO_ONLY
+            8 -> BATTERY_NONE
             else -> BATTERY_ALL
         }
 
         fun batteryLevels(v: Int): List<Int> = when (normalizeBattery(v)) {
             1 -> listOf(10, 5, 0)
             2 -> listOf(5, 0)
-            6 -> listOf(20, 0)
             7 -> listOf(10, 0)
             BATTERY_ZERO_ONLY -> listOf(0)
-            BATTERY_OFF -> emptyList()
+            BATTERY_NONE -> emptyList()
             else -> listOf(20, 10, 5, 0)
         }
 
